@@ -1,0 +1,56 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: product-service
+
+  config:
+    import: "optional:configserver:http://config-admin:config-admin-password@localhost:8888"
+
+  data:
+    mongodb:
+      uri: mongodb://product_svc:product_svc_pass@localhost:27018/iuh_products?authSource=iuh_products
+      database: iuh_products
+    redis:
+      host: localhost
+      port: 6379
+      password: iuh_exchange_redis
+    elasticsearch:
+      uris: http://localhost:9200
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: product-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# AWS S3 Config (đọc từ Window Environment / file .env)
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET:s3-dynamodb-vinhtran}
+    region: ${AWS_REGION:us-east-1}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+    presigned-url-expiry: 300  # 5 phút
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

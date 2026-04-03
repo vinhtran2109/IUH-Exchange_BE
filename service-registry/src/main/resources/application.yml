@@ -1,0 +1,31 @@
+server:
+  port: 8761
+
+spring:
+  application:
+    name: service-registry
+  security:
+    user:
+      name: eureka-admin
+      password: eureka-admin-password
+
+eureka:
+  instance:
+    hostname: localhost
+  client:
+    register-with-eureka: false  # Server không tự đăng ký vào chính nó
+    fetch-registry: false
+    service-url:
+      defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
+  server:
+    enable-self-preservation: false   # Tắt self-preservation ở môi trường local
+    eviction-interval-timer-in-ms: 5000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always

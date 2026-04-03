@@ -1,0 +1,145 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  # Config Server bootstrap
+  config:
+    import: "optional:configserver:http://config-admin:config-admin-password@localhost:8888"
+
+  # Redis for Rate Limiting
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: iuh_exchange_redis
+      timeout: 2000ms
+
+  # ─────────────── Spring Cloud Gateway Routes ───────────────
+  cloud:
+    gateway:
+      # Load Balancer qua Eureka
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+
+      # Định tuyến thủ công (override discovery)
+      routes:
+        # ── Auth / User Service ──
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/auth/**, /api/v1/users/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                key-resolver: "#{@ipKeyResolver}"
+
+        # ── Product Service ──
+        - id: product-service
+          uri: lb://product-service
+          predicates:
+            - Path=/api/v1/products/**
+          filters:
+            - name: JwtAuthFilter
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+                key-resolver: "#{@userKeyResolver}"
+
+        # ── Order Service ──
+        - id: order-service
+          uri: lb://order-service
+          predicates:
+            - Path=/api/v1/orders/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Notification Service ──
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Lost & Found Service ──
+        - id: lost-found-service
+          uri: lb://lost-found-service
+          predicates:
+            - Path=/api/v1/lost-found/**
+          filters:
+            - name: JwtAuthFilter
+
+        # ── Chat Service ──
+        - id: chat-service
+          uri: lb://chat-service
+          predicates:
+            - Path=/api/v1/chats/**
+          filters:
+            - name: JwtAuthFilter
+
+      # Global CORS
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins:
+              - "http://localhost:5173"
+              - "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+# ─────────────── Eureka Client ───────────────
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+# ─────────────── JWT Config ───────────────
+jwt:
+  secret: "iuh-exchange-super-secret-key-change-in-production-2024"
+  expiration: 900000        # 15 phút (ms)
+  refresh-expiration: 604800000  # 7 ngày (ms)
+
+# ─────────────── Resilience4j Circuit Breaker ───────────────
+resilience4j:
+  circuitbreaker:
+    instances:
+      default:
+        slidingWindowSize: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+
+# ─────────────── Actuator ───────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    gateway:
+      enabled: true
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    edu.iuh.exchange.gateway: DEBUG

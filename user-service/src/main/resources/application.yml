@@ -1,0 +1,87 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+
+  config:
+    import: "optional:configserver:http://config-admin:config-admin-password@localhost:8888"
+
+  # MongoDB
+  data:
+    mongodb:
+      uri: mongodb://user_svc:user_svc_pass@localhost:27018/iuh_users?authSource=iuh_users
+      database: iuh_users
+
+    # Redis
+    redis:
+      host: localhost
+      port: 6379
+      password: iuh_exchange_redis
+
+  # Kafka
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: user-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "edu.iuh.exchange.*"
+
+  # Mail (SMTP) - Điền thông tin thực vào .env
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+
+  # Tắt Spring Security auto-config (dùng config riêng)
+  security:
+    user:
+      name: "admin"
+      password: "admin"
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: "iuh-exchange-super-secret-key-change-in-production-2024"
+  expiration: 900000
+  refresh-expiration: 604800000
+
+# Kafka Topics
+kafka:
+  topics:
+    user-registered: user.registered
+    user-verified: user.verified
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  level:
+    edu.iuh.exchange.userservice: DEBUG
+
