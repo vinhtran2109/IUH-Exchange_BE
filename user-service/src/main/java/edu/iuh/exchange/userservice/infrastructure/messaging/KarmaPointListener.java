@@ -39,6 +39,33 @@ public class KarmaPointListener {
         log.warn("📉 [KARMA] Order {} cancelled. Reason: {}", orderId, reason);
     }
 
+    @KafkaListener(topics = "user.karma.penalty", groupId = "user-service-karma-group")
+    public void onKarmaPenalty(Map<String, Object> payload) {
+        String userId = (String) payload.get("userId");
+        int pointsToDeduct = (int) payload.get("pointsToDeduct");
+        String reason = (String) payload.get("reason");
+        
+        log.warn("📉 [KARMA] Penalty for userId: {}. Reason: {}. Deducting {} points.", userId, reason, pointsToDeduct);
+        
+        // Find by ID because the Report API targets reportedUserId (which is likely the MongoDB ID or studentId)
+        // Adjusting find method to try both or assume it's the studentId since our event uses it.
+        userRepository.findByStudentId(userId).ifPresentOrElse(user -> {
+            user.setKarmaPoint(user.getKarmaPoint() - pointsToDeduct);
+            
+            // Check threshold
+            if (user.getKarmaPoint() < 0) {
+                java.util.List<String> perms = new java.util.ArrayList<>(user.getPermissions());
+                perms.remove(User.Permission.CAN_POST);
+                user.setPermissions(perms);
+                log.error("🚫 [MODERATION] User {} karma {} < 0. Revoked CAN_POST permission!", userId, user.getKarmaPoint());
+            }
+            
+            userRepository.save(user);
+        }, () -> {
+            log.warn("⚠️ [KARMA] User {} not found for penalty.", userId);
+        });
+    }
+
     private void addKarmaPoint(String studentId, int points) {
         userRepository.findByStudentId(studentId).ifPresentOrElse(user -> {
             user.setKarmaPoint(user.getKarmaPoint() + points);

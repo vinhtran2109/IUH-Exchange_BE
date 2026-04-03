@@ -52,9 +52,9 @@ Trọng tâm: Tương tác người với người.
 
 ## Phase 6: Phụ trợ - Lost & Found + Moderation (Tuần 6)
 Trọng tâm: Hoàn thiện tính năng cộng đồng sinh viên.
-- [ ] Xây dựng APIs cho Đồ thất lạc (Lost & Found).
-- [ ] API Tố cáo sản phẩm/người dùng (Report Module) dành lưu tạm nội dung Admin kiểm duyệt.
-- [ ] Tự động khóa tính năng "Đăng bài" khi User bị gạch cờ rớt trừ KarmaPoint dưới ngưỡng 0.
+- [x] Xây dựng APIs cho Đồ thất lạc (Lost & Found).
+- [x] API Tố cáo sản phẩm/người dùng (Report Module) dành lưu tạm nội dung Admin kiểm duyệt.
+- [x] Tự động khóa tính năng "Đăng bài" khi User bị gạch cờ rớt trừ KarmaPoint dưới ngưỡng 0.
 
 ## Phase 7: Frontend React Application (Song song Tuần 3 - 6)
 - [ ] Khởi tạo dự án Vite (React + TypeScript).
