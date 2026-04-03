@@ -35,20 +35,20 @@ Trọng tâm: Đăng tải đồ dùng cũ, xử lý Upload ảnh.
 
 ## Phase 4: Order Service & Distributed Transaction (Tuần 4)
 Trọng tâm: Logic trao đổi hàng cực kỳ khắt khe + Saga.
-- [ ] Thiết kế Mongo Order Collection.
-- [ ] Viết API Create Order yêu cầu check **Idempotency-Key** lưu Redis để tránh Duplicate Order do Spam.
-- [ ] Implement Saga Choreography Pattern:
-  - [ ] Gửi Event `OrderCreatedEvent` qua Kafka.
-  - [ ] ProductService nghe sự kiện và khóa món hàng (Cập nhật `Status=PENDING`).
-  - [ ] Nếu Update Product bị Crash/Fail, bắt Lỗi -> Gửi bù Event báo Hủy Order (Compensating Transaction).
-- [ ] Setup tính năng trừ phạt / tặng **KarmaPoint** sau khi hoàn tất mua bán.
+- [x] Thiết kế Mongo Order Collection.
+- [x] Viết API Create Order yêu cầu check **Idempotency-Key** lưu Redis để tránh Duplicate Order do Spam.
+- [x] Implement Saga Choreography Pattern:
+  - [x] Gửi Event `OrderCreatedEvent` qua Kafka (topic: `order.created`).
+  - [x] ProductService nghe sự kiện và khóa món hàng (Cập nhật `Status=PENDING`) → Phát `product.reserved`.
+  - [x] Nếu Product không còn available → Phát `product.reserve.failed` → OrderService tự hủy đơn.
+- [x] Setup tính năng trừ phạt / tặng **KarmaPoint** sau khi hoàn tất mua bán.
 
 ## Phase 5: Giao tiếp Realtime - Chat & Notification (Tuần 5)
 Trọng tâm: Tương tác người với người.
-- [ ] Khởi tạo **Chat Service** và **Notification Service**.
-- [ ] Thiết lập WebSocket với Spring STOMP cho Chat Service.
-- [ ] Áp dụng *Redis Pub/Sub* để router WebSocket tin nhắn nếu Chat Service được sinh ra thành nhiều Instance (Scale Out).
-- [ ] Push Event `New Notification` từ hệ thống Kafka sang Notification Service -> Ghi DB và Push Notification ra WebSocket cho Frontend.
+- [x] Khởi tạo **Chat Service** và **Notification Service**.
+- [x] Thiết lập WebSocket với Spring STOMP cho Chat Service.
+- [x] Áp dụng *Redis Pub/Sub* để router WebSocket tin nhắn nếu Chat Service được sinh ra thành nhiều Instance (Scale Out).
+- [x] Push Event `New Notification` từ hệ thống Kafka sang Notification Service -> Ghi DB và Push Notification ra WebSocket cho Frontend.
 
 ## Phase 6: Phụ trợ - Lost & Found + Moderation (Tuần 6)
 Trọng tâm: Hoàn thiện tính năng cộng đồng sinh viên.

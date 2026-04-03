@@ -9,6 +9,8 @@ import edu.iuh.exchange.productservice.domain.repository.ProductRepository;
 import edu.iuh.exchange.productservice.domain.model.ProductDocument;
 import edu.iuh.exchange.productservice.domain.repository.ProductSearchRepository;
 import edu.iuh.exchange.productservice.infrastructure.messaging.ProductEventProducer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -16,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ProductService {
+
+    private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 
     private final ProductRepository productRepository;
     private final ProfanityFilterService profanityFilterService;
@@ -50,14 +54,22 @@ public class ProductService {
         product.setImageUrls(request.imageUrls());
         product.setStatus(ProductStatus.AVAILABLE);
 
+        // ✅ Bước 1: Lưu vào MongoDB - tác vụ quan trọng nhất, PHẢI thành công
         Product saved = productRepository.save(product);
-        
-        // Phát Event sang Kafka để ElasticSearch lặp chỉ mục (Indexer)
-        ProductEvent event = new ProductEvent(
-                saved.getId(), saved.getTitle(), saved.getDescription(),
-                saved.getPrice(), saved.getCategory(), saved.getStatus()
-        );
-        eventProducer.publishProductCreatedEvent(event);
+        log.info("✅ Product saved to MongoDB: id={}, title={}", saved.getId(), saved.getTitle());
+
+        // ✅ Bước 2: Publish sang Kafka (best-effort)
+        // Nếu Kafka chưa bật hoặc bị lỗi -> chỉ log WARNING, KHÔNG rollback MongoDB
+        try {
+            ProductEvent event = new ProductEvent(
+                    saved.getId(), saved.getTitle(), saved.getDescription(),
+                    saved.getPrice(), saved.getCategory(), saved.getStatus()
+            );
+            eventProducer.publishProductCreatedEvent(event);
+            log.info("📨 Kafka event published for product: {}", saved.getId());
+        } catch (Exception e) {
+            log.warn("⚠️ Kafka unavailable, skipping ElasticSearch indexing. Product still saved. Error: {}", e.getMessage());
+        }
 
         return ProductResponse.fromEntity(saved);
     }

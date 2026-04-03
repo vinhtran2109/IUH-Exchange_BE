@@ -7,7 +7,7 @@ spring:
     import: "optional:configserver:http://config-admin:config-admin-password@localhost:8888"
   data:
     mongodb:
-      uri: mongodb://notification_svc:notification_svc_pass@localhost:27018/iuh_notifications?authSource=iuh_notifications
+      uri: mongodb://root:iuh_exchange_root@localhost:27018/?authMechanism=SCRAM-SHA-1&authSource=admin
       database: iuh_notifications
   kafka:
     bootstrap-servers: localhost:9092
@@ -15,9 +15,12 @@ spring:
       group-id: notification-service-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "edu.iuh.exchange.*"
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
 eureka:
   client:
     service-url:
