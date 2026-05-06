@@ -7,7 +7,7 @@ spring:
     import: "optional:configserver:http://config-admin:config-admin-password@localhost:8888"
   data:
     mongodb:
-      uri: mongodb://order_svc:order_svc_pass@localhost:27018/iuh_orders?authSource=iuh_orders
+      uri: mongodb://root:iuh_exchange_root@localhost:27018/iuh_orders?authSource=admin
       database: iuh_orders
     redis:
       host: localhost
@@ -18,9 +18,18 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        max.block.ms: 3000
     consumer:
-      group-id: order-service-group
+      group-id: order-service-group-v2
       auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
+        spring.json.use.type.headers: false
+        spring.json.value.default.type: java.util.Map
 eureka:
   client:
     service-url:

@@ -35,40 +35,40 @@ Trọng tâm: Đăng tải đồ dùng cũ, xử lý Upload ảnh.
 
 ## Phase 4: Order Service & Distributed Transaction (Tuần 4)
 Trọng tâm: Logic trao đổi hàng cực kỳ khắt khe + Saga.
-- [ ] Thiết kế Mongo Order Collection.
-- [ ] Viết API Create Order yêu cầu check **Idempotency-Key** lưu Redis để tránh Duplicate Order do Spam.
-- [ ] Implement Saga Choreography Pattern:
-  - [ ] Gửi Event `OrderCreatedEvent` qua Kafka.
-  - [ ] ProductService nghe sự kiện và khóa món hàng (Cập nhật `Status=PENDING`).
-  - [ ] Nếu Update Product bị Crash/Fail, bắt Lỗi -> Gửi bù Event báo Hủy Order (Compensating Transaction).
-- [ ] Setup tính năng trừ phạt / tặng **KarmaPoint** sau khi hoàn tất mua bán.
+- [x] Thiết kế Mongo Order Collection.
+- [x] Viết API Create Order yêu cầu check **Idempotency-Key** lưu Redis để tránh Duplicate Order do Spam.
+- [x] Implement Saga Choreography Pattern:
+  - [x] Gửi Event `OrderCreatedEvent` qua Kafka (topic: `order.created`).
+  - [x] ProductService nghe sự kiện và khóa món hàng (Cập nhật `Status=PENDING`) → Phát `product.reserved`.
+  - [x] Nếu Product không còn available → Phát `product.reserve.failed` → OrderService tự hủy đơn.
+- [x] Setup tính năng trừ phạt / tặng **KarmaPoint** sau khi hoàn tất mua bán.
 
 ## Phase 5: Giao tiếp Realtime - Chat & Notification (Tuần 5)
 Trọng tâm: Tương tác người với người.
-- [ ] Khởi tạo **Chat Service** và **Notification Service**.
-- [ ] Thiết lập WebSocket với Spring STOMP cho Chat Service.
-- [ ] Áp dụng *Redis Pub/Sub* để router WebSocket tin nhắn nếu Chat Service được sinh ra thành nhiều Instance (Scale Out).
-- [ ] Push Event `New Notification` từ hệ thống Kafka sang Notification Service -> Ghi DB và Push Notification ra WebSocket cho Frontend.
+- [x] Khởi tạo **Chat Service** và **Notification Service**.
+- [x] Thiết lập WebSocket với Spring STOMP cho Chat Service.
+- [x] Áp dụng *Redis Pub/Sub* để router WebSocket tin nhắn nếu Chat Service được sinh ra thành nhiều Instance (Scale Out).
+- [x] Push Event `New Notification` từ hệ thống Kafka sang Notification Service -> Ghi DB và Push Notification ra WebSocket cho Frontend.
 
 ## Phase 6: Phụ trợ - Lost & Found + Moderation (Tuần 6)
 Trọng tâm: Hoàn thiện tính năng cộng đồng sinh viên.
-- [ ] Xây dựng APIs cho Đồ thất lạc (Lost & Found).
-- [ ] API Tố cáo sản phẩm/người dùng (Report Module) dành lưu tạm nội dung Admin kiểm duyệt.
-- [ ] Tự động khóa tính năng "Đăng bài" khi User bị gạch cờ rớt trừ KarmaPoint dưới ngưỡng 0.
+- [x] Xây dựng APIs cho Đồ thất lạc (Lost & Found).
+- [x] API Tố cáo sản phẩm/người dùng (Report Module) dành lưu tạm nội dung Admin kiểm duyệt.
+- [x] Tự động khóa tính năng "Đăng bài" khi User bị gạch cờ rớt trừ KarmaPoint dưới ngưỡng 0.
 
 ## Phase 7: Frontend React Application (Song song Tuần 3 - 6)
-- [ ] Khởi tạo dự án Vite (React + TypeScript).
-- [ ] Setup TailwindCSS và Shadcn/UI (Hoặc NextUI/AntD) với định dạng màu sắc Theme của IUH (Đỏ / Xám).
-- [ ] Setup **Zustand** Storage, tích hợp API config Axios Interceptors nối Refresh Token tự động. 
-- [ ] Xây dựng Page: Authentication, Homepage, User Profile.
-- [ ] Lắp đặt Component Card sản phẩm + Page Detail (Lấy URL Ảnh thẳng từ S3).
-- [ ] Ghép WebSockets STOMP hiển thị Real-time Chat Panel và Notification Bell.
+- [x] Khởi tạo dự án Vite (React + TypeScript).
+- [x] Setup TailwindCSS và Shadcn/UI (Hoặc NextUI/AntD) với định dạng màu sắc Theme của IUH (Đỏ / Xám).
+- [x] Setup **Zustand** Storage, tích hợp API config Axios Interceptors nối Refresh Token tự động. 
+- [x] Xây dựng Page: Authentication, Homepage, User Profile.
+- [x] Lắp đặt Component Card sản phẩm + Page Detail (Lấy URL Ảnh thẳng từ S3).
+- [x] Ghép WebSockets STOMP hiển thị Real-time Chat Panel và Notification Bell.
 
 ## Phase 8: Logging, Monitoring & Deployment (Tuần 7)
 Trọng tâm: Đóng gói và mang lên Cloud thả rông.
 - [ ] Code Elasticsearch Pipeline (ELK) để bắt log phân tán các Server.
 - [ ] Tích hợp Prometheus metrics cho JVM và thiết lập Grafana Dashboard.
-- [ ] Viết `Dockerfile` cho từng Service và Frontend Nginx.
+- [x] Viết `Dockerfile` cho từng Service và Frontend Nginx.
 - [ ] Tạo GitHub Actions tự build Docker Image trên Main Branch và Push về Hub.
 - [ ] Chạy Cụm Cloud Cluster (Deploying Kubernetes cơ bản hoặc dùng Cụm Amazon EC2 LoadBalancer + MongoDB Atlas / ElastiCache).
 - [ ] Chạy Test Load/Stress bằng JMeter đánh dấu chịu tải API.

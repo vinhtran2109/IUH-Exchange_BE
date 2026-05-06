@@ -36,7 +36,7 @@ public class EmailService {
             log.info("[Email] OTP sent to: {}", toEmail);
 
         } catch (Exception e) {
-            log.error("[Email] Failed to send OTP to {}: {}", toEmail, e.getMessage());
+            log.error("[Email] Failed to send OTP {} to {}: {}", otpCode, toEmail, e.getMessage());
             // Không throw exception - lỗi email không nên làm fail cả request
         }
     }

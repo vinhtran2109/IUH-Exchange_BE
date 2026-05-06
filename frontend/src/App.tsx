@@ -1,0 +1,49 @@
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import Layout from './components/Layout';
+import ChatManager from './components/ChatManager';
+import Home from './pages/Home';
+
+import Login from './pages/Login';
+import Register from './pages/Register';
+import CreateProduct from './pages/CreateProduct';
+import ProductDetail from './pages/ProductDetail';
+import LostFoundCenter from './pages/LostFoundCenter';
+import ReportLostFound from './pages/ReportLostFound_FIX';
+import LostFoundDetail from './pages/LostFoundDetail';
+import Profile from './pages/Profile';
+import Products from './pages/Products';
+import AdminDashboard from './pages/AdminDashboard';
+import OrderDetail from './pages/OrderDetail';
+
+const NotFound = () => <div className="text-center py-20"><h1 className="text-9xl font-black text-indigo-100 mb-4">404</h1><h2 className="text-2xl font-bold text-slate-800 mb-6">Trang không được tìm thấy</h2><button onClick={() => window.history.back()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">Quay lại</button></div>;
+
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <ChatManager />
+      <Routes>
+
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="products/:id" element={<ProductDetail />} />
+          <Route path="products" element={<Products />} />
+          <Route path="products/new" element={<CreateProduct />} />
+          <Route path="login" element={<Login />} />
+          <Route path="lost-found" element={<LostFoundCenter />} />
+          <Route path="lost-found/new" element={<ReportLostFound />} />
+          <Route path="lost-found/:id" element={<LostFoundDetail />} />
+          <Route path="register" element={<Register />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="not-found" element={<NotFound />} />
+
+          <Route path="*" element={<Navigate to="/not-found" replace />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;

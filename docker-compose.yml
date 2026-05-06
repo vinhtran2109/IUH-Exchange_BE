@@ -182,3 +182,252 @@ services:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
     networks:
       - iuh-exchange-net
+
+  # ============================================================
+  # IUH Campus Exchange Platform - Backend Services (Phase 2)
+  # ============================================================
+
+  # ─────────────────────────────────────────────
+  # Service Registry (Eureka)
+  # ─────────────────────────────────────────────
+  service-registry:
+    build: ./service-registry
+    container_name: iuh-service-registry
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    environment:
+      EUREKA_INSTANCE_HOSTNAME: service-registry
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+    networks:
+      - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # Config Server
+  # ─────────────────────────────────────────────
+  config-server:
+    build: ./config-server
+    container_name: iuh-config-server
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_healthy
+    ports:
+      - "8888:8888"
+    environment:
+      SPRING_PROFILES_ACTIVE: native
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+    networks:
+      - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://config-admin:config-admin-password@localhost:8888/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─────────────────────────────────────────────
+  # API Gateway
+  # ─────────────────────────────────────────────
+  api-gateway:
+    build: ./api-gateway
+    container_name: iuh-api-gateway
+    restart: unless-stopped
+    depends_on:
+      service-registry:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      # Bỏ config server để dùng local config cho API Gateway (Fix Filter bug)
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: iuh_exchange_redis
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # User Service
+  # ─────────────────────────────────────────────
+  user-service:
+    build: ./user-service
+    container_name: iuh-user-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      service-registry:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://user_svc:user_svc_pass@mongodb:27017/iuh_users?authSource=iuh_users"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: iuh_exchange_redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # JWT Config (Synchronized)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      # AWS config
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Product Service
+  # ─────────────────────────────────────────────
+  product-service:
+    build: ./product-service
+    container_name: iuh-product-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      service-registry:
+        condition: service_healthy
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://product_svc:product_svc_pass@mongodb:27017/iuh_products?authSource=iuh_products"
+      SPRING_ELASTICSEARCH_URIS: "http://elasticsearch:9200"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # JWT Config (Synchronized)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+      # AWS Config
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Order Service
+  # ─────────────────────────────────────────────
+  order-service:
+    build: ./order-service
+    container_name: iuh-order-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      service-registry:
+        condition: service_healthy
+    environment:
+      SPRING_CLOUD_CONFIG_IMPORT: "optional:configserver:http://config-admin:config-admin-password@config-server:8888"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://order_svc:order_svc_pass@mongodb:27017/iuh_orders?authSource=iuh_orders"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: iuh_exchange_redis
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # JWT Config (Synchronized)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Notification Service
+  # ─────────────────────────────────────────────
+  notification-service:
+    build: ./notification-service
+    container_name: iuh-notification-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_CLOUD_CONFIG_IMPORT: "optional:configserver:http://config-admin:config-admin-password@config-server:8888"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://notification_svc:notification_svc_pass@mongodb:27017/iuh_notifications?authSource=iuh_notifications"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # JWT Config (Synchronized)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Chat Service
+  # ─────────────────────────────────────────────
+  chat-service:
+    build: ./chat-service
+    container_name: iuh-chat-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_CLOUD_CONFIG_IMPORT: "optional:configserver:http://config-admin:config-admin-password@config-server:8888"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://chat_svc:chat_svc_pass@mongodb:27017/iuh_chat?authSource=iuh_chat"
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PASSWORD: iuh_exchange_redis
+      # JWT Config (Synchronized)
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Lost & Found Service
+  # ─────────────────────────────────────────────
+  lost-found-service:
+    build: ./lost-found-service
+    container_name: iuh-lost-found-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      SPRING_CLOUD_CONFIG_IMPORT: "optional:configserver:http://config-admin:config-admin-password@config-server:8888"
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-admin:eureka-admin-password@service-registry:8761/eureka/
+      SPRING_DATA_MONGODB_URI: "mongodb://lostfound_svc:lostfound_svc_pass@mongodb:27017/iuh_lostfound?authSource=iuh_lostfound"
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME}
+    networks:
+      - iuh-exchange-net
+
+  # ============================================================
+  # IUH Campus Exchange Platform - Frontend (Phase 3)
+  # ============================================================
+
+  frontend:
+    build: ./frontend
+    container_name: iuh-frontend
+    restart: unless-stopped
+    depends_on:
+      - api-gateway
+    ports:
+      - "3000:80"
+    networks:
+      - iuh-exchange-net

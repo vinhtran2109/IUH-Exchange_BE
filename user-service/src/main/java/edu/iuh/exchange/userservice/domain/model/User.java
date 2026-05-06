@@ -38,24 +38,23 @@ public class User {
     private String studentId;       // Mã sinh viên IUH
     private String avatarUrl;       // URL ảnh từ S3
 
-    @Builder.Default
-    private boolean isVerified = false;   // Đã xác thực OTP email chưa
+    private boolean isVerified;   // Mặc định false
 
     @Builder.Default
-    private boolean isActive = true;      // Bị ban thì set false
+    private boolean isActive = true;      // Mặc định true cho cả constructor và builder
 
     @Builder.Default
-    private int karmaPoint = 100;         // Điểm uy tín ban đầu = 100
+    private int karmaPoint = 100;         // Mặc định 100
 
     @Builder.Default
     private UserRole role = UserRole.STUDENT;
 
     @Builder.Default
-    private List<String> permissions = List.of(
+    private List<String> permissions = new java.util.ArrayList<>(java.util.List.of(
             Permission.CAN_POST,
             Permission.CAN_CHAT,
             Permission.CAN_REPORT
-    );
+    ));
 
     @CreatedDate
     private Instant createdAt;
