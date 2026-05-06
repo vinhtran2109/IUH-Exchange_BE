@@ -20,23 +20,27 @@ public class RedisSubscriber {
     }
 
     /**
-     * Bắt tin nhắn từ Redis Pub/Sub và đẩy qua Websocket cho người nhận
+     * Bắt tin nhắn JSON thô từ Redis Pub/Sub và tự giải mã bằng ObjectMapper
      */
-    public void onMessage(String message) {
+    public void onMessage(String json) {
         try {
-            // Lấy JSON parse lại thành ChatMessage
-            String unescaped = message.startsWith("\"") ? objectMapper.readValue(message, String.class) : message;
-            ChatMessage chatMessage = objectMapper.readValue(unescaped, ChatMessage.class);
+            log.info("📢 [REDIS DEBUG] Đã bắt được tin nhắn thô: {}", json);
             
-            // Gửi qua WebSocket cho người nhận đích (Sẽ được định tuyến tới queue của user)
-            log.info("🚀 [WebSocket] Pushing message from {} to {}", chatMessage.getSenderId(), chatMessage.getRecipientId());
+            // Tự giải mã bằng tay để kiểm soát lỗi
+            ChatMessage chatMessage = objectMapper.readValue(json, ChatMessage.class);
+            
+            log.info("🚀 [REAL-TIME PUSH] Đẩy tin từ {} tới {}...", 
+                     chatMessage.getSenderId(), chatMessage.getRecipientId());
+            
+            // Gửi qua WebSocket cho người nhận đích
             messagingTemplate.convertAndSendToUser(
                     chatMessage.getRecipientId(),
                     "/queue/messages",
                     chatMessage
             );
+            log.info("✅ [FINISHED] Real-time Push thành công!");
         } catch (Exception e) {
-            log.error("❌ [RedisSubscriber] Lỗi parse tin nhắn: {}", e.getMessage());
+            log.error("❌ [CRITICAL ERROR] Lỗi giải mã tin nhắn: {}", e.getMessage(), e);
         }
     }
 }

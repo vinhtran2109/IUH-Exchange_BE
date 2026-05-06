@@ -130,11 +130,11 @@ public class AuthService {
                 });
 
         if (!user.isVerified()) {
-            throw new BadRequestException("Email not verified. Please check your inbox for OTP.");
+            throw new BadRequestException("Email chưa được xác thực. Vui lòng kiểm tra mã OTP!");
         }
 
         if (!user.isActive()) {
-            throw new BadRequestException("Your account has been suspended.");
+            throw new BadRequestException("Tài khoản của bạn đã bị khóa! Vui lòng liên hệ Admin IUH.");
         }
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -146,7 +146,7 @@ public class AuthService {
         redisTemplate.delete(LOGIN_RATE_LIMIT_PREFIX + request.getEmail());
 
         // Tạo tokens
-        String accessToken  = jwtService.generateAccessToken(user);
+        String accessToken = jwtService.generateAccessToken(user);
         String refreshToken = jwtService.generateRefreshToken(user);
 
         // Gửi refresh token qua HttpOnly Cookie
@@ -179,10 +179,10 @@ public class AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", userId));
 
         if (!user.isActive()) {
-            throw new BadRequestException("Account is suspended");
+            throw new BadRequestException("Tài khoản của bạn đã bị khóa!");
         }
 
-        String newAccessToken  = jwtService.generateAccessToken(user);
+        String newAccessToken = jwtService.generateAccessToken(user);
         String newRefreshToken = jwtService.generateRefreshToken(user);
         setRefreshTokenCookie(response, newRefreshToken);
 
@@ -211,6 +211,32 @@ public class AuthService {
         response.addCookie(cookie);
     }
 
+    /**
+     * Đổi mật khẩu
+     */
+    @Transactional
+    public String changePassword(String userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", userId));
+
+        // 1. Kiểm tra mật khẩu cũ
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new BadRequestException("Mật khẩu hiện tại không chính xác!");
+        }
+
+        // 2. Kiểm tra mật khẩu mới khác mật khẩu cũ
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new BadRequestException("Mật khẩu mới không được trùng với mật khẩu cũ!");
+        }
+
+        // 3. Cập nhật mật khẩu mới
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        log.info("[Auth] Password changed for user: {}", user.getEmail());
+        return "Đổi mật khẩu thành công!";
+    }
+
     // ─────────────────────────────────────────────────────────
     // PRIVATE HELPERS
     // ─────────────────────────────────────────────────────────
@@ -229,6 +255,11 @@ public class AuthService {
         otpRepository.deleteByEmail(email);
         otpRepository.save(otpToken);
 
+        // ✅ LOG OTP RA CONSOLE ĐỂ DEV KHÔNG CẦN CHECK MAIL
+        log.info("---------------------------------------------------------");
+        log.info("[Email] >>> DEV MODE - OTP for {} is: {}", email, otp);
+        log.info("---------------------------------------------------------");
+
         // Gửi email bất đồng bộ
         emailService.sendOtpEmail(email, otp, name);
     }
@@ -245,9 +276,8 @@ public class AuthService {
         if (attempts >= MAX_LOGIN_ATTEMPTS) {
             Long ttl = redisTemplate.getExpire(key);
             throw new BadRequestException(
-                String.format("Too many login attempts. Please try again after %d minutes.", 
-                    ttl != null ? ttl / 60 : 15)
-            );
+                    String.format("Too many login attempts. Please try again after %d minutes.",
+                            ttl != null ? ttl / 60 : 15));
         }
     }
 
@@ -260,8 +290,8 @@ public class AuthService {
 
     private void setRefreshTokenCookie(HttpServletResponse response, String refreshToken) {
         Cookie cookie = new Cookie("refreshToken", refreshToken);
-        cookie.setHttpOnly(true);    // Không đọc được bằng JS
-        cookie.setSecure(true);      // Chỉ qua HTTPS
+        cookie.setHttpOnly(true); // Không đọc được bằng JS
+        cookie.setSecure(true); // Chỉ qua HTTPS
         cookie.setPath("/");
         cookie.setMaxAge((int) (jwtService.getRefreshTokenExpiration() / 1000));
         response.addCookie(cookie);

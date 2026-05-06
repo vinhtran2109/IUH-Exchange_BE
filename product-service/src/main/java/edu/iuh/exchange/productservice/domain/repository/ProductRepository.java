@@ -20,4 +20,6 @@ public interface ProductRepository extends MongoRepository<Product, String> {
     
     // Tìm kiếm theo danh mục
     Page<Product> findByCategoryAndStatusOrderByCreatedAtDesc(String category, ProductStatus status, Pageable pageable);
+
+    long countByStatus(ProductStatus status);
 }

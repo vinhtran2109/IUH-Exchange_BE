@@ -27,7 +27,7 @@ public class NotificationKafkaListener {
         String sellerId = (String) payload.get("sellerId");
         String orderId = (String) payload.get("orderId");
         
-        sendNotification(sellerId, "Đơn hàng mới", "Bạn có một yêu cầu mua sách mới từ đơn hàng " + orderId, "ORDER");
+        sendNotification(sellerId, "Đơn hàng mới", "Bạn có một yêu cầu mua sách mới từ đơn hàng " + orderId, "ORDER", orderId);
     }
 
     @KafkaListener(topics = "order.completed", groupId = "notification-service-group")
@@ -36,21 +36,18 @@ public class NotificationKafkaListener {
         String sellerId = (String) payload.get("sellerId");
         String orderId = (String) payload.get("orderId");
         
-        sendNotification(buyerId, "Giao dịch thành công", "Đơn hàng " + orderId + " đã được chốt!", "ORDER");
-        sendNotification(sellerId, "Giao dịch thành công", "Đơn hàng " + orderId + " đã được chốt!", "ORDER");
+        sendNotification(buyerId, "Giao dịch thành công", "Đơn hàng " + orderId + " đã được chốt!", "ORDER", orderId);
+        sendNotification(sellerId, "Giao dịch thành công", "Đơn hàng " + orderId + " đã được chốt!", "ORDER", orderId);
     }
 
     @KafkaListener(topics = "order.cancelled", groupId = "notification-service-group")
     public void onOrderCancelled(Map<String, Object> payload) {
-        // Thông báo này thường dành cho Buyer
         String orderId = (String) payload.get("orderId");
         String reason = (String) payload.get("reason");
-        // Giả sử lấy được buyerId từ payload, nhưng hiện tại payload chỉ có orderId và reason.
-        // Tạm thời nếu payload chưa có buyerId thì chỉ log. Trong thực tế cần bổ sung buyerId vào event.
         log.warn("🔔 [Notify] Order {} cancelled: {}", orderId, reason);
     }
 
-    private void sendNotification(String recipientId, String title, String message, String type) {
+    private void sendNotification(String recipientId, String title, String message, String type, String targetId) {
         if (recipientId == null) return;
         
         Notification notification = Notification.builder()
@@ -58,6 +55,7 @@ public class NotificationKafkaListener {
                 .title(title)
                 .message(message)
                 .type(type)
+                .targetId(targetId)
                 .build();
                 
         Notification saved = notificationRepository.save(notification);

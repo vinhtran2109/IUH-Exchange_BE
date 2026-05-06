@@ -63,6 +63,42 @@ public class OrderSagaListener {
         });
     }
 
+    @KafkaListener(topics = "order.completed", groupId = "product-service-saga-group-v2")
+    public void onOrderCompleted(Map<String, Object> payload) {
+        String orderId = (String) payload.get("orderId");
+        String productId = (String) payload.get("productId");
+
+        if (productId == null) {
+            log.warn("⚠️ [SAGA] Order completed without productId: orderId={}", orderId);
+            return;
+        }
+
+        productRepository.findById(productId).ifPresent(product -> {
+            product.setStatus(ProductStatus.SOLD);
+            productRepository.save(product);
+            log.info("🏁 [SAGA] Product marked as SOLD: productId={}, orderId={}", productId, orderId);
+        });
+    }
+
+    @KafkaListener(topics = "order.cancelled", groupId = "product-service-saga-group-v2")
+    public void onOrderCancelled(Map<String, Object> payload) {
+        String productId = (String) payload.get("productId");
+        String reason = (String) payload.get("reason");
+
+        if (productId == null) {
+            log.warn("⚠️ [SAGA] Order cancelled without productId, reason={}", reason);
+            return;
+        }
+
+        productRepository.findById(productId).ifPresent(product -> {
+            if (ProductStatus.PENDING.equals(product.getStatus())) {
+                product.setStatus(ProductStatus.AVAILABLE);
+                productRepository.save(product);
+                log.info("↩️ [SAGA] Product released back to AVAILABLE: productId={}, reason={}", productId, reason);
+            }
+        });
+    }
+
     private void sendReserveFailed(String orderId, String productId, String reason) {
         Map<String, String> failPayload = new HashMap<>();
         failPayload.put("orderId", orderId);

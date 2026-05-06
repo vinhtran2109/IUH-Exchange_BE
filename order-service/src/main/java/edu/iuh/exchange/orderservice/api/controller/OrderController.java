@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.net.URI;
+import java.util.Map;
 import java.util.List;
 
 @RestController
@@ -55,5 +56,31 @@ public class OrderController {
         return orderService.getOrderById(id)
                 .map(order -> ResponseEntity.ok(ApiResponse.ok(order, "Success")))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    /**
+     * Seller xác nhận đơn hàng.
+     */
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<ApiResponse<OrderResponse>> confirmOrder(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String sellerId) {
+
+        OrderResponse response = orderService.confirmOrder(id, sellerId);
+        return ResponseEntity.ok(ApiResponse.ok(response, "Order confirmed"));
+    }
+
+    /**
+     * Seller từ chối đơn hàng.
+     */
+    @PatchMapping("/{id}/reject")
+    public ResponseEntity<ApiResponse<OrderResponse>> rejectOrder(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String sellerId,
+            @RequestBody(required = false) Map<String, String> body) {
+
+        String reason = body != null ? body.getOrDefault("reason", "Người bán từ chối đơn hàng") : "Người bán từ chối đơn hàng";
+        OrderResponse response = orderService.rejectOrder(id, sellerId, reason);
+        return ResponseEntity.ok(ApiResponse.ok(response, "Order rejected"));
     }
 }

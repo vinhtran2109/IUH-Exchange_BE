@@ -24,24 +24,29 @@ public class OrderEventProducer {
         }
     }
 
-    public void publishOrderCancelled(String orderId, String reason) {
+    public void publishOrderCancelled(String orderId, String productId, String reason) {
         try {
             kafkaTemplate.send(OrderTopics.ORDER_CANCELLED, orderId,
-                    new java.util.HashMap<>(java.util.Map.of("orderId", orderId, "reason", reason)));
+                    new java.util.HashMap<>(java.util.Map.of(
+                            "orderId", orderId,
+                            "productId", productId,
+                            "reason", reason
+                    )));
             log.info("📨 [SAGA] OrderCancelledEvent published: orderId={}", orderId);
         } catch (Exception e) {
             log.warn("⚠️ Kafka unavailable, OrderCancelledEvent not published: {}", e.getMessage());
         }
     }
-    public void publishOrderCompleted(String orderId, String buyerId, String sellerId) {
+    public void publishOrderCompleted(String orderId, String buyerId, String sellerId, String productId) {
         try {
             kafkaTemplate.send(OrderTopics.ORDER_COMPLETED, orderId,
                     new java.util.HashMap<>(java.util.Map.of(
                             "orderId", orderId,
                             "buyerId", buyerId,
-                            "sellerId", sellerId
+                            "sellerId", sellerId,
+                            "productId", productId
                     )));
-            log.info("📨 [SAGA] OrderCompletedEvent published: orderId={}, buyerId={}, sellerId={}", orderId, buyerId, sellerId);
+            log.info("📨 [SAGA] OrderCompletedEvent published: orderId={}, buyerId={}, sellerId={}, productId={}", orderId, buyerId, sellerId, productId);
         } catch (Exception e) {
             log.warn("⚠️ Kafka unavailable, OrderCompletedEvent not published: {}", e.getMessage());
         }

@@ -1,8 +1,12 @@
 package edu.iuh.exchange.chatservice.config;
 
-import edu.iuh.exchange.chatservice.infrastructure.messaging.RedisSubscriber;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.listener.ChannelTopic;
@@ -11,36 +15,65 @@ import org.springframework.data.redis.listener.adapter.MessageListenerAdapter;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import edu.iuh.exchange.chatservice.infrastructure.messaging.RedisSubscriber;
+
 @Configuration
 public class RedisConfig {
 
-    public static final String CHAT_TOPIC = "chat_room_topic";
+    public static final String CHAT_TOPIC = "chat-messages";
 
     @Bean
-    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
+    @Primary
+
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        return mapper;
+    }
+
+
+    @Bean
+    public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory, ObjectMapper objectMapper) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
+
+        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+
+        // Key dùng String, Value dùng JSON đã cấu hình thời gian
         template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new GenericJackson2JsonRedisSerializer());
+        template.setValueSerializer(serializer);
+        template.setHashKeySerializer(new StringRedisSerializer());
+        template.setHashValueSerializer(serializer);
+
+        template.afterPropertiesSet();
         return template;
     }
 
+    // 2. Cấu hình Adapter để bắn tin nhắn từ Redis Subscriber tới class RedisSubscriber
     @Bean
-    public ChannelTopic topic() {
-        return new ChannelTopic(CHAT_TOPIC);
+    public MessageListenerAdapter messageListenerAdapter(RedisSubscriber redisSubscriber) {
+        // Chúng ta sẽ tự giải mã String trong RedisSubscriber để tránh lỗi ngầm của Spring
+        MessageListenerAdapter adapter = new MessageListenerAdapter(redisSubscriber, "onMessage");
+        adapter.setSerializer(new StringRedisSerializer());
+        return adapter;
     }
 
-    @Bean
-    public MessageListenerAdapter listenerAdapter(RedisSubscriber subscriber) {
-        return new MessageListenerAdapter(subscriber, "onMessage");
-    }
 
+
+    // 3. Container tổng - nơi đăng ký tất cả các Topic muốn nghe
     @Bean
-    public RedisMessageListenerContainer redisContainer(RedisConnectionFactory connectionFactory,
-                                                        MessageListenerAdapter listenerAdapter) {
+    public RedisMessageListenerContainer redisMessageListenerContainer(
+            RedisConnectionFactory connectionFactory,
+            MessageListenerAdapter messageListenerAdapter) {
+        
         RedisMessageListenerContainer container = new RedisMessageListenerContainer();
         container.setConnectionFactory(connectionFactory);
-        container.addMessageListener(listenerAdapter, topic());
+        
+        // Đăng ký Topic CHAT_TOPIC để bắt tất cả tin nhắn chat qua Pub/Sub
+        container.addMessageListener(messageListenerAdapter, new ChannelTopic(CHAT_TOPIC));
+        
         return container;
     }
 }
+
+

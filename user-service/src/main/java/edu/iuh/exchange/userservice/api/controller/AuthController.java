@@ -101,7 +101,9 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.ok("Logged out successfully"));
     }
 
+
     // ─── Private helpers ───
+
 
     private String extractRefreshTokenFromCookie(HttpServletRequest request) {
         if (request.getCookies() == null) return null;

@@ -42,7 +42,7 @@ public class Product {
 
     // Default constructor
     public Product() {
-        this.status = ProductStatus.AVAILABLE;
+        this.status = ProductStatus.PENDING_APPROVAL;
     }
 
     // Getters and Setters

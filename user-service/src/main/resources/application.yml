@@ -60,7 +60,16 @@ spring:
       name: "admin"
       password: "admin"
 
+# ─────────────── AWS S3 Config (Avatar Storage) ───────────────
+aws:
+  s3:
+    bucket-name: ${S3_BUCKET_NAME:s3-vinhtran}
+    region: ${AWS_REGION:us-east-1}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+
 eureka:
+
   client:
     service-url:
       defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
@@ -68,9 +77,9 @@ eureka:
     prefer-ip-address: true
 
 jwt:
-  secret: "iuh-exchange-super-secret-key-change-in-production-2024"
-  expiration: 900000
-  refresh-expiration: 604800000
+  secret: ${JWT_SECRET:iuh-exchange-super-secret-key-change-in-production-2024}
+  expiration: ${JWT_EXPIRATION:900000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
 # Kafka Topics
 kafka:

@@ -55,6 +55,19 @@ public class ProductController {
     }
 
     /**
+     * Lấy danh sách sản phẩm của chính tôi (Dùng cho Profile)
+     */
+    @GetMapping("/me")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getMyProducts(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        
+        Page<ProductResponse> products = productService.getProductsBySellerId(userId, PageRequest.of(page, size));
+        return ResponseEntity.ok(ApiResponse.ok(products));
+    }
+
+    /**
      * Lấy 1 Product thông qua ID
      */
     @GetMapping("/{id}")
@@ -80,6 +93,31 @@ public class ProductController {
     }
 
     /**
+     * Cập nhật thông tin sản phẩm
+     */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String userId,
+            @Valid @RequestBody CreateProductRequest request) {
+        
+        ProductResponse response = productService.updateProduct(id, userId, request);
+        return ResponseEntity.ok(ApiResponse.ok(response, "Updated successfully"));
+    }
+
+    /**
+     * Xóa sản phẩm
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteProduct(
+            @PathVariable String id,
+            @RequestHeader("X-User-Id") String userId) {
+        
+        productService.deleteProduct(id, userId);
+        return ResponseEntity.ok(ApiResponse.ok(null, "Deleted successfully"));
+    }
+
+    /**
      * Lấy Pre-signed URL từ Amazon S3 để Frontend đẩy ảnh trực tiếp.
      */
     @PostMapping("/upload-url")
@@ -95,4 +133,43 @@ public class ProductController {
             "Upload URL generated successfully"
         ));
     }
+
+    // ==========================================
+    // ADMIN ENDPOINTS
+    // ==========================================
+
+    @GetMapping("/admin/pending")
+    public ResponseEntity<ApiResponse<Page<ProductResponse>>> getPendingProducts(
+            @RequestHeader("X-User-Role") String role,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        
+        Page<ProductResponse> products = productService.getPendingProducts(PageRequest.of(page, size));
+        return ResponseEntity.ok(ApiResponse.ok(products, "Success"));
+    }
+
+    @PatchMapping("/admin/{id}/resolve")
+    public ResponseEntity<ApiResponse<ProductResponse>> resolveProductStatus(
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable String id,
+            @RequestParam String action) {
+        
+        ProductResponse response = productService.resolveProductStatus(id, action);
+        return ResponseEntity.ok(ApiResponse.ok(response, "Resolved successfully"));
+    }
+
+    /**
+     * [ADMIN] Thống kê Dashboard
+     */
+    @GetMapping("/admin/stats")
+    public ResponseEntity<ApiResponse<java.util.Map<String, Object>>> getProductStats(
+            @RequestHeader(value = "X-User-Role", required = false) String role) {
+        
+        if (role == null || !"ADMIN".equals(role)) {
+            return ResponseEntity.status(403).body(ApiResponse.error(403, "Quyền Admin là bắt buộc. Hiện tại: " + role));
+        }
+        
+        return ResponseEntity.ok(ApiResponse.ok(productService.getProductStats()));
+    }
 }
+

@@ -22,10 +22,12 @@ public class Notification {
     private String title;
     private String message;
     private String type; // ORDER, CHAT, SYSTEM, REPORT
+    private String targetId; // ID of the related entity (OrderId, ProductId, etc.)
     
     @Builder.Default
     private boolean read = false;
     
     @CreatedDate
-    private Instant createdAt;
+    @Builder.Default
+    private Instant createdAt = Instant.now();
 }

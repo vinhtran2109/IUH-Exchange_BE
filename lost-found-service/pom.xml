@@ -45,6 +45,14 @@
             <groupId>edu.iuh.exchange</groupId>
             <artifactId>common-lib</artifactId>
         </dependency>
+
+        <!-- AWS S3 SDK for Image Upload -->
+        <dependency>
+            <groupId>software.amazon.awssdk</groupId>
+            <artifactId>s3</artifactId>
+            <version>2.25.15</version>
+        </dependency>
+
     </dependencies>
     <build>
         <plugins>

@@ -17,6 +17,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
  */
 @SpringBootApplication
 @EnableDiscoveryClient
+@org.springframework.data.mongodb.config.EnableMongoAuditing
 public class NotificationServiceApplication {
     public static void main(String[] args) {
         SpringApplication.run(NotificationServiceApplication.class, args);

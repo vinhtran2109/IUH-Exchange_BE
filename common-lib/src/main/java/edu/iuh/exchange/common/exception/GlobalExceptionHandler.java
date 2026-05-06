@@ -81,6 +81,17 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Xử lý lỗi thiếu header bắt buộc (MissingRequestHeaderException)
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingRequestHeaderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingHeaderException(org.springframework.web.bind.MissingRequestHeaderException ex) {
+        log.warn("[400] Missing required header: {}", ex.getHeaderName());
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.error(400, "Missing required header: " + ex.getHeaderName()));
+    }
+
+    /**
      * Xử lý bất kỳ exception không mong muốn nào (Fallback handler)
      */
     @ExceptionHandler(Exception.class)

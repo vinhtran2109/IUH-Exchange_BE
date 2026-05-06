@@ -20,6 +20,16 @@ eureka:
       defaultZone: http://eureka-admin:eureka-admin-password@localhost:8761/eureka/
   instance:
     prefer-ip-address: true
+
+# AWS S3 Config (đọc từ Window Environment / file .env)
+aws:
+  s3:
+    bucket-name: ${S3_BUCKET_NAME:s3-vinhtran}
+    region: ${AWS_REGION:us-east-1}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
+    presigned-url-expiry: 300  # 5 phút
+
 management:
   endpoints:
     web:

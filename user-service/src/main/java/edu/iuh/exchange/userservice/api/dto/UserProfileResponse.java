@@ -15,8 +15,13 @@ public class UserProfileResponse {
     private String name;
     private String studentId;
     private String avatarUrl;
+    @com.fasterxml.jackson.annotation.JsonProperty("isVerified")
     private boolean isVerified;
+    
+    @com.fasterxml.jackson.annotation.JsonProperty("isActive")
+    private boolean isActive;
     private int karmaPoint;
     private String role;
     private List<String> permissions;
 }
+

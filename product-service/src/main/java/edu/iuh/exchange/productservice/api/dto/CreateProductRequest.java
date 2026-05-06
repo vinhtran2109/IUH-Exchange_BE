@@ -10,12 +10,13 @@ import java.util.List;
 
 public record CreateProductRequest(
         @NotBlank(message = "Title is required")
-        @Size(min = 10, max = 200, message = "Title must be between 10 and 200 characters")
+        @Size(min = 3, max = 200, message = "Title must be between 3 and 200 characters")
         String title,
 
         @NotBlank(message = "Description is required")
-        @Size(min = 20, max = 2000, message = "Description must be between 20 and 2000 characters")
+        @Size(min = 5, max = 2000, message = "Description must be between 5 and 2000 characters")
         String description,
+
 
         @NotNull(message = "Price is required")
         @Min(value = 0, message = "Price cannot be negative")

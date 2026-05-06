@@ -57,18 +57,18 @@ Trọng tâm: Hoàn thiện tính năng cộng đồng sinh viên.
 - [x] Tự động khóa tính năng "Đăng bài" khi User bị gạch cờ rớt trừ KarmaPoint dưới ngưỡng 0.
 
 ## Phase 7: Frontend React Application (Song song Tuần 3 - 6)
-- [ ] Khởi tạo dự án Vite (React + TypeScript).
-- [ ] Setup TailwindCSS và Shadcn/UI (Hoặc NextUI/AntD) với định dạng màu sắc Theme của IUH (Đỏ / Xám).
-- [ ] Setup **Zustand** Storage, tích hợp API config Axios Interceptors nối Refresh Token tự động. 
-- [ ] Xây dựng Page: Authentication, Homepage, User Profile.
-- [ ] Lắp đặt Component Card sản phẩm + Page Detail (Lấy URL Ảnh thẳng từ S3).
-- [ ] Ghép WebSockets STOMP hiển thị Real-time Chat Panel và Notification Bell.
+- [x] Khởi tạo dự án Vite (React + TypeScript).
+- [x] Setup TailwindCSS và Shadcn/UI (Hoặc NextUI/AntD) với định dạng màu sắc Theme của IUH (Đỏ / Xám).
+- [x] Setup **Zustand** Storage, tích hợp API config Axios Interceptors nối Refresh Token tự động. 
+- [x] Xây dựng Page: Authentication, Homepage, User Profile.
+- [x] Lắp đặt Component Card sản phẩm + Page Detail (Lấy URL Ảnh thẳng từ S3).
+- [x] Ghép WebSockets STOMP hiển thị Real-time Chat Panel và Notification Bell.
 
 ## Phase 8: Logging, Monitoring & Deployment (Tuần 7)
 Trọng tâm: Đóng gói và mang lên Cloud thả rông.
 - [ ] Code Elasticsearch Pipeline (ELK) để bắt log phân tán các Server.
 - [ ] Tích hợp Prometheus metrics cho JVM và thiết lập Grafana Dashboard.
-- [ ] Viết `Dockerfile` cho từng Service và Frontend Nginx.
+- [x] Viết `Dockerfile` cho từng Service và Frontend Nginx.
 - [ ] Tạo GitHub Actions tự build Docker Image trên Main Branch và Push về Hub.
 - [ ] Chạy Cụm Cloud Cluster (Deploying Kubernetes cơ bản hoặc dùng Cụm Amazon EC2 LoadBalancer + MongoDB Atlas / ElastiCache).
 - [ ] Chạy Test Load/Stress bằng JMeter đánh dấu chịu tải API.

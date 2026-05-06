@@ -42,6 +42,7 @@ public class ReportController {
      */
     @GetMapping("/admin")
     public ResponseEntity<ApiResponse<Page<Report>>> getReports(
+            @RequestHeader("X-User-Role") String role,
             @RequestParam(defaultValue = "PENDING") Report.ReportStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -58,6 +59,7 @@ public class ReportController {
      */
     @PatchMapping("/admin/{reportId}/resolve")
     public ResponseEntity<ApiResponse<Report>> resolveReport(
+            @RequestHeader("X-User-Role") String role,
             @PathVariable String reportId,
             @RequestParam Report.ReportStatus status,
             @RequestParam(required = false) String adminNote) {

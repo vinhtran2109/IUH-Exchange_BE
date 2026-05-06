@@ -27,13 +27,13 @@ public class OrderSagaConsumer {
     }
 
     /**
-     * Product đã được khóa thành công → Chuyển Order sang CONFIRMED
+     * Product đã được khóa thành công → Đơn chờ người bán xác nhận.
      */
     @KafkaListener(topics = OrderTopics.PRODUCT_RESERVED, groupId = "order-service-group")
     public void onProductReserved(Map<String, String> payload) {
         String orderId = payload.get("orderId");
         log.info("✅ [SAGA Step 2] Product reserved for orderId={}", orderId);
-        orderService.completeOrder(orderId); // Đơn giản hóa: Reserve thành công = Hoàn tất
+        orderService.markAwaitingSellerConfirmation(orderId);
     }
 
     /**

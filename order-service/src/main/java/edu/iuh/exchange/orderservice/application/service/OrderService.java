@@ -86,6 +86,21 @@ public class OrderService {
     }
 
     /**
+     * Product đã reserve xong, đơn hàng chờ người bán xác nhận.
+     */
+    public void markAwaitingSellerConfirmation(String orderId) {
+        orderRepository.findById(orderId).ifPresent(order -> {
+            if (order.getStatus() == OrderStatus.CANCELLED || order.getStatus() == OrderStatus.COMPLETED) {
+                return;
+            }
+
+            order.setStatus(OrderStatus.CONFIRMED);
+            orderRepository.save(order);
+            log.info("✅ [SAGA Step 2] Order awaiting seller confirmation: orderId={}", orderId);
+        });
+    }
+
+    /**
      * SAGA Compensating Transaction:
      * Product Service báo về "Reserve thất bại" → Order Service tự hủy Order.
      */
@@ -94,22 +109,51 @@ public class OrderService {
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
             log.info("❌ [SAGA Rollback] Order cancelled: orderId={}, reason={}", orderId, reason);
+            eventProducer.publishOrderCancelled(orderId, order.getProductId(), reason);
         });
     }
 
     /**
-     * SAGA Step cuối:
-     * Cả 2 bên xác nhận → Hoàn tất giao dịch + trừ/cộng KarmaPoint.
+     * Seller xác nhận đơn → Hoàn tất giao dịch + trừ/cộng KarmaPoint.
      */
-    public void completeOrder(String orderId) {
-        orderRepository.findById(orderId).ifPresent(order -> {
-            order.setStatus(OrderStatus.COMPLETED);
-            orderRepository.save(order);
-            log.info("🏆 [SAGA Complete] Order completed: orderId={}", orderId);
-            
-            // Phát Event sang User Service để cộng Karma Point
-            eventProducer.publishOrderCompleted(orderId, order.getBuyerId(), order.getSellerId());
-        });
+    public OrderResponse confirmOrder(String orderId, String sellerId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new edu.iuh.exchange.common.exception.ResourceNotFoundException("Order", orderId));
+
+        if (!order.getSellerId().equals(sellerId)) {
+            throw new edu.iuh.exchange.common.exception.ForbiddenException("Bạn không có quyền xác nhận đơn này");
+        }
+
+        if (order.getStatus() == OrderStatus.CANCELLED) {
+            throw new edu.iuh.exchange.common.exception.BadRequestException("Đơn hàng đã bị hủy");
+        }
+
+        order.setStatus(OrderStatus.COMPLETED);
+        Order saved = orderRepository.save(order);
+        log.info("🏆 [SELLER CONFIRM] Order completed: orderId={}, sellerId={}", orderId, sellerId);
+
+        eventProducer.publishOrderCompleted(orderId, order.getBuyerId(), order.getSellerId(), order.getProductId());
+        return OrderResponse.fromEntity(saved);
+    }
+
+    public OrderResponse rejectOrder(String orderId, String sellerId, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new edu.iuh.exchange.common.exception.ResourceNotFoundException("Order", orderId));
+
+        if (!order.getSellerId().equals(sellerId)) {
+            throw new edu.iuh.exchange.common.exception.ForbiddenException("Bạn không có quyền từ chối đơn này");
+        }
+
+        if (order.getStatus() == OrderStatus.COMPLETED) {
+            throw new edu.iuh.exchange.common.exception.BadRequestException("Đơn hàng đã được xác nhận");
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        Order saved = orderRepository.save(order);
+        log.info("❌ [SELLER REJECT] Order cancelled: orderId={}, sellerId={}, reason={}", orderId, sellerId, reason);
+
+        eventProducer.publishOrderCancelled(orderId, order.getProductId(), reason);
+        return OrderResponse.fromEntity(saved);
     }
 
     public List<OrderResponse> getMyOrders(String userId) {

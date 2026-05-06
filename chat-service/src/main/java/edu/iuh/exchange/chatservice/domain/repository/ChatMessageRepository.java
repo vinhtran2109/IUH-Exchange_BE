@@ -13,4 +13,8 @@ public interface ChatMessageRepository extends MongoRepository<ChatMessage, Stri
     List<ChatMessage> findBySenderIdAndRecipientIdOrSenderIdAndRecipientIdOrderByTimestampAsc(
             String sender1, String recipient1, String sender2, String recipient2
     );
+
+    // Lấy tất cả tin nhắn liên quan đến user để tạo danh sách Inbox
+    List<ChatMessage> findBySenderIdOrRecipientIdOrderByTimestampDesc(String senderId, String recipientId);
 }
+
