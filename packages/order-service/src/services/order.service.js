@@ -333,6 +333,48 @@ export class OrderService {
   }
 
   /**
+   * Buyer cancels their own order.
+   * Allowed when order is PENDING or AWAITING_SELLER.
+   *
+   * @param {string} orderId
+   * @param {string} buyerId - Authenticated buyer's user ID
+   * @param {string} [reason]
+   * @returns {object} Updated order
+   */
+  async cancelByBuyer(orderId, buyerId, reason) {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ResourceNotFoundException('Order', orderId);
+    }
+
+    if (order.buyerId !== buyerId) {
+      throw new ForbiddenException('Bạn không có quyền hủy đơn này');
+    }
+
+    if (order.status === 'COMPLETED') {
+      throw new BadRequestException('Đơn hàng đã hoàn tất, không thể hủy');
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new BadRequestException('Đơn hàng đã bị hủy trước đó');
+    }
+
+    this._assertTransition(order.status, 'CANCELLED');
+
+    order.status = 'CANCELLED';
+    await order.save();
+    logger.info(`[BUYER CANCEL] Order cancelled: orderId=${orderId}, buyerId=${buyerId}, reason=${reason || 'N/A'}`);
+
+    await publishOrderCancelled({
+      orderId: order._id.toString(),
+      productId: order.productId,
+      reason: reason || 'Người mua hủy đơn hàng',
+    });
+
+    return order.toObject();
+  }
+
+  /**
    * Get a single order by ID.
    *
    * @param {string} orderId

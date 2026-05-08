@@ -129,4 +129,21 @@ export class OrderController {
     const order = await this.orderService.rejectOrder(req.params.id, sellerId, reason);
     return res.json(ApiResponse.ok(order, 'Order rejected'));
   }
+
+  /**
+   * PATCH /api/v1/orders/:id/cancel
+   * Buyer cancels their own order.
+   *
+   * Body (optional): { reason?: string }
+   */
+  async cancelOrder(req, res) {
+    const buyerId = req.headers['x-user-id'];
+    if (!buyerId) {
+      throw new BadRequestException('Missing X-User-Id header');
+    }
+
+    const reason = req.body?.reason || 'Người mua hủy đơn hàng';
+    const order = await this.orderService.cancelByBuyer(req.params.id, buyerId, reason);
+    return res.json(ApiResponse.ok(order, 'Order cancelled'));
+  }
 }

@@ -289,6 +289,85 @@ describe('order.service', () => {
     });
   });
 
+  describe('cancelByBuyer', () => {
+    it('should allow buyer to cancel PENDING order', async () => {
+      const order = {
+        ...mockOrder,
+        buyerId: 'buyer123',
+        status: 'PENDING',
+        save: vi.fn().mockResolvedValue(true),
+        toObject: () => ({ ...mockOrder, status: 'CANCELLED' }),
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      const result = await orderService.cancelByBuyer('order123', 'buyer123', 'Changed mind');
+
+      expect(order.status).toBe('CANCELLED');
+      expect(order.save).toHaveBeenCalled();
+      expect(mockPublishOrderCancelled).toHaveBeenCalled();
+    });
+
+    it('should allow buyer to cancel AWAITING_SELLER order', async () => {
+      const order = {
+        ...mockOrder,
+        buyerId: 'buyer123',
+        status: 'AWAITING_SELLER',
+        save: vi.fn().mockResolvedValue(true),
+        toObject: () => ({ ...mockOrder, status: 'CANCELLED' }),
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      const result = await orderService.cancelByBuyer('order123', 'buyer123');
+
+      expect(order.status).toBe('CANCELLED');
+      expect(mockPublishOrderCancelled).toHaveBeenCalled();
+    });
+
+    it('should reject cancel from non-buyer', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        buyerId: 'buyer123',
+        status: 'PENDING',
+      });
+
+      await expect(
+        orderService.cancelByBuyer('order123', 'other-user')
+      ).rejects.toThrow('không có quyền');
+    });
+
+    it('should reject cancel of COMPLETED order', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        buyerId: 'buyer123',
+        status: 'COMPLETED',
+      });
+
+      await expect(
+        orderService.cancelByBuyer('order123', 'buyer123')
+      ).rejects.toThrow('đã hoàn tất');
+    });
+
+    it('should reject cancel of already CANCELLED order', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        buyerId: 'buyer123',
+        status: 'CANCELLED',
+      });
+
+      await expect(
+        orderService.cancelByBuyer('order123', 'buyer123')
+      ).rejects.toThrow('đã bị hủy');
+    });
+
+    it('should throw 404 for missing order', async () => {
+      mockOrderModel.findById.mockResolvedValue(null);
+
+      await expect(
+        orderService.cancelByBuyer('nonexistent', 'buyer123')
+      ).rejects.toThrow();
+    });
+  });
+
   describe('markAwaitingSellerConfirmation', () => {
     it('should update order status to AWAITING_SELLER', async () => {
       const order = {

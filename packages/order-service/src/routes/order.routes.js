@@ -68,5 +68,14 @@ export function createOrderRoutes(orderService) {
     controller.rejectOrder(req, res).catch(next);
   });
 
+  /**
+   * PATCH /api/v1/orders/:id/cancel
+   * Buyer cancels their own order.
+   * Body (optional): { reason? }
+   */
+  router.patch('/:id/cancel', (req, res, next) => {
+    controller.cancelOrder(req, res).catch(next);
+  });
+
   return router;
 }
