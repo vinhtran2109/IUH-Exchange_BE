@@ -1,8 +1,20 @@
 FROM node:22-alpine
+
 WORKDIR /app
-COPY package.json packages/ws-gateway/package.json packages/common/package.json ./
-COPY packages/common/ ./packages/common/
-COPY packages/ws-gateway/ ./packages/ws-gateway/
+
+# Copy monorepo root files
+COPY package.json package-lock.json ./
+
+# Copy workspace packages needed by ws-gateway
+COPY packages/common/package.json ./packages/common/
+COPY packages/ws-gateway/package.json ./packages/ws-gateway/
+
+# Install dependencies (npm workspaces will resolve @iuh-exchange/common)
 RUN npm install --omit=dev
-COPY packages/ws-gateway/src ./src
-CMD ["node", "src/index.js"]
+
+# Copy source code AFTER install to leverage Docker layer caching
+COPY packages/common/src ./packages/common/src
+COPY packages/common/package.json ./packages/common/
+COPY packages/ws-gateway/src ./packages/ws-gateway/src
+
+CMD ["node", "packages/ws-gateway/src/index.js"]
