@@ -1,4 +1,5 @@
 import { User } from '../models/User.js';
+import { KarmaHistory } from '../models/KarmaHistory.js';
 import {
   ResourceNotFoundException,
   BadRequestException,
@@ -147,6 +148,17 @@ export async function adjustKarma(req, res) {
   }
 
   await user.save();
+
+  // Log karma change to history
+  await KarmaHistory.create({
+    userId: id,
+    amount,
+    previousKarma,
+    newKarma: user.karmaPoint,
+    reason: reason || 'Admin adjustment',
+    performedBy: req.user?.sub || null,
+    source: 'ADMIN',
+  });
 
   logger.info(`[Admin] Karma adjusted for ${user.email}: ${previousKarma} → ${user.karmaPoint} (${amount > 0 ? '+' : ''}${amount}). Reason: ${reason || 'N/A'}`);
 
