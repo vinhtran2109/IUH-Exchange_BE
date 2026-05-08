@@ -3,7 +3,7 @@ import {
   Shield, Users, AlertTriangle, ShieldCheck, Ban, CheckCircle, 
   XCircle, PackageCheck, BarChart3, Activity, TrendingUp, 
   ShoppingCart, Landmark, Info, ChevronDown, ArrowUp, ArrowDown,
-  Download, Eye, Search, X, CheckSquare, Square, Loader2
+  Download, Eye, Search, X, CheckSquare, Square, Loader2, Server
 } from 'lucide-react';
 import { adminService } from '../services/adminService';
 import type { UserAdminData, ReportData } from '../services/adminService';
@@ -23,12 +23,14 @@ const PERMISSION_LABELS: Record<string, string> = {
 const AdminDashboard: React.FC = () => {
   const { user } = useAuthStore() as any;
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'reports' | 'products'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'reports' | 'products' | 'dlq'>('overview');
 
   const [users, setUsers] = useState<UserAdminData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [stats, setStats] = useState<any>({ user: {}, product: {} });
+  const [dlqEvents, setDlqEvents] = useState<any[]>([]);
+  const [dlqStats, setDlqStats] = useState<any>({});
   
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +75,12 @@ const AdminDashboard: React.FC = () => {
       } else if (activeTab === 'products') {
         const res = await adminService.getPendingProducts(0, 50);
         if (res.success) setProducts(res.data.content);
+      } else if (activeTab === 'dlq') {
+        const res = await adminService.getDlqEvents(0, 50);
+        if (res.success) {
+          setDlqEvents(res.data.content || []);
+          setDlqStats(res.data.stats || {});
+        }
       }
     } catch (e) {
       console.error("Lỗi fetch admin data", e);
@@ -124,6 +132,22 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.resolveProductStatus(productId, action);
       if (res.success) fetchData();
+    } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
+  };
+
+  // ── DLQ actions ──
+  const handleRetryDlq = async (eventId: string) => {
+    try {
+      await adminService.retryDlqEvent(eventId);
+      fetchData();
+    } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
+  };
+
+  const handleDismissDlq = async (eventId: string) => {
+    if (!window.confirm('Bỏ qua event này?')) return;
+    try {
+      await adminService.dismissDlqEvent(eventId);
+      fetchData();
     } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
   };
 
@@ -266,6 +290,7 @@ const AdminDashboard: React.FC = () => {
           { id: 'users', label: 'Sinh viên', icon: Users },
           { id: 'products', label: 'Duyệt bài', icon: PackageCheck },
           { id: 'reports', label: 'Tố cáo', icon: AlertTriangle },
+          { id: 'dlq', label: 'DLQ', icon: Server },
         ].map(tab => (
           <button 
             key={tab.id}

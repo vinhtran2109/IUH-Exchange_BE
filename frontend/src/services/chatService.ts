@@ -158,5 +158,13 @@ export const chatService = {
   getConversations: async (_userId: string) => {
     const response = await api.get('/chat/conversations');
     return response.data;
+  },
+
+  // 6. Tìm kiếm tin nhắn
+  searchMessages: async (query: string, conversationId?: string) => {
+    let url = `/chat/search?q=${encodeURIComponent(query)}`;
+    if (conversationId) url += `&conversationId=${encodeURIComponent(conversationId)}`;
+    const response = await api.get(url);
+    return response.data;
   }
 };

@@ -4,6 +4,7 @@ import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common
 import { initNotificationSocket } from './services/socket.service.js';
 import { startKafkaConsumer } from './services/kafka-consumer.service.js';
 import notificationRoutes from './routes/notification.routes.js';
+import dlqRoutes from './routes/dlq.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -20,6 +21,7 @@ app.get('/health', (_req, res) => {
 });
 
 // ── REST API routes ──
+app.use('/api/v1/notifications', dlqRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 
 // ── Error handler ──

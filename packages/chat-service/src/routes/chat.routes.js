@@ -5,6 +5,7 @@ import {
   getUserConversations,
   markConversationAsRead,
   markAllConversationsAsRead,
+  searchMessages,
 } from '../controllers/chat.controller.js';
 
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/conversations', getUserConversations);
 router.get('/conversations/:conversationId', getConversationHistory);
 router.patch('/conversations/:conversationId/read', markConversationAsRead);
 router.patch('/conversations/read-all', markAllConversationsAsRead);
+router.get('/search', searchMessages);
 
 export default router;

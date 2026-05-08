@@ -83,5 +83,23 @@ export const adminService = {
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
     return response.data;
-  }
+  },
+
+  // DLQ Monitoring
+  getDlqEvents: async (page = 0, size = 20, status?: string) => {
+    let url = `/notifications/dlq?page=${page}&size=${size}`;
+    if (status) url += `&status=${status}`;
+    const response = await api.get(url);
+    return response.data;
+  },
+
+  retryDlqEvent: async (eventId: string) => {
+    const response = await api.post(`/notifications/dlq/${eventId}/retry`);
+    return response.data;
+  },
+
+  dismissDlqEvent: async (eventId: string) => {
+    const response = await api.delete(`/notifications/dlq/${eventId}`);
+    return response.data;
+  },
 };

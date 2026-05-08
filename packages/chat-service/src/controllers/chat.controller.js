@@ -129,3 +129,50 @@ export async function markAllConversationsAsRead(req, res, next) {
     next(err);
   }
 }
+
+/**
+ * GET /api/v1/chat/search?q=keyword
+ * Search messages for the current user by content keyword.
+ */
+export async function searchMessages(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { q, conversationId } = req.query;
+    const { page, size, skip } = parsePagination(req.query);
+
+    if (!q || q.trim().length < 2) {
+      return res.json(ApiResponse.ok({ content: [], totalElements: 0 }));
+    }
+
+    const filter = {
+      $or: [{ senderId: userId }, { receiverId: userId }],
+      content: { $regex: q.trim(), $options: 'i' },
+    };
+
+    if (conversationId) {
+      filter.conversationId = conversationId;
+    }
+
+    const [messages, total] = await Promise.all([
+      ChatMessage.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(size)
+        .lean(),
+      ChatMessage.countDocuments(filter),
+    ]);
+
+    const pageResponse = new PageResponse({
+      content: messages,
+      page,
+      size,
+      totalElements: total,
+      totalPages: Math.ceil(total / size),
+      last: page * size >= total,
+    });
+
+    res.json(ApiResponse.ok(pageResponse));
+  } catch (err) {
+    next(err);
+  }
+}
