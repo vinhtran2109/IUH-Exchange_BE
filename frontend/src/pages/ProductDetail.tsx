@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ShoppingCart, MessageSquare, AlertCircle, Package, Trash2, Flag } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, MessageSquare, AlertCircle, Package, Trash2, Flag, Heart } from 'lucide-react';
 import { productService } from '../services/productService';
 import { chatService } from '../services/chatService';
 import { orderService } from '../services/orderService';
@@ -9,6 +9,7 @@ import type { Product } from '../services/productService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
 import ReviewSection from '../components/ReviewSection';
+import { wishlistService } from '../services/wishlistService';
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +20,7 @@ const ProductDetail: React.FC = () => {
   const [deleting, setDeleting] = useState(false);
   const [ordering, setOrdering] = useState(false);
   const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
+  const [wishlisted, setWishlisted] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -53,6 +55,26 @@ const ProductDetail: React.FC = () => {
     };
     checkOrder();
   }, [id, user]);
+
+  // Check wishlist status
+  useEffect(() => {
+    if (!id || !user) return;
+    const checkWish = async () => {
+      try {
+        const res = await wishlistService.check(id);
+        if (res.success) setWishlisted(res.data.wishlisted);
+      } catch (e) { /* ignore */ }
+    };
+    checkWish();
+  }, [id, user]);
+
+  const handleToggleWishlist = async () => {
+    if (!user) { alert('Bạn cần đăng nhập!'); return; }
+    try {
+      const res = await wishlistService.toggle(id!);
+      if (res.success) setWishlisted(res.data.wishlisted);
+    } catch (e) { console.error(e); }
+  };
 
   const handleDelete = async () => {
     if (!id || !window.confirm("Bạn có chắc chắn muốn gỡ bài đăng này không? Hành động này không thể hoàn tác.")) return;
@@ -180,6 +202,21 @@ const ProductDetail: React.FC = () => {
           <h1 className="text-4xl font-black text-slate-900 leading-tight mb-4">
             {product.title}
           </h1>
+
+          {user && user.id !== product.sellerId && (
+            <button
+              onClick={handleToggleWishlist}
+              className="mb-4 flex items-center gap-2 text-sm font-bold transition-all"
+            >
+              <Heart
+                size={20}
+                className={wishlisted ? 'fill-rose-500 text-rose-500' : 'text-slate-400 hover:text-rose-400'}
+              />
+              <span className={wishlisted ? 'text-rose-500' : 'text-slate-400'}>
+                {wishlisted ? 'Đã yêu thích' : 'Yêu thích'}
+              </span>
+            </button>
+          )}
 
           <div className="flex items-center gap-4 mb-8">
              <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-xs font-bold uppercase border border-rose-100">

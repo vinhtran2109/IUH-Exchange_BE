@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common';
 import { initSocketService } from './services/socket.service.js';
 import chatRoutes from './routes/chat.routes.js';
+import chatUploadRoutes from './routes/chat-upload.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -19,6 +20,7 @@ app.get('/health', (_req, res) => {
 });
 
 // ── REST API routes ──
+app.use('/api/v1/chat', chatUploadRoutes);
 app.use('/api/v1/chat', chatRoutes);
 
 // ── Error handler ──

@@ -15,8 +15,11 @@ export interface Product {
 
 export const productService = {
   // Lấy danh sách sản phẩm (mặc định page 0, size 20)
-  getProducts: async (page = 0, size = 20) => {
-    const response = await api.get(`/products?page=${page}&size=${size}`);
+  getProducts: async (page = 0, size = 20, category?: string, sort?: string) => {
+    let url = `/products?page=${page}&size=${size}`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
+    if (sort) url += `&sort=${encodeURIComponent(sort)}`;
+    const response = await api.get(url);
     return response.data;
   },
 

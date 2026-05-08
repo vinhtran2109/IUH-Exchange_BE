@@ -1,5 +1,6 @@
 import { createConsumer, logger } from '@iuh-exchange/common';
 import { Notification } from '../models/Notification.js';
+import { DlqEvent } from '../models/DlqEvent.js';
 import { publishNotification } from './socket.service.js';
 import { sendOrderEmail } from './email.service.js';
 
@@ -233,6 +234,20 @@ export async function startKafkaConsumer() {
             partition,
             offset: message.offset,
           });
+
+          // Save to DLQ for monitoring/retry
+          try {
+            const rawValue = message.value?.toString();
+            await DlqEvent.create({
+              topic,
+              payload: rawValue ? JSON.parse(rawValue) : null,
+              error: err.message,
+              status: 'PENDING',
+            });
+            logger.info(`Event saved to DLQ: ${topic}`);
+          } catch (dlqErr) {
+            logger.error(`Failed to save to DLQ: ${dlqErr.message}`);
+          }
         }
       },
     });

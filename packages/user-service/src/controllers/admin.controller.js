@@ -247,3 +247,27 @@ export async function getUserStats(req, res) {
 
   res.json(ApiResponse.ok({ total, active, banned, lowKarma }));
 }
+
+/**
+ * GET /api/v1/admin/users/:id/detail
+ * Get detailed user info (admin only).
+ */
+export async function getUserDetail(req, res) {
+  const { id } = req.params;
+
+  const user = await User.findById(id)
+    .select('-passwordHash -refreshToken -otp -otpExpiry -otpAttemptCount -passwordResetOtp -passwordResetOtpExpiry')
+    .lean();
+
+  if (!user) throw new ResourceNotFoundException('User', id);
+
+  const karmaHistory = await KarmaHistory.find({ userId: id })
+    .sort({ createdAt: -1 })
+    .limit(10)
+    .lean();
+
+  res.json(ApiResponse.ok({
+    ...mapToProfile(user),
+    recentKarmaHistory: karmaHistory,
+  }));
+}

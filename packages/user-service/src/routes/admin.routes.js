@@ -37,4 +37,7 @@ router.get('/stats', adminCtrl.getUserStats);
 // GET /api/v1/users/admin/:id/karma-history — user karma history
 router.get('/:id/karma-history', getUserKarmaHistory);
 
+// GET /api/v1/users/admin/:id/detail — detailed user info
+router.get('/:id/detail', adminCtrl.getUserDetail);
+
 export default router;

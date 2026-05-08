@@ -10,13 +10,11 @@ interface ChatListProps {
   onSelectUser: (id: string, name: string) => void;
 }
 
-/**
- * Thành phần phụ hiển thị từng người trong danh sách chat
- */
 const ChatPartnerItem: React.FC<{ 
     partnerId: string; 
-    onSelect: (id: string, name: string) => void 
-}> = ({ partnerId, onSelect }) => {
+    onSelect: (id: string, name: string) => void;
+    lastMessage?: string;
+}> = ({ partnerId, onSelect, lastMessage }) => {
   const [partnerInfo, setPartnerInfo] = useState<{name: string, avatarUrl?: string} | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,14 +25,11 @@ const ChatPartnerItem: React.FC<{
         return;
     }
 
-    // Gọi API lấy thông tin User từ User Service
     api.get(`/users/${partnerId}`)
       .then(res => {
-        if (res.data.success) {
-            setPartnerInfo(res.data.data);
-        }
+        if (res.data.success) setPartnerInfo(res.data.data);
       })
-      .catch(() => setPartnerInfo({ name: 'Người dùng IUH' })) // Fallback
+      .catch(() => setPartnerInfo({ name: 'Người dùng IUH' }))
       .finally(() => setLoading(false));
   }, [partnerId]);
 
@@ -66,9 +61,9 @@ const ChatPartnerItem: React.FC<{
         <p className="text-sm font-bold text-slate-800 truncate">
           {partnerInfo?.name || 'Khách hàng'}
         </p>
-        <p className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider font-bold">
-           {partnerId.startsWith('system') ? 'Official' : 'Thành viên'}
-        </p>
+        {lastMessage && (
+          <p className="text-xs text-slate-400 truncate mt-0.5">{lastMessage}</p>
+        )}
       </div>
       <div className="p-2 bg-slate-50 rounded-xl text-slate-300 group-hover:bg-white group-hover:text-indigo-600 transition-all">
          <ArrowRight size={14} />
@@ -79,19 +74,57 @@ const ChatPartnerItem: React.FC<{
 
 const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
   const { user } = useAuthStore() as any;
-  const [conversations, setConversations] = useState<string[]>([]);
+  const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (user?.id) {
       chatService.getConversations(user.id)
         .then(res => {
-          if (res.success) setConversations(res.data);
+          if (res.success) {
+            const convos = res.data || [];
+            // Extract partner IDs from conversation data
+            const partners = convos.map((c: any) => {
+              const partnerId = c.lastMessage?.senderId === user.id 
+                ? c.lastMessage?.receiverId 
+                : c.lastMessage?.senderId;
+              return {
+                partnerId: partnerId || c._id,
+                lastMessage: c.lastMessage?.content || '',
+                conversationId: c._id,
+              };
+            });
+            setConversations(partners);
+          }
         })
         .catch(err => console.error("Failed to load conversations:", err))
         .finally(() => setLoading(false));
     }
   }, [user?.id]);
+
+  // Search messages
+  useEffect(() => {
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await chatService.searchMessages(searchQuery);
+        if (res.success) {
+          setSearchResults(res.data?.content || []);
+        }
+      } catch (e) { /* ignore */ }
+      setSearching(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const displayItems = searchQuery.trim().length >= 2 ? null : conversations;
 
   return (
     <motion.div
@@ -102,10 +135,7 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
     >
       {/* Header */}
       <div className="p-6 bg-gradient-to-r from-indigo-600 to-violet-600 text-white relative">
-        <button 
-          onClick={onClose}
-          className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors"
-        >
+        <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors">
           <X size={20} />
         </button>
         <h3 className="text-xl font-black mb-1">Tin nhắn</h3>
@@ -118,9 +148,16 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
-            placeholder="Tìm kiếm người dùng..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Tìm kiếm tin nhắn..."
             className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
           />
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+              <X size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -131,6 +168,38 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
             <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
             <p className="text-xs font-medium">Đang tải hộp thư...</p>
           </div>
+        ) : searchQuery.trim().length >= 2 ? (
+          /* Search results */
+          searching ? (
+            <div className="flex items-center justify-center py-10">
+              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : searchResults.length === 0 ? (
+            <div className="text-center py-10 text-slate-400 text-sm">
+              Không tìm thấy tin nhắn nào
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {searchResults.map((msg: any) => {
+                const partnerId = msg.senderId === user?.id ? msg.receiverId : msg.senderId;
+                return (
+                  <button
+                    key={msg._id}
+                    onClick={() => {
+                      onSelectUser(partnerId, partnerId);
+                      setSearchQuery('');
+                    }}
+                    className="w-full text-left p-3 hover:bg-indigo-50 rounded-2xl transition-all"
+                  >
+                    <p className="text-xs text-slate-400 mb-1">
+                      {new Date(msg.createdAt).toLocaleString('vi-VN')}
+                    </p>
+                    <p className="text-sm text-slate-700 line-clamp-2">{msg.content}</p>
+                  </button>
+                );
+              })}
+            </div>
+          )
         ) : conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
              <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-300">
@@ -138,21 +207,16 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
              </div>
              <div>
                 <p className="font-bold text-slate-800">Chưa có tin nhắn</p>
-                <p className="text-xs text-slate-400 mt-1">Bắt đầu trò chuyện với người bán hoặc liên hệ hỗ trợ.</p>
+                <p className="text-xs text-slate-400 mt-1">Bắt đầu trò chuyện với người bán.</p>
              </div>
-             <button 
-                onClick={() => onSelectUser('system-support-id', 'IUH Support')}
-                className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4"
-             >
-                Liên hệ hỗ trợ IUH ngay
-             </button>
           </div>
         ) : (
           <div className="space-y-1">
-            {conversations.map((partnerId) => (
+            {conversations.map((conv) => (
               <ChatPartnerItem 
-                key={partnerId} 
-                partnerId={partnerId} 
+                key={conv.partnerId} 
+                partnerId={conv.partnerId}
+                lastMessage={conv.lastMessage}
                 onSelect={onSelectUser} 
               />
             ))}
