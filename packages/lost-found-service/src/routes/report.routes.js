@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, authorize } from '@iuh-exchange/common';
+import { authenticate, ForbiddenException } from '@iuh-exchange/common';
 import {
   createReport,
   listReports,
@@ -15,8 +15,15 @@ router.post('/', authenticate, createReport);
 // Authenticated: view own reports
 router.get('/my', authenticate, listMyReports);
 
+function adminOnly(req, _res, next) {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    throw new ForbiddenException('Admin access required');
+  }
+  next();
+}
+
 // Admin only: list & resolve reports
-router.get('/admin', authenticate, authorize('admin'), listReports);
-router.patch('/admin/:reportId/resolve', authenticate, authorize('admin'), resolveReport);
+router.get('/admin', authenticate, adminOnly, listReports);
+router.patch('/admin/:reportId/resolve', authenticate, adminOnly, resolveReport);
 
 export default router;
