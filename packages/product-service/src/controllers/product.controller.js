@@ -176,6 +176,7 @@ export async function createProduct(req, res) {
 
   // Invalidate product list cache
   await cache.delPattern('products:list:*');
+  await cache.del('products:admin:stats');
 
   res.status(201).json(ApiResponse.created(toResponse(product)));
 }
@@ -222,6 +223,7 @@ export async function updateProduct(req, res) {
   // Invalidate cache
   await cache.del(`products:detail:${saved._id}`);
   await cache.delPattern('products:list:*');
+  await cache.del('products:admin:stats');
 
   res.json(ApiResponse.ok(toResponse(saved), 'Updated successfully'));
 }
@@ -251,6 +253,7 @@ export async function deleteProduct(req, res) {
   // Invalidate cache
   await cache.del(`products:detail:${product._id}`);
   await cache.delPattern('products:list:*');
+  await cache.del('products:admin:stats');
 
   logger.info(`Product deleted: id=${product._id}`);
   res.json(ApiResponse.ok(null, 'Deleted successfully'));
@@ -348,6 +351,7 @@ export async function resolveProduct(req, res) {
   // Invalidate cache
   await cache.del(`products:detail:${saved._id}`);
   await cache.delPattern('products:list:*');
+  await cache.del('products:admin:stats');
 
   res.json(ApiResponse.ok(toResponse(saved), 'Resolved successfully'));
 }
@@ -357,6 +361,10 @@ export async function resolveProduct(req, res) {
  * Dashboard statistics (admin only).
  */
 export async function getProductStats(_req, res) {
+  const cacheKey = 'products:admin:stats';
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const [total, pending, available, sold] = await Promise.all([
     Product.countDocuments(),
     Product.countDocuments({ status: 'PENDING_APPROVAL' }),
@@ -364,5 +372,7 @@ export async function getProductStats(_req, res) {
     Product.countDocuments({ status: 'SOLD' }),
   ]);
 
-  res.json(ApiResponse.ok({ total, pending, available, sold }));
+  const response = ApiResponse.ok({ total, pending, available, sold });
+  await cache.set(cacheKey, response, 30); // Cache 30 seconds
+  res.json(response);
 }

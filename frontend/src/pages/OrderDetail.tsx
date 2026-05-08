@@ -10,7 +10,7 @@ import { orderService } from '../services/orderService';
 import { productService } from '../services/productService';
 
 const OrderDetail: React.FC = () => {
-   type OrderStatusKey = 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED';
+   type OrderStatusKey = 'PENDING' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED';
   const { user } = useAuthStore() as any;
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -82,14 +82,14 @@ const OrderDetail: React.FC = () => {
    const currentStatus = (order?.status || 'PENDING') as OrderStatusKey;
    const statusLabel = {
       PENDING: 'Đang chờ xử lý',
-      CONFIRMED: 'Chờ người bán xác nhận',
+      AWAITING_SELLER: 'Chờ người bán xác nhận',
       COMPLETED: 'Giao dịch thành công',
       CANCELLED: 'Đơn hàng đã bị hủy'
    }[currentStatus];
 
    const statusTone = {
       PENDING: 'bg-amber-50 text-amber-700 border-amber-100',
-      CONFIRMED: 'bg-indigo-50 text-indigo-700 border-indigo-100',
+      AWAITING_SELLER: 'bg-indigo-50 text-indigo-700 border-indigo-100',
       COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-100',
       CANCELLED: 'bg-rose-50 text-rose-700 border-rose-100'
    }[currentStatus];

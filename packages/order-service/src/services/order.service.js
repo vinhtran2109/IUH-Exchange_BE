@@ -20,8 +20,8 @@ const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
  * Key = current status, Value = set of allowed next statuses.
  */
 const VALID_TRANSITIONS = {
-  PENDING: new Set(['CONFIRMED', 'CANCELLED']),
-  CONFIRMED: new Set(['COMPLETED', 'CANCELLED']),
+  PENDING: new Set(['AWAITING_SELLER', 'CANCELLED']),
+  AWAITING_SELLER: new Set(['COMPLETED', 'CANCELLED']),
   COMPLETED: new Set(),
   CANCELLED: new Set(),
 };
@@ -123,7 +123,7 @@ export class OrderService {
   }
 
   /**
-   * Mark order as CONFIRMED after product has been reserved.
+   * Mark order as AWAITING_SELLER after product has been reserved.
    * Called by saga consumer when ProductReservedEvent is received.
    *
    * @param {string} orderId
@@ -141,7 +141,7 @@ export class OrderService {
       return;
     }
 
-    order.status = 'CONFIRMED';
+    order.status = 'AWAITING_SELLER';
     await order.save();
     logger.info(`[SAGA Step 2] Order awaiting seller confirmation: orderId=${orderId}`);
   }

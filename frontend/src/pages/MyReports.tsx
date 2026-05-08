@@ -16,6 +16,7 @@ interface Report {
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   PENDING: { label: 'Chờ xử lý', color: 'bg-amber-50 text-amber-600 border-amber-100', icon: <Clock size={14} /> },
+  REVIEWED: { label: 'Đã xem xét', color: 'bg-blue-50 text-blue-600 border-blue-100', icon: <AlertTriangle size={14} /> },
   RESOLVED: { label: 'Đã xử lý', color: 'bg-emerald-50 text-emerald-600 border-emerald-100', icon: <CheckCircle size={14} /> },
   DISMISSED: { label: 'Đã bỏ qua', color: 'bg-slate-50 text-slate-500 border-slate-100', icon: <XCircle size={14} /> },
 };
@@ -79,7 +80,7 @@ const MyReports: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {reports.map((report, i) => {
-            const statusInfo = STATUS_LABELS[report.status] || STATUS_LABELS.PENDING;
+            const statusInfo = STATUS_LABELS[report.status] || { label: report.status, color: 'bg-slate-50 text-slate-500 border-slate-100', icon: <AlertTriangle size={14} /> };
             return (
               <motion.div
                 key={report.id}

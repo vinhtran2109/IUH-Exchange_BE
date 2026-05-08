@@ -1,4 +1,10 @@
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import { logger } from '@iuh-exchange/common';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Firebase Cloud Messaging (FCM) push notification service.
@@ -29,8 +35,9 @@ async function initFirebase() {
     // Try service account file first, then environment variables
     let credential;
     try {
-      const serviceAccount = await import('../../firebase-service-account.json', { with: { type: 'json' } });
-      credential = admin.default.credential.cert(serviceAccount.default || serviceAccount);
+      const serviceAccountPath = join(__dirname, '../../firebase-service-account.json');
+      const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
+      credential = admin.default.credential.cert(serviceAccount);
     } catch {
       // Fallback: use environment variables
       if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL) {
