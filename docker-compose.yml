@@ -27,8 +27,8 @@ services:
     ports:
       - "27018:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: iuh_exchange_root
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-iuh_exchange_root}
       MONGO_INITDB_DATABASE: iuh_exchange
     volumes:
       - mongo_data:/data/db
@@ -156,6 +156,12 @@ services:
       - user-service
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # User Service
@@ -178,6 +184,12 @@ services:
       - redis
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # Product Service
@@ -200,6 +212,12 @@ services:
       - elasticsearch
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3002/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # Order Service
@@ -223,6 +241,12 @@ services:
       - kafka
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3003/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # Notification Service
@@ -245,6 +269,12 @@ services:
       - kafka
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3004/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # Chat Service
@@ -267,6 +297,12 @@ services:
       - redis
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3005/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   # ─────────────────────────────────────────────
   # Lost & Found Service
@@ -288,3 +324,9 @@ services:
       - mongodb
     networks:
       - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3006/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -6,6 +6,7 @@ COPY packages/common ./packages/common
 COPY package.json ./
 COPY packages/lost-found-service ./packages/lost-found-service
 
+RUN apk add --no-cache curl
 RUN npm install --workspace=packages/lost-found-service --omit=dev
 
 ENV NODE_ENV=production
