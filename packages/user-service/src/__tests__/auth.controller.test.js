@@ -243,6 +243,99 @@ describe('auth.controller', () => {
       const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'Password123!' });
       await expect(auth.login(req, res)).rejects.toThrow('Tài khoản của bạn đã bị khóa');
     });
+
+    it('should reject login when account is locked', async () => {
+      const hash = await bcrypt.hash('Password123!', 10);
+      User.findOne.mockResolvedValue({
+        ...mockUserInstance,
+        passwordHash: hash,
+        isVerified: true,
+        isActive: true,
+        failedLoginAttempts: 0,
+        lockUntil: new Date(Date.now() + 10 * 60 * 1000), // locked for 10 more minutes
+      });
+
+      const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'Password123!' });
+      await expect(auth.login(req, res)).rejects.toThrow('tạm khóa');
+    });
+
+    it('should track failed login attempts and lock after 5 failures', async () => {
+      const hash = await bcrypt.hash('CorrectPassword!', 10);
+      const user = {
+        ...mockUserInstance,
+        passwordHash: hash,
+        isVerified: true,
+        isActive: true,
+        failedLoginAttempts: 4, // 4 previous failures
+        lockUntil: null,
+        save: vi.fn().mockResolvedValue(true),
+      };
+      User.findOne.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'WrongPassword!' });
+      await expect(auth.login(req, res)).rejects.toThrow('tạm khóa 15 phút');
+      expect(user.lockUntil).toBeDefined();
+      expect(user.lockUntil.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('should show remaining attempts on wrong password', async () => {
+      const hash = await bcrypt.hash('CorrectPassword!', 10);
+      const user = {
+        ...mockUserInstance,
+        passwordHash: hash,
+        isVerified: true,
+        isActive: true,
+        failedLoginAttempts: 1,
+        lockUntil: null,
+        save: vi.fn().mockResolvedValue(true),
+      };
+      User.findOne.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'WrongPassword!' });
+      await expect(auth.login(req, res)).rejects.toThrow('Còn 3 lần thử');
+    });
+
+    it('should reset failed attempts on successful login', async () => {
+      const hash = await bcrypt.hash('Password123!', 10);
+      const user = {
+        ...mockUserInstance,
+        passwordHash: hash,
+        isVerified: true,
+        isActive: true,
+        failedLoginAttempts: 3,
+        lockUntil: null,
+        save: vi.fn().mockResolvedValue(true),
+      };
+      User.findOne.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'Password123!' });
+      await auth.login(req, res);
+
+      expect(user.failedLoginAttempts).toBe(0);
+      expect(user.lockUntil).toBeNull();
+      expect(user.save).toHaveBeenCalled();
+    });
+
+    it('should allow login after lock period expires', async () => {
+      const hash = await bcrypt.hash('Password123!', 10);
+      const user = {
+        ...mockUserInstance,
+        passwordHash: hash,
+        isVerified: true,
+        isActive: true,
+        failedLoginAttempts: 0,
+        lockUntil: new Date(Date.now() - 1000), // lock expired 1 second ago
+        save: vi.fn().mockResolvedValue(true),
+      };
+      User.findOne.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes({ email: 'test@student.iuh.edu.vn', password: 'Password123!' });
+      await auth.login(req, res);
+
+      expect(res.json).toHaveBeenCalled();
+      const response = res.json.mock.calls[0][0];
+      expect(response.data.accessToken).toBeDefined();
+    });
   });
 
   describe('changePassword', () => {
