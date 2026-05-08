@@ -20,4 +20,5 @@ export { hashPassword, comparePassword, generateAccessToken, generateRefreshToke
 export { connectMongo } from './utils/mongo.js';
 export { createRedis, getRedis } from './utils/redis.js';
 export { cache } from './utils/cache.js';
+export { metricsMiddleware, metricsHandler, incrementCacheHit, incrementCacheMiss, setWsConnections } from './utils/metrics.js';
 export { createKafka, getKafka, createProducer, createConsumer } from './utils/kafka.js';

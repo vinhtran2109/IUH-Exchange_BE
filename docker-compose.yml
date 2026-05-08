@@ -14,6 +14,8 @@ volumes:
   kafka_data:
   zookeeper_data:
   elasticsearch_data:
+  prometheus_data:
+  grafana_data:
 
 services:
 
@@ -125,6 +127,43 @@ services:
     networks:
       - iuh-exchange-net
 
+  # ─────────────────────────────────────────────
+  # Logstash (ELK log pipeline)
+  # ─────────────────────────────────────────────
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.13.4
+    container_name: iuh-logstash
+    restart: unless-stopped
+    ports:
+      - "5044:5044"
+      - "9600:9600"
+    environment:
+      - LS_JAVA_OPTS=-Xms256m -Xmx256m
+    volumes:
+      - ./infra/elk/logstash/pipeline:/usr/share/logstash/pipeline:ro
+      - ./infra/elk/logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
+    depends_on:
+      - elasticsearch
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Kibana (ELK Dashboard)
+  # ─────────────────────────────────────────────
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.13.4
+    container_name: iuh-kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - xpack.security.enabled=false
+    depends_on:
+      - elasticsearch
+    networks:
+      - iuh-exchange-net
+
   # ============================================================
   # Node.js Backend Services
   # ============================================================
@@ -145,6 +184,7 @@ services:
       PORT: "8080"
       SERVICE_NAME: api-gateway
       GATEWAY_PORT: "8080"
+      LOGSTASH_URL: "http://logstash:9600"
       USER_SERVICE_URL: http://user-service:3001
       PRODUCT_SERVICE_URL: http://product-service:3002
       ORDER_SERVICE_URL: http://order-service:3003
@@ -358,3 +398,43 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # Prometheus (Metrics Collection)
+  # ─────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: iuh-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    networks:
+      - iuh-exchange-net
+
+  # ─────────────────────────────────────────────
+  # Grafana (Monitoring Dashboard)
+  # ─────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: iuh-grafana
+    restart: unless-stopped
+    ports:
+      - "3100:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: iuh_exchange_grafana
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./infra/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - iuh-exchange-net
