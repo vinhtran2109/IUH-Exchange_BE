@@ -11,6 +11,7 @@
  */
 
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { config } from '@iuh-exchange/common';
 
 /**
@@ -46,6 +47,11 @@ export function authFilter(req, res, next) {
     req.headers['x-user-id'] = String(userId);
     req.headers['x-user-role'] = role;
     req.headers['x-user-email'] = email;
+
+    // Compute HMAC signature to prevent header spoofing
+    const payload = `${userId}:${role}:${email}`;
+    const signature = crypto.createHmac('sha256', config.gatewaySecret || config.jwt.secret).update(payload).digest('hex');
+    req.headers['x-gateway-signature'] = signature;
 
     // Attach to req for logging
     req.user = { id: userId, role, email };
@@ -84,6 +90,12 @@ export function optionalAuthFilter(req, res, next) {
       req.headers['x-user-id'] = String(userId);
       req.headers['x-user-role'] = role;
       req.headers['x-user-email'] = email;
+
+      // Compute HMAC signature to prevent header spoofing
+      const payload = `${userId}:${role}:${email}`;
+      const signature = crypto.createHmac('sha256', config.gatewaySecret || config.jwt.secret).update(payload).digest('hex');
+      req.headers['x-gateway-signature'] = signature;
+
       req.user = { id: userId, role, email };
     } catch {
       // Token invalid — proceed without identity

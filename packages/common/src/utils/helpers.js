@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { config } from '../config/index.js';
 
 const SALT_ROUNDS = 10;
@@ -52,4 +53,18 @@ export function parsePagination(query) {
   const page = Math.max(1, parseInt(query.page || '1', 10));
   const size = Math.min(100, Math.max(1, parseInt(query.size || '20', 10)));
   return { page, size, skip: (page - 1) * size };
+}
+
+/**
+ * Hash a token using SHA-256
+ */
+export function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/**
+ * Compare a plaintext token against a SHA-256 hash
+ */
+export function compareToken(token, hash) {
+  return hashToken(token) === hash;
 }

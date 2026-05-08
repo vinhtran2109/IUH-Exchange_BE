@@ -9,6 +9,8 @@ import {
   generateAccessToken,
   generateRefreshToken,
   verifyToken,
+  hashToken,
+  compareToken,
   logger,
 } from '@iuh-exchange/common';
 import crypto from 'crypto';
@@ -38,7 +40,7 @@ export async function register(req, res) {
     otpAttemptCount: 0,
   });
 
-  logger.info(`OTP for ${email}: ${otp}`);
+  logger.debug(`OTP for ${email}: ${otp}`);
   await sendOtpEmail(email, otp, name);
 
   res.status(201).json(
@@ -103,7 +105,7 @@ export async function resendOtp(req, res) {
   user.otpAttemptCount = 0;
   await user.save();
 
-  logger.info(`Resend OTP for ${email}: ${otp}`);
+  logger.debug(`Resend OTP for ${email}: ${otp}`);
   await sendOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi lại mã OTP'));
@@ -133,7 +135,7 @@ export async function login(req, res) {
   const accessToken = generateAccessToken(payload);
   const refreshToken = generateRefreshToken({ sub: user._id.toString() });
 
-  user.refreshToken = refreshToken;
+  user.refreshToken = hashToken(refreshToken);
   await user.save();
 
   res.cookie('refreshToken', refreshToken, {
@@ -176,7 +178,7 @@ export async function refreshToken(req, res) {
   }
 
   const user = await User.findById(decoded.sub);
-  if (!user || user.refreshToken !== token) {
+  if (!user || !compareToken(token, user.refreshToken)) {
     throw new UnauthorizedException('Invalid refresh token');
   }
 
@@ -190,7 +192,7 @@ export async function refreshToken(req, res) {
   const accessToken = generateAccessToken(payload);
   const newRefreshToken = generateRefreshToken({ sub: user._id.toString() });
 
-  user.refreshToken = newRefreshToken;
+  user.refreshToken = hashToken(newRefreshToken);
   await user.save();
 
   res.cookie('refreshToken', newRefreshToken, {
@@ -255,7 +257,7 @@ export async function forgotPassword(req, res) {
   user.passwordResetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
-  logger.info(`Password reset OTP for ${email}: ${otp}`);
+  logger.debug(`Password reset OTP for ${email}: ${otp}`);
   await sendPasswordResetOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi mã OTP đặt lại mật khẩu'));

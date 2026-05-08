@@ -59,4 +59,7 @@ export const config = {
   elasticsearch: {
     node: process.env.ELASTICSEARCH_NODE || 'http://localhost:9200',
   },
+
+  // Gateway shared secret for header signature verification
+  gatewaySecret: process.env.GATEWAY_SECRET || '',
 };
