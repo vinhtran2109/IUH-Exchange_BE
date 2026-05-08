@@ -1,0 +1,28 @@
+{
+  "name": "IUH Campus Exchange",
+  "short_name": "IUH Exchange",
+  "description": "Nền tảng trao đổi, mua bán đồ dùng sinh viên IUH",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": ["shopping", "education"],
+  "lang": "vi",
+  "dir": "ltr"
+}

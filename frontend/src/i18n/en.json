@@ -1,0 +1,94 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "An error occurred",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "back": "Back",
+    "search": "Search",
+    "noData": "No data",
+    "confirm": "Confirm",
+    "success": "Success"
+  },
+  "nav": {
+    "home": "Home",
+    "products": "Products",
+    "lostFound": "Lost & Found",
+    "profile": "Profile",
+    "login": "Login",
+    "register": "Register",
+    "logout": "Logout",
+    "messages": "Messages",
+    "admin": "Admin"
+  },
+  "home": {
+    "title": "IUH Campus Exchange",
+    "subtitle": "A safe and convenient platform for IUH students to buy, sell, and exchange items",
+    "browseProducts": "Browse Products",
+    "postProduct": "Post Now",
+    "stats": {
+      "products": "Products",
+      "users": "Students",
+      "transactions": "Transactions"
+    }
+  },
+  "products": {
+    "title": "Products",
+    "searchPlaceholder": "Search products...",
+    "category": "Category",
+    "condition": "Condition",
+    "price": "Price",
+    "noProducts": "No products yet",
+    "addToWishlist": "Add to wishlist",
+    "contactSeller": "Contact seller"
+  },
+  "profile": {
+    "title": "My Dashboard",
+    "subtitle": "Manage your account, orders, and listings",
+    "personalInfo": "Personal Info",
+    "myProducts": "My Listings",
+    "myOrders": "Order History",
+    "myReports": "My Reports",
+    "security": "Security",
+    "updateProfile": "Update Profile",
+    "changePassword": "Change Password"
+  },
+  "chat": {
+    "title": "Messages",
+    "subtitle": "Chat & Get answers",
+    "searchPlaceholder": "Search messages...",
+    "noConversations": "No messages yet",
+    "startChat": "Start chatting with a seller",
+    "loadMore": "Load more",
+    "typeMessage": "Type a message..."
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "name": "Full Name",
+    "studentId": "Student ID",
+    "forgotPassword": "Forgot password?",
+    "noAccount": "Don't have an account?",
+    "hasAccount": "Already have an account?"
+  },
+  "lostFound": {
+    "title": "Lost & Found Center",
+    "report": "Report Lost Item",
+    "lost": "Lost",
+    "found": "Found",
+    "noItems": "No lost items yet"
+  },
+  "report": {
+    "title": "My Reports",
+    "subtitle": "Track the status of your submitted reports",
+    "pending": "Pending",
+    "resolved": "Resolved",
+    "dismissed": "Dismissed",
+    "noReports": "You haven't submitted any reports"
+  }
+}
