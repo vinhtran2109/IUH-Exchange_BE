@@ -13,6 +13,8 @@ export {
 export { errorHandler } from './middleware/errorHandler.js';
 export { authenticate, optionalAuth, authorize, verifyGatewaySignature } from './middleware/auth.js';
 export { validate } from './middleware/validate.js';
+export { auditLog } from './middleware/audit.js';
+export { AuditLog } from './models/AuditLog.js';
 
 export { config } from './config/index.js';
 export { logger } from './utils/logger.js';
