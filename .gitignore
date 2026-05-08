@@ -22,3 +22,10 @@ logs/
 
 # ── Docker volumes ──
 data/
+
+# ── Firebase ──
+firebase-service-account.json
+
+# ── Load test results ──
+tests/load/results/
+*.jtl
