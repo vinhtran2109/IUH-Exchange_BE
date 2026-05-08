@@ -5,7 +5,6 @@ import {
   uploadUrlSchema,
   paginationSchema,
   searchSchema,
-  resolveSchema,
 } from '../validations/product.validation.js';
 import {
   listProducts,
@@ -40,7 +39,7 @@ function adminOnly(req, _res, next) {
 // ── Admin Routes (MUST be before /:id to avoid conflicts) ──
 
 router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), getPendingProducts);
-router.patch('/admin/:id/resolve', authenticate, adminOnly, validateBody(resolveSchema), resolveProduct);
+router.patch('/admin/:id/resolve', authenticate, adminOnly, resolveProduct);
 router.get('/admin/stats', authenticate, adminOnly, getProductStats);
 
 // ── Public Routes ──

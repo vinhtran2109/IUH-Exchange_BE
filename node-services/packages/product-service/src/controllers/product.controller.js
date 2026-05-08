@@ -266,7 +266,7 @@ export async function getPendingProducts(req, res) {
  * Approve or reject a product (admin only).
  */
 export async function resolveProduct(req, res) {
-  const { action } = req.body;
+  const action = req.query.action || req.body?.action;
   const product = await Product.findById(req.params.id);
   if (!product) throw new ResourceNotFoundException('Product', req.params.id);
 

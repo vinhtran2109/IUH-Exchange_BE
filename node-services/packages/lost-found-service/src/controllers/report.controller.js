@@ -109,7 +109,11 @@ export async function listReports(req, res, next) {
  */
 export async function resolveReport(req, res, next) {
   try {
-    const data = resolveReportSchema.parse(req.body);
+    // Frontend sends status & adminNote as query params
+    const data = resolveReportSchema.parse({
+      status: req.query.status || req.body?.status,
+      adminNote: req.query.adminNote || req.body?.adminNote || '',
+    });
 
     const report = await Report.findById(req.params.reportId);
     if (!report) throw new ResourceNotFoundException('Report', req.params.reportId);

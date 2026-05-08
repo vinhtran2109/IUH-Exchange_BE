@@ -297,6 +297,22 @@ export class OrderService {
   }
 
   /**
+   * Get all orders where the user is buyer OR seller (combined view).
+   *
+   * @param {string} userId
+   * @returns {object[]} Orders sorted by creation date descending
+   */
+  async getMyOrders(userId) {
+    const orders = await Order.find({
+      $or: [{ buyerId: userId }, { sellerId: userId }],
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return orders;
+  }
+
+  /**
    * Get a single order by ID.
    *
    * @param {string} orderId

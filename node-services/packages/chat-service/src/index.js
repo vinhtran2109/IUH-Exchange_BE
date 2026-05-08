@@ -24,8 +24,8 @@ app.use('/api/v1/chat', chatRoutes);
 // ── Error handler ──
 app.use(errorHandler);
 
-// ── Initialize Socket.IO ──
-const { io } = initSocketService(httpServer);
+// ── Initialize SockJS + STOMP server on /ws ──
+initSocketService(httpServer);
 
 // ── Start ──
 await connectMongo(MONGODB_URI);

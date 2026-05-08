@@ -159,6 +159,33 @@ export async function adjustKarma(req, res) {
 }
 
 /**
+ * PATCH /api/v1/users/admin/:id/toggle-ban
+ * Toggle user ban status.
+ */
+export async function toggleBanUser(req, res) {
+  const { id } = req.params;
+
+  const user = await User.findById(id);
+  if (!user) throw new ResourceNotFoundException('User', id);
+
+  if (user.isActive) {
+    // Ban
+    user.isActive = false;
+    user.permissions = [];
+    await user.save();
+    logger.info(`[Admin] User banned: ${user.email}`);
+    res.json(ApiResponse.ok(mapToProfile(user), 'Đã khóa tài khoản'));
+  } else {
+    // Unban
+    user.isActive = true;
+    user.permissions = ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT'];
+    await user.save();
+    logger.info(`[Admin] User unbanned: ${user.email}`);
+    res.json(ApiResponse.ok(mapToProfile(user), 'Đã mở khóa tài khoản'));
+  }
+}
+
+/**
  * POST /api/v1/admin/users/:id/ban
  */
 export async function banUser(req, res) {

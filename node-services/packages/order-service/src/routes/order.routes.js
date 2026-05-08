@@ -31,6 +31,15 @@ export function createOrderRoutes(orderService) {
   });
 
   /**
+   * GET /api/v1/orders/my-orders
+   * Get all orders where the user is buyer OR seller (combined).
+   * MUST be before /:id to avoid conflict.
+   */
+  router.get('/my-orders', (req, res, next) => {
+    controller.getMyOrders(req, res).catch(next);
+  });
+
+  /**
    * GET /api/v1/orders/:id
    * Get a single order by ID.
    */

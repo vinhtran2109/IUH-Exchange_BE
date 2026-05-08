@@ -285,86 +285,118 @@ app.use('/api/v1', (req, res) => {
 app.use(errorHandler);
 
 // ────────────────────────────────────────────────────────
-// WebSocket Proxy — Socket.IO for chat & notification
+// WebSocket Proxy — SockJS + STOMP for chat & notifications
+// SockJS uses HTTP-based fallback transports alongside WebSocket upgrade.
+// All /ws traffic routes to the chat-service which handles both
+// chat and notification STOMP destinations.
 // ────────────────────────────────────────────────────────
-const WS_SERVICES = [
-  { path: '/ws/chat', target: SERVICES.chat },
-  { path: '/ws/notifications', target: SERVICES.notification },
-];
 
+const CHAT_SERVICE_URL = SERVICES.chat;
+
+// SockJS HTTP-based transports: xhr-streaming, xhr-polling, eventsource,
+// htmlfile, jsonp-polling — these are normal HTTP requests that must be proxied.
+// SockJS also serves /ws/info (capabilities check) and /ws/{server}/{session}/{transport}.
+const sockjsProxy = createProxyMiddleware({
+  target: CHAT_SERVICE_URL,
+  changeOrigin: true,
+  ws: false, // HTTP transports handled here; WebSocket upgrade handled separately
+  timeout: 30_000,
+  proxyTimeout: 30_000,
+  pathRewrite: (path) => path, // Keep /ws prefix intact — downstream expects it
+  on: {
+    proxyReq(proxyReq) {
+      proxyReq.setHeader('X-Forwarded-Proto', 'http');
+    },
+    error(err, req, res) {
+      logger.error(`[ws-http] SockJS proxy error: ${err.message}`);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: false,
+          statusCode: 502,
+          message: 'Chat service unavailable.',
+          timestamp: new Date().toISOString(),
+        }));
+      }
+    },
+  },
+});
+
+// Mount SockJS HTTP transport proxy at /ws
+app.use('/ws', (req, res, next) => {
+  // WebSocket upgrade requests are handled by server.on('upgrade') below.
+  // This middleware handles only HTTP-based SockJS transports.
+  if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
+    return next();
+  }
+  sockjsProxy(req, res, next);
+});
+
+// WebSocket upgrade handler for SockJS websocket transport
 server.on('upgrade', (req, socket, head) => {
   const { url } = req;
 
-  for (const wsRoute of WS_SERVICES) {
-    if (url.startsWith(wsRoute.path)) {
-      // Auth check for WebSocket: extract token from query or header
-      const urlObj = new URL(url, 'http://localhost');
-      const token = urlObj.searchParams.get('token')
-        || (req.headers.authorization?.startsWith('Bearer ')
-          ? req.headers.authorization.substring(7)
-          : null);
+  // SockJS websocket transport: /ws/<server_id>/<session_id>/websocket
+  if (url.startsWith('/ws/')) {
+    // Extract JWT from query string (SockJS doesn't support custom headers
+    // on WebSocket upgrade, so the client passes token as query param)
+    // Also check Authorization header for non-SockJS clients.
+    const urlObj = new URL(url, 'http://localhost');
+    const token = urlObj.searchParams.get('token')
+      || (req.headers.authorization?.startsWith('Bearer ')
+        ? req.headers.authorization.substring(7)
+        : null);
 
-      if (!token) {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-
-      // Validate token
-      try {
-        const decoded = jwt.verify(token, config.jwt.secret);
-        req.headers['x-user-id'] = String(decoded.sub || decoded.userId || decoded.id || '');
-        req.headers['x-user-role'] = decoded.role || 'GUEST';
-        req.headers['x-user-email'] = decoded.email || '';
-      } catch {
-        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-
-      const breakerName = wsRoute.path.includes('chat') ? 'chat' : 'notification';
-      if (breakers[breakerName]?.isRejected()) {
-        socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
-        socket.destroy();
-        return;
-      }
-
-      // Forward upgrade to downstream
-      const targetUrl = new URL(wsRoute.target);
-      const proxy = http.request({
-        hostname: targetUrl.hostname,
-        port: targetUrl.port,
-        path: url,
-        method: req.method,
-        headers: req.headers,
-      });
-
-      proxy.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-        socket.write(
-          `HTTP/1.1 101 Switching Protocols\r\n` +
-          Object.entries(proxyRes.headers)
-            .map(([k, v]) => `${k}: ${v}`)
-            .join('\r\n') +
-          '\r\n\r\n'
-        );
-        if (proxyHead?.length) socket.write(proxyHead);
-        proxySocket.pipe(socket);
-        socket.pipe(proxySocket);
-
-        proxySocket.on('error', () => socket.destroy());
-        socket.on('error', () => proxySocket.destroy());
-      });
-
-      proxy.on('error', (err) => {
-        logger.error(`[ws] Proxy error for ${wsRoute.path}: ${err.message}`);
-        breakers[breakerName]?.onFailure();
-        socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-        socket.destroy();
-      });
-
-      proxy.end();
+    if (!token) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
       return;
     }
+
+    try {
+      const decoded = jwt.verify(token, config.jwt.secret);
+      req.headers['x-user-id'] = String(decoded.sub || decoded.userId || decoded.id || '');
+      req.headers['x-user-role'] = decoded.role || 'GUEST';
+      req.headers['x-user-email'] = decoded.email || '';
+    } catch {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
+    const targetUrl = new URL(CHAT_SERVICE_URL);
+    const proxyReq = http.request({
+      hostname: targetUrl.hostname,
+      port: targetUrl.port,
+      path: url,
+      method: req.method,
+      headers: req.headers,
+    });
+
+    proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+      socket.write(
+        `HTTP/1.1 101 Switching Protocols\r\n` +
+        Object.entries(proxyRes.headers)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\r\n') +
+        '\r\n\r\n'
+      );
+      if (proxyHead?.length) socket.write(proxyHead);
+      proxySocket.pipe(socket);
+      socket.pipe(proxySocket);
+
+      proxySocket.on('error', () => socket.destroy());
+      socket.on('error', () => proxySocket.destroy());
+    });
+
+    proxyReq.on('error', (err) => {
+      logger.error(`[ws] Proxy error for ${url}: ${err.message}`);
+      socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+      socket.destroy();
+    });
+
+    proxyReq.end();
+    return;
   }
 
   // Unknown WebSocket path

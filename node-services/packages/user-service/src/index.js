@@ -23,8 +23,9 @@ app.get('/health', (req, res) => {
 
 // ── Routes ──
 app.use('/api/v1/auth', authRoutes);
+// Admin routes MUST be before /users to avoid /:id catching "admin"
+app.use('/api/v1/users/admin', adminRoutes);
 app.use('/api/v1/users', userRoutes);
-app.use('/api/v1/admin', adminRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);

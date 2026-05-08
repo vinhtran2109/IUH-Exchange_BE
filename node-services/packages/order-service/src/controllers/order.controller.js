@@ -77,6 +77,20 @@ export class OrderController {
   }
 
   /**
+   * GET /api/v1/orders/my-orders
+   * Get all orders where the authenticated user is buyer OR seller.
+   */
+  async getMyOrders(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+      throw new BadRequestException('Missing X-User-Id header');
+    }
+
+    const orders = await this.orderService.getMyOrders(userId);
+    return res.json(ApiResponse.ok(orders));
+  }
+
+  /**
    * GET /api/v1/orders/:id
    * Get a single order by ID.
    */

@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { authenticate, authorize, ForbiddenException, validate } from '@iuh-exchange/common';
+import { authenticate, ForbiddenException, validate } from '@iuh-exchange/common';
 import {
   updateRoleSchema,
   updatePermissionsSchema,
   adjustKarmaSchema,
-  banUserSchema,
 } from './admin.schema.js';
 import * as adminCtrl from '../controllers/admin.controller.js';
 
@@ -20,12 +19,18 @@ function requireAdmin(req, _res, next) {
 // All admin routes require authentication + ADMIN role
 router.use(authenticate, requireAdmin);
 
-router.get('/users', adminCtrl.listUsers);
-router.put('/users/:id/role', validate(updateRoleSchema), adminCtrl.updateUserRole);
-router.put('/users/:id/permissions', validate(updatePermissionsSchema), adminCtrl.updateUserPermissions);
-router.put('/users/:id/karma', validate(adjustKarmaSchema), adminCtrl.adjustKarma);
-router.post('/users/:id/ban', validate(banUserSchema), adminCtrl.banUser);
-router.post('/users/:id/unban', adminCtrl.unbanUser);
+// GET /api/v1/users/admin/all — list all users (paginated)
+router.get('/all', adminCtrl.listUsers);
+
+// PATCH /api/v1/users/admin/:id/toggle-ban — toggle ban status
+router.patch('/:id/toggle-ban', adminCtrl.toggleBanUser);
+
+// Legacy routes (kept for backward compatibility)
+router.put('/:id/role', validate(updateRoleSchema), adminCtrl.updateUserRole);
+router.put('/:id/permissions', validate(updatePermissionsSchema), adminCtrl.updateUserPermissions);
+router.put('/:id/karma', validate(adjustKarmaSchema), adminCtrl.adjustKarma);
+
+// GET /api/v1/users/admin/stats — user statistics
 router.get('/stats', adminCtrl.getUserStats);
 
 export default router;

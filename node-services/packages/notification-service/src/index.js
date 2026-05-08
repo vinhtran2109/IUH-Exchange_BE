@@ -25,15 +25,15 @@ app.use('/api/v1/notifications', notificationRoutes);
 // ── Error handler ──
 app.use(errorHandler);
 
-// ── Initialize Socket.IO ──
-const { io } = initNotificationSocket(httpServer);
+// ── Initialize Redis pub/sub for notification delivery ──
+initNotificationSocket();
 
 // ── Connect MongoDB ──
 await connectMongo(MONGODB_URI);
 
 // ── Start Kafka consumer ──
 try {
-  await startKafkaConsumer(io);
+  await startKafkaConsumer();
 } catch (err) {
   logger.error('Kafka consumer failed to start — notification events will not be processed', { error: err.message });
 }

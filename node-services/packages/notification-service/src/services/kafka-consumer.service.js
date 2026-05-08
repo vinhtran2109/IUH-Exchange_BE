@@ -1,5 +1,6 @@
 import { createConsumer, logger } from '@iuh-exchange/common';
 import { Notification } from '../models/Notification.js';
+import { publishNotification } from './socket.service.js';
 
 const GROUP_ID = 'notification-service-group';
 
@@ -13,7 +14,8 @@ const TOPICS = [
 ];
 
 /**
- * Create and persist a notification, then emit it via Socket.IO.
+ * Create and persist a notification, then publish it via Redis pub/sub.
+ * The chat-service picks it up and delivers to connected WebSocket clients.
  *
  * @param {object} params
  * @param {string} params.recipientId
@@ -21,9 +23,8 @@ const TOPICS = [
  * @param {string} params.message
  * @param {string} params.type - ORDER | CHAT | SYSTEM | KARMA | REPORT
  * @param {string} [params.targetId]
- * @param {import('socket.io').Server} params.io
  */
-async function sendNotification({ recipientId, title, message, type, targetId, io }) {
+async function sendNotification({ recipientId, title, message, type, targetId }) {
   if (!recipientId) return;
 
   const notification = await Notification.create({
@@ -36,10 +37,8 @@ async function sendNotification({ recipientId, title, message, type, targetId, i
 
   const notificationObj = notification.toObject();
 
-  // Push real-time via Socket.IO to the user's personal room
-  if (io) {
-    io.to(`user:${recipientId}`).emit('notification:new', notificationObj);
-  }
+  // Publish to Redis — chat-service delivers to connected WebSocket users
+  publishNotification(notificationObj);
 
   logger.info(`Notification sent to ${recipientId}: ${title}`);
   return notificationObj;
@@ -51,7 +50,7 @@ async function sendNotification({ recipientId, title, message, type, targetId, i
  * and calls sendNotification for each recipient.
  */
 const eventHandlers = {
-  'order.created': async (payload, io) => {
+  'order.created': async (payload) => {
     const { sellerId, orderId, buyerName } = payload;
     await sendNotification({
       recipientId: sellerId,
@@ -59,11 +58,10 @@ const eventHandlers = {
       message: `You have a new purchase request for order ${orderId}${buyerName ? ` from ${buyerName}` : ''}`,
       type: 'ORDER',
       targetId: orderId,
-      io,
     });
   },
 
-  'order.completed': async (payload, io) => {
+  'order.completed': async (payload) => {
     const { buyerId, sellerId, orderId } = payload;
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
@@ -73,12 +71,11 @@ const eventHandlers = {
         message: `Order ${orderId} has been completed successfully!`,
         type: 'ORDER',
         targetId: orderId,
-        io,
       });
     }
   },
 
-  'order.cancelled': async (payload, io) => {
+  'order.cancelled': async (payload) => {
     const { buyerId, sellerId, orderId, reason } = payload;
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
@@ -88,12 +85,11 @@ const eventHandlers = {
         message: `Order ${orderId} has been cancelled${reason ? `: ${reason}` : ''}`,
         type: 'ORDER',
         targetId: orderId,
-        io,
       });
     }
   },
 
-  'product.reserved': async (payload, io) => {
+  'product.reserved': async (payload) => {
     const { sellerId, productId, buyerName } = payload;
     await sendNotification({
       recipientId: sellerId,
@@ -101,11 +97,10 @@ const eventHandlers = {
       message: `Your product has been reserved${buyerName ? ` by ${buyerName}` : ''}`,
       type: 'ORDER',
       targetId: productId,
-      io,
     });
   },
 
-  'karma.updated': async (payload, io) => {
+  'karma.updated': async (payload) => {
     const { userId, karmaChange, reason } = payload;
     const direction = karmaChange >= 0 ? 'increased' : 'decreased';
     await sendNotification({
@@ -114,11 +109,10 @@ const eventHandlers = {
       message: `Your karma has ${direction} by ${Math.abs(karmaChange)}${reason ? `. Reason: ${reason}` : ''}`,
       type: 'KARMA',
       targetId: userId,
-      io,
     });
   },
 
-  'report.created': async (payload, io) => {
+  'report.created': async (payload) => {
     const { reporterId, reportedUserId, reportId } = payload;
     await sendNotification({
       recipientId: reporterId,
@@ -126,7 +120,6 @@ const eventHandlers = {
       message: `Your report #${reportId} has been submitted and is under review`,
       type: 'REPORT',
       targetId: reportId,
-      io,
     });
     if (reportedUserId) {
       await sendNotification({
@@ -135,7 +128,6 @@ const eventHandlers = {
         message: 'Your account has been flagged for review',
         type: 'REPORT',
         targetId: reportId,
-        io,
       });
     }
   },
@@ -144,10 +136,8 @@ const eventHandlers = {
 /**
  * Start the Kafka consumer.
  * Each incoming message is parsed as JSON and dispatched to the matching handler.
- *
- * @param {import('socket.io').Server} io - Socket.IO instance for real-time push
  */
-export async function startKafkaConsumer(io) {
+export async function startKafkaConsumer() {
   try {
     const consumer = await createConsumer(GROUP_ID, TOPICS, 'notification-service');
 
@@ -162,7 +152,7 @@ export async function startKafkaConsumer(io) {
 
           const handler = eventHandlers[topic];
           if (handler) {
-            await handler(payload, io);
+            await handler(payload);
           } else {
             logger.warn(`No handler for topic: ${topic}`);
           }
