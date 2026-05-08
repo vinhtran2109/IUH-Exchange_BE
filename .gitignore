@@ -1,21 +1,16 @@
-# Git ignore rules for IUH Campus Exchange Platform
-
 # ── Environment files ──
 .env
 *.env.local
 *.env.production
 
-# ── Maven ──
-target/
-*.class
-*.jar
-*.war
+# ── Node.js ──
+node_modules/
+dist/
 
 # ── IDE ──
 .idea/
 *.iml
 .vscode/
-.eclipse/
 
 # ── OS ──
 .DS_Store
@@ -25,5 +20,5 @@ Thumbs.db
 *.log
 logs/
 
-# ── Docker volumes (nếu mount local) ──
+# ── Docker volumes ──
 data/
