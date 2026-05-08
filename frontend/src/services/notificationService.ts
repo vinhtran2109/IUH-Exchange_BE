@@ -15,7 +15,13 @@ export const notificationService = {
   // Lấy danh sách thông báo của tôi
   getNotifications: async () => {
     const response = await api.get('/notifications');
-    return response.data;
+    const data = response.data;
+    // Backend returns paginated { success, data: { content: [...] } }
+    // Flatten for frontend compatibility
+    if (data?.success && data?.data?.content) {
+      return { success: true, data: data.data.content };
+    }
+    return data;
   },
 
   // Đánh dấu 1 thông báo là đã đọc

@@ -27,6 +27,10 @@ export interface AuthResponse {
 export const authService = {
   login: async (data: LoginRequest) => {
     const response = await api.post("/auth/login", data);
+    // Store refresh token for auto-refresh
+    if (response.data?.success && response.data?.data?.refreshToken) {
+      localStorage.setItem("refreshToken", response.data.data.refreshToken);
+    }
     return response.data;
   },
 

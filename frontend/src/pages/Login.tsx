@@ -22,8 +22,8 @@ const Login: React.FC = () => {
     try {
       const response = await authService.login({ email, password });
       if (response && response.success) {
-        const { userId, email: userEmail, name, role, karmaPoint, accessToken, studentId } = response.data;
-        login({ id: userId, email: userEmail, name, role, studentId: studentId || '', karmaPoint: karmaPoint || 0 }, accessToken);
+        const d = response.data;
+        login({ id: d.userId || d.user?.id, email: d.email || d.user?.email, name: d.name || d.user?.name, role: d.role || d.user?.role, studentId: d.studentId || d.user?.studentId || '', karmaPoint: d.karmaPoint || d.user?.karmaPoint || 0 }, d.accessToken);
         navigate('/');
       } else {
         setError(response.message || 'Đăng nhập thất bại. Vui lòng thử lại!');

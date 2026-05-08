@@ -26,6 +26,12 @@ export const productService = {
     return response.data;
   },
 
+  // Tìm kiếm sản phẩm qua ElasticSearch
+  searchProducts: async (keyword: string, page = 0, size = 20) => {
+    const response = await api.get(`/products/search?keyword=${encodeURIComponent(keyword)}&page=${page + 1}&size=${size}`);
+    return response.data;
+  },
+
   // Xem chi tiết 1 sản phẩm
   getProductById: async (id: string) => {
     const response = await api.get(`/products/${id}`);

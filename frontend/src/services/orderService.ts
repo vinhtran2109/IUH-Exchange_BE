@@ -10,7 +10,9 @@ export interface CreateOrderRequest {
 
 export const orderService = {
   createOrder: async (data: CreateOrderRequest) => {
-    const response = await api.post("/orders", data);
+    const response = await api.post("/orders", data, {
+      headers: { 'Idempotency-Key': data.idempotencyKey },
+    });
     return response.data;
   },
 

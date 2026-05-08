@@ -55,6 +55,12 @@ export const lostFoundService = {
     return response.data;
   },
 
+  // Xác nhận tìm thấy đồ
+  claimItem: async (id: string) => {
+    const response = await api.post(`/lost-found/${id}/claim`);
+    return response.data;
+  },
+
   // Lấy Pre-signed URL để upload ảnh đồ thất lạc
   getUploadUrl: async (filename: string, contentType: string) => {
     const response = await api.post("/lost-found/upload-url", { filename, contentType });

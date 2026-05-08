@@ -40,22 +40,24 @@ const Products: React.FC = () => {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await productService.getProducts(page, PAGE_SIZE);
+      let response;
+      if (debouncedSearch) {
+        // Use ElasticSearch fuzzy search when searching
+        response = await productService.searchProducts(debouncedSearch, page, PAGE_SIZE);
+      } else {
+        response = await productService.getProducts(page, PAGE_SIZE);
+      }
       if (response.success) {
         let data: Product[] = response.data.content || [];
 
-        // Client-side filter (until backend supports query params)
-        if (debouncedSearch) {
-          data = data.filter(p =>
-            p.title.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-            p.description.toLowerCase().includes(debouncedSearch.toLowerCase())
-          );
-        }
-        if (selectedCategory !== 'Tất cả') {
-          data = data.filter(p => p.category === selectedCategory);
-        }
-        if (selectedCondition !== 'Tất cả') {
-          data = data.filter(p => p.condition === selectedCondition);
+        // Client-side filter for category/condition (ES handles text search)
+        if (!debouncedSearch) {
+          if (selectedCategory !== 'Tất cả') {
+            data = data.filter(p => p.category === selectedCategory);
+          }
+          if (selectedCondition !== 'Tất cả') {
+            data = data.filter(p => p.condition === selectedCondition);
+          }
         }
 
         setProducts(data);
@@ -70,7 +72,7 @@ const Products: React.FC = () => {
 
   useEffect(() => {
     setPage(0);
-  }, [debouncedSearch, selectedCategory, selectedCondition]);
+  }, [debouncedSearch, selectedCategory, selectedCondition, sortBy]);
 
   useEffect(() => {
     fetchProducts();

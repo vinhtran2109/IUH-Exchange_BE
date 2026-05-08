@@ -88,18 +88,28 @@ const Profile: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadingAvatar(true);
-    const formData = new FormData();
-    formData.append('file', file);
     try {
-      const res = await api.post('/users/avatar', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      // 1. Get presigned URL
+      const presignRes = await api.post('/users/avatar/presign', { contentType: file.type });
+      if (!presignRes.data.success) throw new Error('Failed to get upload URL');
+      const { uploadUrl, publicUrl } = presignRes.data.data;
+
+      // 2. Upload directly to S3
+      await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
       });
-      if (res.data.success) {
-        setAvatarUrl(res.data.data);
-        setProfile(prev => prev ? { ...prev, avatarUrl: res.data.data } : prev);
+
+      // 3. Update profile with new avatar URL
+      const updateRes = await api.patch('/users/me', { avatarUrl: publicUrl });
+      if (updateRes.data.success) {
+        setAvatarUrl(publicUrl);
+        setProfile(prev => prev ? { ...prev, avatarUrl: publicUrl } : prev);
+        updateUser({ avatarUrl: publicUrl });
       }
     } catch (err: any) {
-      alert("Lỗi upload ảnh lên S3");
+      alert("Lỗi upload ảnh: " + (err.message || "Vui lòng thử lại"));
     } finally { setUploadingAvatar(false); }
   };
 
@@ -109,8 +119,9 @@ const Profile: React.FC = () => {
     try {
       const res = await api.patch('/users/me', { name, avatarUrl });
       if (res.data.success) {
-        setProfile(prev => prev ? { ...prev, name, avatarUrl } : prev);
-        updateUser({ name, avatarUrl });
+        const updated = res.data.data;
+        setProfile(prev => prev ? { ...prev, name: updated?.name || name, avatarUrl: updated?.avatarUrl || avatarUrl } : prev);
+        updateUser({ name: updated?.name || name, avatarUrl: updated?.avatarUrl || avatarUrl });
         setMessage({ type: 'success', text: 'Cập nhật thông tin thành công! ✨' });
       }
     } catch (err: any) {
@@ -228,7 +239,9 @@ const Profile: React.FC = () => {
                            <div className="flex-1">
                               <div className="font-bold text-slate-800">{p.title}</div>
                               <div className="text-rose-500 font-black text-sm">{p.price.toLocaleString()}đ</div>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md mt-1 inline-block ${p.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{p.status}</span>
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md mt-1 inline-block ${p.status === 'AVAILABLE' ? 'bg-emerald-100 text-emerald-700' : p.status === 'PENDING_APPROVAL' ? 'bg-amber-100 text-amber-700' : p.status === 'SOLD' ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-700'}`}>
+                                {p.status === 'PENDING_APPROVAL' ? 'CHỜ DUYỆT' : p.status === 'AVAILABLE' ? 'ĐANG BÁN' : p.status === 'SOLD' ? 'ĐÃ BÁN' : p.status}
+                              </span>
                            </div>
                            <button onClick={() => handleDeleteProduct(p.id)} className="p-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all"><Trash2 size={20}/></button>
                         </div>
@@ -269,7 +282,7 @@ const Profile: React.FC = () => {
                     if (newPassword !== confirmPassword) { setMessage({ type: 'error', text: 'Mật khẩu xác nhận không khớp!' }); return; }
                     setLoading(true);
                     try {
-                      const res = await api.post('/users/password', { oldPassword, newPassword });
+                      const res = await api.put('/auth/change-password', { oldPassword, newPassword });
                       if (res.data.success) {
                         setMessage({ type: 'success', text: 'Đổi mật khẩu thành công! ✨' });
                         setOldPassword(''); setNewPassword(''); setConfirmPassword('');

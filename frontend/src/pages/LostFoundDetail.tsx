@@ -9,11 +9,14 @@ import {
   MessageCircle, 
   Trash2, 
   Package,
-  User as UserIcon
+  User as UserIcon,
+  Flag,
+  Hand
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 import type { LostFoundItem } from '../services/lostFoundService';
 import { chatService } from '../services/chatService';
+import api from '../services/api';
 
 import { useAuthStore } from '../store/authStore';
 
@@ -27,6 +30,7 @@ const LostFoundDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [deleting, setDeleting] = useState(false);
+  const [claiming, setClaiming] = useState(false);
 
   useEffect(() => {
     if (id) fetchDetail(id);
@@ -61,6 +65,35 @@ const LostFoundDetail: React.FC = () => {
       alert("Gỡ bài thất bại. Vui lòng thử lại.");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleClaim = async () => {
+    if (!item || !user) return;
+    if (!window.confirm("Xác nhận bạn đã tìm thấy đồ vật này?")) return;
+    try {
+      setClaiming(true);
+      const res = await lostFoundService.claimItem(item.id);
+      if (res.success) {
+        setItem({ ...item, status: 'CLAIMED' as any });
+        alert("Đã xác nhận tìm thấy đồ vật!");
+      }
+    } catch (err: any) {
+      alert("Lỗi: " + (err.response?.data?.message || "Không thể xác nhận"));
+    } finally {
+      setClaiming(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!user) { alert("Bạn cần đăng nhập để tố cáo!"); return; }
+    const reason = prompt("Lý do tố cáo:");
+    if (!reason || reason.length < 5) return;
+    try {
+      await api.post('/reports', { targetType: 'LOST_FOUND', targetId: id, reason });
+      alert("Đã gửi tố cáo. Admin sẽ xem xét sớm.");
+    } catch (err: any) {
+      alert("Lỗi: " + (err.response?.data?.message || "Không thể gửi tố cáo"));
     }
   };
 
@@ -162,13 +195,19 @@ const LostFoundDetail: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4">
+                {!isOwner && item.status === 'OPEN' && item.type === 'FOUND' && (
+                  <button 
+                    onClick={handleClaim}
+                    disabled={claiming}
+                    className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-emerald-600 text-white rounded-[1.75rem] font-black shadow-2xl shadow-emerald-200 hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                  >
+                    <Hand size={22} />
+                    {claiming ? 'ĐANG XỬ LÝ...' : 'TÔI TÌM THẤY ĐỒ NÀY'}
+                  </button>
+                )}
                 <button 
-                  onClick={() => {
-                    console.log("🖱️ [LostFoundDetail] Clicked Nhắn tin với:", item.studentId);
-                    chatService.triggerOpenChat(item.studentId, "Chủ bài đăng");
-                  }}
+                  onClick={() => chatService.triggerOpenChat(item.studentId, "Chủ bài đăng")}
                   disabled={isOwner}
-
                   className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-indigo-600 text-white rounded-[1.75rem] font-black shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
                 >
                   <MessageCircle size={22} className="group-hover:rotate-12 transition-transform" />
@@ -182,6 +221,15 @@ const LostFoundDetail: React.FC = () => {
                   GỌI ĐIỆN CHO CHỦ BÀI
                 </a>
               </div>
+              {!isOwner && (
+                <button 
+                  onClick={handleReport}
+                  className="w-full mt-3 flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-2xl font-bold text-sm transition-all"
+                >
+                  <Flag size={16} />
+                  Tố cáo bài đăng
+                </button>
+              )}
            </div>
         </div>
       </div>
