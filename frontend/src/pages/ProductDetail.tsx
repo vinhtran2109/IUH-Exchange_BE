@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ShoppingCart, MessageSquare, AlertCircle, Package, Trash2 } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, MessageSquare, AlertCircle, Package, Trash2, Flag } from 'lucide-react';
 import { productService } from '../services/productService';
 import { chatService } from '../services/chatService';
 import { orderService } from '../services/orderService';
 import type { Product } from '../services/productService';
 import { useAuthStore } from '../store/authStore';
+import api from '../services/api';
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +51,18 @@ const ProductDetail: React.FC = () => {
       alert("Lỗi khi xóa bài. Bạn có phải là chủ bài đăng không?");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!user) { alert("Bạn cần đăng nhập để tố cáo!"); return; }
+    const reason = prompt("Lý do tố cáo sản phẩm này:");
+    if (!reason || reason.length < 5) return;
+    try {
+      await api.post('/reports', { targetType: 'PRODUCT', targetId: id, reason });
+      alert("Đã gửi tố cáo. Admin sẽ xem xét sớm.");
+    } catch (err: any) {
+      alert("Lỗi: " + (err.response?.data?.message || "Không thể gửi tố cáo"));
     }
   };
 
@@ -208,6 +221,13 @@ const ProductDetail: React.FC = () => {
                  >
                     <MessageSquare size={24} />
                     CHAT VỚI NGƯỜI BÁN
+                 </button>
+                 <button 
+                   onClick={handleReport}
+                   className="col-span-2 flex items-center justify-center gap-2 py-3 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-2xl font-bold text-sm transition-all"
+                 >
+                    <Flag size={16} />
+                    Tố cáo sản phẩm
                  </button>
                </>
              )}

@@ -114,15 +114,16 @@ export const chatService = {
     return false;
   },
 
-  // 4. Lấy lịch sử chat
+  // 4. Lấy lịch sử chat (dùng conversationId format: "userA:userB")
   getHistory: async (senderId: string, recipientId: string) => {
-    const response = await api.get(`/chat/history/${senderId}/${recipientId}`);
+    const conversationId = [senderId, recipientId].sort().join(':');
+    const response = await api.get(`/chat/conversations/${conversationId}`);
     return response.data;
   },
 
   // 5. Lấy danh sách Inbox (các UserId đã từng chat)
-  getConversations: async (userId: string) => {
-    const response = await api.get(`/chat/conversations/${userId}`);
+  getConversations: async (_userId: string) => {
+    const response = await api.get('/chat/conversations');
     return response.data;
   }
 };

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Shield, Users, AlertTriangle, ShieldCheck, Ban, CheckCircle, 
   XCircle, PackageCheck, BarChart3, Activity, TrendingUp, 
-  ShoppingCart, Landmark, Info
+  ShoppingCart, Landmark, Info, ChevronDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { adminService } from '../services/adminService';
 import type { UserAdminData, ReportData } from '../services/adminService';
@@ -61,6 +61,24 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.toggleBanUser(userId);
       if (res.success) { fetchData(); }
+    } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    if (!window.confirm(`Đổi vai trò thành ${newRole}?`)) return;
+    try {
+      const res = await adminService.updateUserRole(userId, newRole);
+      if (res.success) fetchData();
+    } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
+  };
+
+  const handleKarmaAdjust = async (userId: string, direction: 'up' | 'down') => {
+    const amount = prompt(`Nhập số điểm karma muốn ${direction === 'up' ? 'cộng' : 'trừ'}:`);
+    if (!amount || isNaN(Number(amount))) return;
+    const reason = prompt("Lý do (tùy chọn):") || '';
+    try {
+      const res = await adminService.adjustKarma(userId, direction === 'up' ? Number(amount) : -Number(amount), reason);
+      if (res.success) fetchData();
     } catch (e: any) { alert("Lỗi: " + e.response?.data?.message); }
   };
 
@@ -219,17 +237,48 @@ const AdminDashboard: React.FC = () => {
               <tr className="bg-slate-50 border-b border-slate-200 text-sm uppercase tracking-wider text-slate-500">
                 <th className="p-4 font-bold">Email</th>
                 <th className="p-4 font-bold">MSSV</th>
+                <th className="p-4 font-bold">Vai trò</th>
+                <th className="p-4 font-bold">Karma</th>
                 <th className="p-4 font-bold">Trạng thái</th>
                 <th className="p-4 font-bold">Hành động</th>
               </tr>
             </thead>
             <tbody>
-              {users.map(u => (
+              {users.map(u => {
+                const isActive = u.isActive !== false && (u as any).active !== false;
+                return (
                 <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                  <td className="p-4 font-medium text-slate-800">{u.email}</td>
-                  <td className="p-4 text-slate-500">{u.studentId}</td>
                   <td className="p-4">
-                    {(u.isActive !== false && (u as any).active !== false) ? (
+                    <div className="font-medium text-slate-800">{u.email}</div>
+                    <div className="text-xs text-slate-400">{u.name}</div>
+                  </td>
+                  <td className="p-4 text-slate-500 text-sm">{u.studentId || '—'}</td>
+                  <td className="p-4">
+                    <select
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                      className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 transition-all"
+                    >
+                      <option value="STUDENT">STUDENT</option>
+                      <option value="MODERATOR">MODERATOR</option>
+                      <option value="ADMIN">ADMIN</option>
+                    </select>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1">
+                      <span className={`font-black text-sm ${u.karmaPoint < 0 ? 'text-rose-500' : u.karmaPoint < 50 ? 'text-amber-500' : 'text-emerald-600'}`}>
+                        {u.karmaPoint}
+                      </span>
+                      <button onClick={() => handleKarmaAdjust(u.id, 'up')} className="p-1 text-emerald-500 hover:bg-emerald-50 rounded transition-all" title="Cộng karma">
+                        <ArrowUp size={14} />
+                      </button>
+                      <button onClick={() => handleKarmaAdjust(u.id, 'down')} className="p-1 text-rose-500 hover:bg-rose-50 rounded transition-all" title="Trừ karma">
+                        <ArrowDown size={14} />
+                      </button>
+                    </div>
+                  </td>
+                  <td className="p-4">
+                    {isActive ? (
                       <span className="inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-full">
                          <CheckCircle size={12}/> HOẠT ĐỘNG
                       </span>
@@ -242,13 +291,14 @@ const AdminDashboard: React.FC = () => {
                   <td className="p-4">
                     <button 
                       onClick={() => handleToggleBan(u.id)}
-                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all ${(u.isActive !== false && (u as any).active !== false) ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold uppercase transition-all ${isActive ? 'bg-rose-100 text-rose-700 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'}`}
                     >
-                      {(u.isActive !== false && (u as any).active !== false) ? 'Khóa TK' : 'Mở khóa'}
+                      {isActive ? 'Khóa TK' : 'Mở khóa'}
                     </button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

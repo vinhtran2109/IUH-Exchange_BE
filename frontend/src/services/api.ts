@@ -8,6 +8,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
 
 // Inject Access Token to every request
@@ -33,7 +34,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle expired token and redirection
+// Handle expired token and automatic refresh
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
@@ -41,9 +42,20 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      // TODO: Implement Refresh Token logic here
-      // const refreshToken = localStorage.getItem("refreshToken");
-      // if (refreshToken) { ... }
+
+      try {
+        // Refresh token is in httpOnly cookie — browser sends it automatically
+        const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {}, { withCredentials: true });
+        const { accessToken } = res.data.data;
+
+        localStorage.setItem("accessToken", accessToken);
+        originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        return api(originalRequest);
+      } catch (refreshError) {
+        localStorage.removeItem("accessToken");
+        window.location.href = "/login";
+        return Promise.reject(refreshError);
+      }
     }
 
     return Promise.reject(error);

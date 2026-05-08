@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { verifyGatewaySignature } from '@iuh-exchange/common';
 import { OrderController } from '../controllers/order.controller.js';
 
 /**
@@ -10,6 +11,9 @@ import { OrderController } from '../controllers/order.controller.js';
 export function createOrderRoutes(orderService) {
   const router = Router();
   const controller = new OrderController(orderService);
+
+  // Verify gateway-signed headers on all order routes
+  router.use(verifyGatewaySignature);
 
   /**
    * POST /api/v1/orders

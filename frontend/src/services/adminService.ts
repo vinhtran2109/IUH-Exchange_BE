@@ -37,6 +37,21 @@ export const adminService = {
     return response.data;
   },
 
+  updateUserRole: async (userId: string, role: string) => {
+    const response = await api.put(`/users/admin/${userId}/role`, { role });
+    return response.data;
+  },
+
+  updateUserPermissions: async (userId: string, permissions: string[]) => {
+    const response = await api.put(`/users/admin/${userId}/permissions`, { permissions });
+    return response.data;
+  },
+
+  adjustKarma: async (userId: string, amount: number, reason?: string) => {
+    const response = await api.put(`/users/admin/${userId}/karma`, { amount, reason });
+    return response.data;
+  },
+
   // Reports Management
   getReports: async (status = "PENDING", page = 0, size = 20) => {
     const response = await api.get(`/reports/admin?status=${status}&page=${page}&size=${size}`);
