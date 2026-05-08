@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { FcmToken } from '../models/FcmToken.js';
 import { sendPushNotification, sendPushToTopic } from '../services/fcm.service.js';
-import { ApiResponse, logger } from '@iuh-exchange/common';
+import { ApiResponse, logger, authenticate } from '@iuh-exchange/common';
 
 const router = Router();
+
+// Bug #1 fix: All FCM routes require authentication
+router.use(authenticate);
 
 /**
  * POST /api/v1/notifications/fcm/register

@@ -23,12 +23,21 @@ export function correlationId(req, res, next) {
 }
 
 /**
+ * Redact token from URL query params (e.g., SockJS ?token=xxx).
+ */
+function sanitizeUrl(url) {
+  // Bug #16 fix: Redact JWT token from URL to prevent leaking in logs/browser history
+  return url.replace(/([?&])token=[^&]*/gi, '$1token=[REDACTED]');
+}
+
+/**
  * Log request start and response completion.
  * Must be registered after correlationId().
  */
 export function requestLogger(req, res, next) {
   const start = Date.now();
-  const { method, originalUrl } = req;
+  const { method } = req;
+  const originalUrl = sanitizeUrl(req.originalUrl);
   const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const userId = req.user?.id || req.headers['x-user-id'] || 'anonymous';
 

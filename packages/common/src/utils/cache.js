@@ -64,10 +64,19 @@ export const cache = {
   async delPattern(pattern) {
     try {
       const redis = getRedis();
-      const keys = await redis.keys(pattern);
-      if (keys.length > 0) {
-        await redis.del(...keys);
-        logger.debug(`Cache DEL pattern "${pattern}": ${keys.length} keys removed`);
+      // Bug #18 fix: Use SCAN instead of KEYS to avoid blocking Redis in production
+      let cursor = '0';
+      let totalDeleted = 0;
+      do {
+        const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = nextCursor;
+        if (keys.length > 0) {
+          await redis.del(...keys);
+          totalDeleted += keys.length;
+        }
+      } while (cursor !== '0');
+      if (totalDeleted > 0) {
+        logger.debug(`Cache DEL pattern "${pattern}": ${totalDeleted} keys removed`);
       }
     } catch (err) {
       logger.error(`Cache DEL pattern error:`, err);
@@ -85,11 +94,32 @@ export const cache = {
     const cached = await this.get(key);
     if (cached !== null) return cached;
 
-    const value = await fetchFn();
-    if (value !== null && value !== undefined) {
-      await this.set(key, value, ttlSeconds);
+    // Bug #12 fix: Cache stampede protection — use Redis lock to prevent
+    // concurrent requests from all computing the same value
+    const lockKey = `lock:${key}`;
+    const lockTtl = 10; // 10 seconds max lock hold
+    const redis = getRedis();
+
+    try {
+      const acquired = await redis.set(lockKey, '1', 'EX', lockTtl, 'NX');
+      if (!acquired) {
+        // Another process is computing — wait and retry from cache
+        for (let i = 0; i < 20; i++) {
+          await new Promise(r => setTimeout(r, 250));
+          const retryCached = await this.get(key);
+          if (retryCached !== null) return retryCached;
+        }
+        // Timeout waiting — proceed to compute anyway (fallback)
+      }
+
+      const value = await fetchFn();
+      if (value !== null && value !== undefined) {
+        await this.set(key, value, ttlSeconds);
+      }
+      return value;
+    } finally {
+      await redis.del(lockKey).catch(() => {});
     }
-    return value;
   },
 
   /**

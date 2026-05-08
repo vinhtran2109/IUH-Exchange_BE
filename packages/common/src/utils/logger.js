@@ -1,5 +1,6 @@
 import winston from 'winston';
 import http from 'http';
+import { createRequire } from 'module';
 
 /**
  * Logstash HTTP transport - sends JSON logs to Logstash via HTTP input.
@@ -38,6 +39,11 @@ class LogstashHttpTransport extends winston.transports.Stream {
  * - Console: human-readable with colors
  * - Logstash: JSON structured (when LOGSTASH_URL is set)
  */
+// Bug #36 fix: Add file transport with rotation for production
+const LOG_DIR = process.env.LOG_DIR || 'logs';
+const LOG_MAX_SIZE = process.env.LOG_MAX_SIZE || '20m'; // 20MB per file
+const LOG_MAX_FILES = process.env.LOG_MAX_FILES || '14d'; // Keep 14 days
+
 const transports = [
   new winston.transports.Console({
     format: winston.format.combine(
@@ -49,6 +55,24 @@ const transports = [
     ),
   }),
 ];
+
+// Add rotating file transport in production (lazy load to avoid crash if not installed)
+if (process.env.NODE_ENV === 'production') {
+  try {
+    const require = createRequire(import.meta.url);
+    const DailyRotateFile = require('winston-daily-rotate-file');
+    transports.push(new DailyRotateFile({
+      dirname: LOG_DIR,
+      filename: `${process.env.SERVICE_NAME || 'app'}-%DATE%.log`,
+      datePattern: 'YYYY-MM-DD',
+      maxSize: LOG_MAX_SIZE,
+      maxFiles: LOG_MAX_FILES,
+      zippedArchive: true,
+    }));
+  } catch {
+    // winston-daily-rotate-file not installed — skip file logging
+  }
+}
 
 // Add Logstash transport if LOGSTASH_URL is configured
 if (process.env.LOGSTASH_URL) {

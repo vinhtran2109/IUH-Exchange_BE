@@ -60,6 +60,11 @@ export function verifyGatewaySignature(req, res, next) {
       throw new ForbiddenException('Missing gateway signature');
     }
 
+    // Bug #28 fix: Reject empty userId to prevent bypass
+    if (!userId || userId.trim() === '') {
+      throw new ForbiddenException('Missing user identity in gateway headers');
+    }
+
     const payload = `${userId}:${role}:${email}`;
     const expected = crypto.createHmac('sha256', secret).update(payload).digest('hex');
 

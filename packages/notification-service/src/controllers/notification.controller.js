@@ -87,9 +87,12 @@ export async function markAllAsRead(req, res, next) {
   try {
     const userId = req.user.sub;
 
+    // Bug #35 fix: Add batch size limit to prevent excessive DB writes
+    const MAX_BATCH = 1000;
     const result = await Notification.updateMany(
       { recipientId: userId, isRead: false },
       { isRead: true },
+      { limit: MAX_BATCH },
     );
 
     logger.info(`Marked all ${result.modifiedCount} notifications as read for ${userId}`);

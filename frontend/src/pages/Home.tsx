@@ -14,7 +14,7 @@ const Home: React.FC = () => {
   React.useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await productService.getProducts(0, 8);
+        const response = await productService.getProducts(1, 8);
         if (response.success) {
           setProducts(response.data.content);
         }
@@ -101,7 +101,8 @@ const Home: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading ? (
-            [1, 2, 3, 4].map((i) => (
+            // Bug #34 fix: Generate skeleton cards based on grid columns (responsive)
+            Array.from({ length: 8 }, (_, i) => i + 1).map((i) => (
               <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 space-y-3 animate-pulse">
                 <div className="aspect-square bg-slate-100 rounded-lg w-full"></div>
                 <div className="h-3 bg-slate-100 rounded w-2/3"></div>

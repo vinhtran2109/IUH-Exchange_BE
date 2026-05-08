@@ -28,26 +28,54 @@ api.interceptors.request.use(
 );
 
 // Handle expired token and automatic refresh
+let isRefreshing = false;
+let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];
+
+function processQueue(error: any, token: string | null = null) {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error);
+    } else {
+      prom.resolve(token!);
+    }
+  });
+  failedQueue = [];
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
+      // Bug #27 fix: Queue concurrent requests while refreshing token
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject });
+        }).then((token) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          return api(originalRequest);
+        });
+      }
+
       originalRequest._retry = true;
+      isRefreshing = true;
 
       try {
-        // Refresh token is in httpOnly cookie — browser sends it automatically
         const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {}, { withCredentials: true });
         const { accessToken } = res.data.data;
 
         localStorage.setItem("accessToken", accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+        processQueue(null, accessToken);
         return api(originalRequest);
       } catch (refreshError) {
+        processQueue(refreshError, null);
         localStorage.removeItem("accessToken");
         window.location.href = "/login";
         return Promise.reject(refreshError);
+      } finally {
+        isRefreshing = false;
       }
     }
 

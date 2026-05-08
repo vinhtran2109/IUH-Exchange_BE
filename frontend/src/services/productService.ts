@@ -14,8 +14,8 @@ export interface Product {
 }
 
 export const productService = {
-  // Lấy danh sách sản phẩm (mặc định page 0, size 20)
-  getProducts: async (page = 0, size = 20, category?: string, sort?: string) => {
+  // Lấy danh sách sản phẩm (mặc định page 1, size 20 — 1-based pagination)
+  getProducts: async (page = 1, size = 20, category?: string, sort?: string) => {
     let url = `/products?page=${page}&size=${size}`;
     if (category) url += `&category=${encodeURIComponent(category)}`;
     if (sort) url += `&sort=${encodeURIComponent(sort)}`;
@@ -24,14 +24,14 @@ export const productService = {
   },
 
   // Xem các món đồ đã đăng của chính mình
-  getMyProducts: async (page = 0, size = 10) => {
+  getMyProducts: async (page = 1, size = 10) => {
     const response = await api.get(`/products/me?page=${page}&size=${size}`);
     return response.data;
   },
 
   // Tìm kiếm sản phẩm qua ElasticSearch
-  searchProducts: async (keyword: string, page = 0, size = 20) => {
-    const response = await api.get(`/products/search?keyword=${encodeURIComponent(keyword)}&page=${page + 1}&size=${size}`);
+  searchProducts: async (keyword: string, page = 1, size = 20) => {
+    const response = await api.get(`/products/search?keyword=${encodeURIComponent(keyword)}&page=${page}&size=${size}`);
     return response.data;
   },
 

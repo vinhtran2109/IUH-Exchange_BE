@@ -40,7 +40,8 @@ export async function register(req, res) {
     otpAttemptCount: 0,
   });
 
-  logger.debug(`OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext to console/logs
+  logger.debug(`OTP sent to: ${email}`);
   await sendOtpEmail(email, otp, name);
 
   res.status(201).json(
@@ -105,7 +106,8 @@ export async function resendOtp(req, res) {
   user.otpAttemptCount = 0;
   await user.save();
 
-  logger.debug(`Resend OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext
+  logger.debug(`Resend OTP sent to: ${email}`);
   await sendOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi lại mã OTP'));
@@ -256,7 +258,8 @@ export async function forgotPassword(req, res) {
   user.passwordResetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
-  logger.debug(`Password reset OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext
+  logger.debug(`Password reset OTP sent to: ${email}`);
   await sendPasswordResetOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi mã OTP đặt lại mật khẩu'));

@@ -1,6 +1,11 @@
 import { ChatMessage } from '../models/ChatMessage.js';
 import { ApiResponse, PageResponse, parsePagination, logger } from '@iuh-exchange/common';
 
+// Bug #6 fix: Escape special regex chars to prevent ReDoS
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * GET /api/v1/chat/conversations
  * Get paginated list of user's conversations with last message and unread count.
@@ -64,6 +69,11 @@ export async function getConversationHistory(req, res, next) {
   try {
     const { conversationId } = req.params;
     const { page, size, skip } = parsePagination(req.query);
+
+    // Bug #22 fix: Validate conversationId format (expected: "userId1:userId2")
+    if (!conversationId || !/^[a-zA-Z0-9_-]+:[a-zA-Z0-9_-]+$/.test(conversationId)) {
+      return res.status(400).json(ApiResponse.error(400, 'Invalid conversationId format'));
+    }
 
     const [messages, total] = await Promise.all([
       ChatMessage.find({ conversationId })
@@ -146,7 +156,7 @@ export async function searchMessages(req, res, next) {
 
     const filter = {
       $or: [{ senderId: userId }, { receiverId: userId }],
-      content: { $regex: q.trim(), $options: 'i' },
+      content: { $regex: escapeRegex(q.trim()), $options: 'i' },
     };
 
     if (conversationId) {
