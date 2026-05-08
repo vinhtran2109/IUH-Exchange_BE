@@ -6,32 +6,69 @@ import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 
-const CATEGORIES = ['Tất cả', 'Sách & Tài liệu', 'Điện tử', 'Quần áo', 'Đồ dùng học tập', 'Nhạc cụ', 'Thể thao', 'Khác'];
-const CONDITIONS = ['Tất cả', 'Mới', 'Như mới', 'Tốt', 'Còn dùng được'];
+const CATEGORIES = [
+  { label: 'Tất cả', value: '' },
+  { label: 'Sách & Tài liệu', value: 'BOOKS' },
+  { label: 'Điện tử', value: 'ELECTRONICS' },
+  { label: 'Thời trang', value: 'FASHION' },
+  { label: 'Đồ dùng học tập', value: 'TOOLS' },
+  { label: 'Nhạc cụ', value: 'MUSIC' },
+  { label: 'Thể thao', value: 'SPORTS' },
+  { label: 'Khác', value: 'OTHERS' },
+];
+const CONDITIONS = [
+  { label: 'Tất cả', value: '' },
+  { label: 'Mới', value: 'NEW' },
+  { label: 'Như mới', value: 'LIKE_NEW' },
+  { label: 'Tốt', value: 'GOOD' },
+  { label: 'Còn dùng được', value: 'FAIR' },
+];
 const SORT_OPTIONS = [
-  { label: 'Mới nhất', value: 'createdAt,desc' },
-  { label: 'Giá thấp nhất', value: 'price,asc' },
-  { label: 'Giá cao nhất', value: 'price,desc' },
+  { label: 'Mới nhất', value: 'createdAt:desc' },
+  { label: 'Giá thấp nhất', value: 'price:asc' },
+  { label: 'Giá cao nhất', value: 'price:desc' },
 ];
 
 const PAGE_SIZE = 12;
 
+const CATEGORY_MAP: Record<string, string> = {
+  'BOOKS': 'Sách & Tài liệu',
+  'ELECTRONICS': 'Điện tử',
+  'FASHION': 'Thời trang',
+  'TOOLS': 'Đồ dùng học tập',
+  'MUSIC': 'Nhạc cụ',
+  'SPORTS': 'Thể thao',
+  'OTHERS': 'Khác',
+};
+
 const Products: React.FC = () => {
-  const [searchParams] = useSearchParams();
-  const initialSearch = searchParams.get('search') || '';
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial state from URL
+  const [search, setSearch] = useState(searchParams.get('search') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') || '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
+  const [selectedCondition, setSelectedCondition] = useState(searchParams.get('condition') || '');
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'createdAt:desc');
+  const [page, setPage] = useState(parseInt(searchParams.get('page') || '0', 10));
 
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState(initialSearch);
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('Tất cả');
-  const [selectedCondition, setSelectedCondition] = useState('Tất cả');
-  const [sortBy, setSortBy] = useState('createdAt,desc');
-  const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Debounce search input
+  // Sync state → URL
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (debouncedSearch) params.set('search', debouncedSearch);
+    if (selectedCategory) params.set('category', selectedCategory);
+    if (selectedCondition) params.set('condition', selectedCondition);
+    if (sortBy !== 'createdAt:desc') params.set('sort', sortBy);
+    if (page > 0) params.set('page', String(page));
+    setSearchParams(params, { replace: true });
+  }, [debouncedSearch, selectedCategory, selectedCondition, sortBy, page]);
+
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 400);
     return () => clearTimeout(timer);
@@ -42,32 +79,17 @@ const Products: React.FC = () => {
     try {
       let response;
       if (debouncedSearch) {
-        // Use ElasticSearch fuzzy search when searching
         response = await productService.searchProducts(debouncedSearch, page, PAGE_SIZE);
       } else {
-        response = await productService.getProducts(page, PAGE_SIZE);
+        response = await productService.getProducts(page, PAGE_SIZE, selectedCategory || undefined, sortBy);
       }
       if (response.success) {
         let data: Product[] = response.data.content || [];
 
-        // Client-side filter for category/condition (ES handles text search)
-        if (!debouncedSearch) {
-          if (selectedCategory !== 'Tất cả') {
-            data = data.filter(p => p.category === selectedCategory);
-          }
-          if (selectedCondition !== 'Tất cả') {
-            data = data.filter(p => p.condition === selectedCondition);
-          }
+        // Client-side condition filter (backend doesn't filter by condition yet)
+        if (selectedCondition && !debouncedSearch) {
+          data = data.filter(p => p.condition === selectedCondition);
         }
-
-        // Client-side sort
-        const [sortField, sortDir] = sortBy.split(',');
-        data.sort((a: any, b: any) => {
-          const aVal = a[sortField];
-          const bVal = b[sortField];
-          if (sortDir === 'asc') return aVal > bVal ? 1 : -1;
-          return aVal < bVal ? 1 : -1;
-        });
 
         setProducts(data);
         setTotalPages(response.data.totalPages || 1);
@@ -79,6 +101,7 @@ const Products: React.FC = () => {
     }
   }, [page, debouncedSearch, selectedCategory, selectedCondition, sortBy]);
 
+  // Reset page when filters change
   useEffect(() => {
     setPage(0);
   }, [debouncedSearch, selectedCategory, selectedCondition, sortBy]);
@@ -87,7 +110,7 @@ const Products: React.FC = () => {
     fetchProducts();
   }, [fetchProducts]);
 
-  const activeFiltersCount = [selectedCategory !== 'Tất cả', selectedCondition !== 'Tất cả'].filter(Boolean).length;
+  const activeFiltersCount = [!!selectedCategory, !!selectedCondition].filter(Boolean).length;
 
   return (
     <div className="max-w-7xl mx-auto py-8 px-4">
@@ -154,11 +177,11 @@ const Products: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {CATEGORIES.map(cat => (
                     <button
-                      key={cat}
-                      onClick={() => setSelectedCategory(cat)}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategory === cat ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                      key={cat.value}
+                      onClick={() => setSelectedCategory(cat.value)}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCategory === cat.value ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'}`}
                     >
-                      {cat}
+                      {cat.label}
                     </button>
                   ))}
                 </div>
@@ -168,18 +191,18 @@ const Products: React.FC = () => {
                 <div className="flex flex-wrap gap-2">
                   {CONDITIONS.map(cond => (
                     <button
-                      key={cond}
-                      onClick={() => setSelectedCondition(cond)}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCondition === cond ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'}`}
+                      key={cond.value}
+                      onClick={() => setSelectedCondition(cond.value)}
+                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${selectedCondition === cond.value ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-slate-100 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600'}`}
                     >
-                      {cond}
+                      {cond.label}
                     </button>
                   ))}
                 </div>
               </div>
               {activeFiltersCount > 0 && (
                 <button
-                  onClick={() => { setSelectedCategory('Tất cả'); setSelectedCondition('Tất cả'); }}
+                  onClick={() => { setSelectedCategory(''); setSelectedCondition(''); }}
                   className="text-sm font-bold text-rose-500 hover:text-rose-700 flex items-center gap-1 transition-colors"
                 >
                   <X size={14} /> Xóa tất cả bộ lọc
@@ -189,6 +212,24 @@ const Products: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Active filter tags */}
+      {(selectedCategory || selectedCondition) && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {selectedCategory && (
+            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold flex items-center gap-1">
+              {CATEGORY_MAP[selectedCategory] || selectedCategory}
+              <button onClick={() => setSelectedCategory('')} className="hover:text-indigo-800"><X size={12} /></button>
+            </span>
+          )}
+          {selectedCondition && (
+            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-bold flex items-center gap-1">
+              {CONDITIONS.find(c => c.value === selectedCondition)?.label || selectedCondition}
+              <button onClick={() => setSelectedCondition('')} className="hover:text-indigo-800"><X size={12} /></button>
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Results */}
       {loading ? (
