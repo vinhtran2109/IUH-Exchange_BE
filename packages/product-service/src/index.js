@@ -1,6 +1,7 @@
 import express from 'express';
 import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common';
 import productRoutes from './routes/product.routes.js';
+import reviewRoutes from './routes/review.routes.js';
 import { initKafkaProducer } from './services/kafka.service.js';
 import { ensureIndex } from './services/elasticsearch.service.js';
 import { initSagaListener } from './services/saga.listener.js';
@@ -18,6 +19,7 @@ app.get('/health', (req, res) => {
 });
 
 // ── Routes ──
+app.use('/api/v1/products', reviewRoutes);
 app.use('/api/v1/products', productRoutes);
 
 // ── Error handler ──

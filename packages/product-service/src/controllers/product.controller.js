@@ -297,6 +297,23 @@ export async function resolveProduct(req, res) {
       category: saved.category,
       status: saved.status,
     });
+
+    // Notify seller: product approved
+    await publishProductEvent('product.approved', {
+      sellerId: saved.sellerId,
+      productId: saved._id.toString(),
+      productTitle: saved.title,
+    });
+  }
+
+  // If rejected, notify seller
+  if (saved.status === 'REJECTED') {
+    await publishProductEvent('product.rejected', {
+      sellerId: saved.sellerId,
+      productId: saved._id.toString(),
+      productTitle: saved.title,
+      reason: req.body?.reason || '',
+    });
   }
 
   logger.info(`Product ${action}: id=${saved._id}`);

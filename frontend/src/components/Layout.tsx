@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { 
   Bell, MessageSquare, Search, User as UserIcon, 
   Package, PlusCircle, LogOut, Shield, Clock,
-  ShoppingCart, Info, AlertOctagon
+  ShoppingCart, Info, AlertOctagon, PackageCheck
 } from 'lucide-react';
 
 import { chatService } from '../services/chatService';
@@ -58,18 +58,18 @@ const Layout: React.FC = () => {
   const handleMarkRead = async (id: string) => {
     try {
       await notificationService.markAsRead(id);
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
     } catch (e) { console.error(e); }
   };
 
   const handleMarkAllRead = async () => {
     try {
       await notificationService.markAllAsRead();
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (e) { console.error(e); }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
@@ -145,6 +145,8 @@ const Layout: React.FC = () => {
                                 onClick={() => {
                                   if (n.targetId && n.type && n.type.includes('ORDER')) {
                                     navigate(`/orders/${n.targetId}`);
+                                  } else if (n.targetId && n.type === 'PRODUCT') {
+                                    navigate(`/products/${n.targetId}`);
                                   } else {
                                     handleMarkRead(n.id);
                                   }
@@ -153,14 +155,14 @@ const Layout: React.FC = () => {
                                 className="block p-4 border-b border-slate-50 cursor-pointer transition-colors hover:bg-slate-100 bg-white"
                               >
                                  <div className="flex gap-3">
-                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${n.type && n.type.includes('ORDER') ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                                       {n.type === 'KARMA_UPDATE' ? <AlertOctagon size={16}/> : (n.type && n.type.includes('ORDER')) ? <ShoppingCart size={16}/> : <Info size={16}/>}
+                                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${n.type && n.type.includes('ORDER') ? 'bg-emerald-100 text-emerald-600' : n.type === 'PRODUCT' ? 'bg-amber-100 text-amber-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                                       {n.type === 'KARMA_UPDATE' ? <AlertOctagon size={16}/> : (n.type && n.type.includes('ORDER')) ? <ShoppingCart size={16}/> : n.type === 'PRODUCT' ? <PackageCheck size={16}/> : <Info size={16}/>}
                                     </div>
                                     <div>
                                        <p className="text-xs font-bold text-slate-800 leading-tight mb-1">{n.message}</p>
                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium tracking-tight">
                                           <Clock size={12}/> {n.createdAt ? new Date(n.createdAt).toLocaleString() : 'Vừa xong'}
-                                          {!n.read && <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></span>}
+                                          {!n.isRead && <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full"></span>}
                                        </div>
                                     </div>
                                  </div>

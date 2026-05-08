@@ -5,9 +5,9 @@ export interface Notification {
   recipientId: string;
   title?: string;
   message: string;
-  type: string; // ORDER, CHAT, SYSTEM, etc.
+  type: string; // ORDER, CHAT, SYSTEM, KARMA, REPORT, PRODUCT
   targetId?: string;
-  read: boolean;
+  isRead: boolean;
   createdAt: string;
 }
 
