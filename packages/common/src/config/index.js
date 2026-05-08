@@ -4,6 +4,18 @@
  *
  * Ưu tiên: process.env > default values
  */
+
+// ── Required env validation ──
+const REQUIRED_ENV_VARS = ['JWT_SECRET'];
+
+for (const varName of REQUIRED_ENV_VARS) {
+  if (!process.env[varName]) {
+    console.error(`❌ FATAL: Missing required environment variable: ${varName}`);
+    console.error(`   Set ${varName} in your .env file before starting the service.`);
+    process.exit(1);
+  }
+}
+
 export const config = {
   // Server
   port: parseInt(process.env.PORT || '3000', 10),
@@ -30,7 +42,7 @@ export const config = {
 
   // JWT
   jwt: {
-    secret: process.env.JWT_SECRET || 'change-me-in-production',
+    secret: process.env.JWT_SECRET, // Required — validated above
     expiration: process.env.JWT_EXPIRATION || '15m',
     refreshExpiration: process.env.JWT_REFRESH_EXPIRATION || '7d',
   },
