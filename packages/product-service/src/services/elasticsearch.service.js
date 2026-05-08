@@ -5,6 +5,19 @@ const esClient = new Client({ node: config.elasticsearch.node });
 
 const INDEX = 'products';
 
+async function withRetry(fn, maxRetries = 3, baseDelayMs = 500) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === maxRetries) throw err;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      logger.warn(`ES operation failed (attempt ${attempt}/${maxRetries}), retrying in ${delay}ms: ${err.message}`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+}
+
 /**
  * Ensure the products index exists with proper mappings.
  */
@@ -39,20 +52,22 @@ export async function ensureIndex() {
  */
 export async function indexProduct(product) {
   try {
-    await esClient.index({
-      index: INDEX,
-      id: product.id,
-      document: {
-        title: product.title,
-        description: product.description,
-        price: product.price,
-        category: product.category,
-        status: product.status,
-      },
+    await withRetry(async () => {
+      await esClient.index({
+        index: INDEX,
+        id: product.id,
+        document: {
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          category: product.category,
+          status: product.status,
+        },
+      });
     });
     logger.info(`ES indexed product: ${product.id}`);
   } catch (err) {
-    logger.error(`ES index failed for ${product.id}: ${err.message}`);
+    logger.error(`ES index failed for ${product.id} after retries: ${err.message}`);
   }
 }
 
@@ -62,10 +77,12 @@ export async function indexProduct(product) {
  */
 export async function removeProduct(productId) {
   try {
-    await esClient.delete({ index: INDEX, id: productId }, { ignore: [404] });
+    await withRetry(async () => {
+      await esClient.delete({ index: INDEX, id: productId }, { ignore: [404] });
+    });
     logger.info(`ES removed product: ${productId}`);
   } catch (err) {
-    logger.error(`ES delete failed for ${productId}: ${err.message}`);
+    logger.error(`ES delete failed for ${productId} after retries: ${err.message}`);
   }
 }
 
