@@ -2,10 +2,14 @@
   "name": "@iuh-exchange/order-service",
   "version": "1.0.0",
   "type": "module",
-  "scripts": { "dev": "node --watch src/index.js", "start": "node src/index.js" },
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
   "dependencies": {
     "@iuh-exchange/common": "1.0.0",
     "express": "^4.21.0",
+    "kafkajs": "^2.2.4",
     "mongoose": "^8.8.0",
     "zod": "^3.23.8"
   }

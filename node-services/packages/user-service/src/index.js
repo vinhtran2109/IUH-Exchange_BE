@@ -6,6 +6,8 @@ import {
   errorHandler,
 } from '@iuh-exchange/common';
 import authRoutes from './routes/auth.routes.js';
+import userRoutes from './routes/user.routes.js';
+import adminRoutes from './routes/admin.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -21,6 +23,8 @@ app.get('/health', (req, res) => {
 
 // ── Routes ──
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
+app.use('/api/v1/admin', adminRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);
