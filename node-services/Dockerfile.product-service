@@ -1,0 +1,13 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY packages/common ./packages/common
+COPY package.json ./
+COPY packages/product-service ./packages/product-service
+
+RUN npm install --workspace=packages/product-service --omit=dev
+
+ENV NODE_ENV=production
+
+CMD ["node", "packages/product-service/src/index.js"]

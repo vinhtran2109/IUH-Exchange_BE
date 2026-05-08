@@ -1,0 +1,19 @@
+{
+  "name": "@iuh-exchange/common",
+  "version": "1.0.0",
+  "description": "Shared library for IUH Exchange microservices",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/**/*.test.js"
+  },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.0",
+    "winston": "^3.15.0",
+    "zod": "^3.23.8"
+  }
+}

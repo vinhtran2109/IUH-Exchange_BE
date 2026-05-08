@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copy common lib first
+COPY packages/common ./packages/common
+COPY package.json ./
+
+# Copy service
+COPY packages/api-gateway ./packages/api-gateway
+
+# Install production deps only
+RUN npm install --workspace=packages/api-gateway --omit=dev
+
+ENV NODE_ENV=production
+ENV SERVICE_NAME=api-gateway
+ENV PORT=8080
+
+EXPOSE 8080
+
+CMD ["node", "packages/api-gateway/src/index.js"]

@@ -1,0 +1,25 @@
+{
+  "name": "iuh-exchange",
+  "version": "1.0.0",
+  "private": true,
+  "description": "IUH Campus Exchange Platform - Node.js Microservices",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "docker compose up -d mongodb redis kafka elasticsearch && npm run dev:services",
+    "dev:services": "npm run dev --workspace=packages/api-gateway & npm run dev --workspace=packages/user-service & npm run dev --workspace=packages/product-service & npm run dev --workspace=packages/order-service & npm run dev --workspace=packages/notification-service & npm run dev --workspace=packages/chat-service & npm run dev --workspace=packages/lost-found-service",
+    "dev:gateway": "npm run dev --workspace=packages/api-gateway",
+    "dev:user": "npm run dev --workspace=packages/user-service",
+    "dev:product": "npm run dev --workspace=packages/product-service",
+    "dev:order": "npm run dev --workspace=packages/order-service",
+    "dev:chat": "npm run dev --workspace=packages/chat-service",
+    "dev:notification": "npm run dev --workspace=packages/notification-service",
+    "dev:lostfound": "npm run dev --workspace=packages/lost-found-service",
+    "lint": "eslint packages/*/src",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
