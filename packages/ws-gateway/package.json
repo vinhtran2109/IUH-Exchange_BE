@@ -1,0 +1,16 @@
+{
+  "name": "@iuh-exchange/ws-gateway",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@iuh-exchange/common": "*",
+    "sockjs": "^0.3.24",
+    "jsonwebtoken": "^9.0.2",
+    "axios": "^1.7.0"
+  }
+}

@@ -330,3 +330,31 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  # ─────────────────────────────────────────────
+  # WebSocket Gateway (separated)
+  # ─────────────────────────────────────────────
+  ws-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.ws-gateway
+    container_name: iuh-ws-gateway-node
+    restart: unless-stopped
+    ports:
+      - "3007:3007"
+    env_file: .env
+    environment:
+      PORT: "3007"
+      SERVICE_NAME: ws-gateway
+      CHAT_SERVICE_URL: http://chat-service:3005
+    depends_on:
+      - redis
+      - chat-service
+    networks:
+      - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3007/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
