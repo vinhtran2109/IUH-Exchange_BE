@@ -1,11 +1,31 @@
 import sockjs from 'sockjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import axios from 'axios';
 import { config, logger, createRedis } from '@iuh-exchange/common';
 import { FrameAccumulator, serializeFrame } from '../utils/stomp-parser.js';
 
 const REDIS_NOTIF_CHANNEL = 'sockjs:notifications';
 const CHAT_SERVICE_URL = process.env.CHAT_SERVICE_URL || 'http://localhost:3005';
+
+/**
+ * Build internal service headers for proxying requests to downstream services.
+ * Uses the same HMAC signature format as the API gateway auth filter,
+ * so downstream services with verifyGatewaySignature middleware will accept these.
+ */
+function buildInternalHeaders(userId, role = 'USER', email = '') {
+  const secret = config.gatewaySecret || config.jwt.secret;
+  const payload = `${userId}:${role}:${email}`;
+  const signature = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+
+  return {
+    'x-internal-service': 'ws-gateway',
+    'x-user-id': String(userId),
+    'x-user-role': role,
+    'x-user-email': email,
+    'x-gateway-signature': signature,
+  };
+}
 
 /**
  * Build a conversationId from two user IDs (sorted, joined by ":").
@@ -286,14 +306,14 @@ async function handleChatSend(conn, frame, userId) {
 
     const conversationId = buildConversationId(userId, recipientId);
 
-    // Proxy to chat-service
+    // Proxy to chat-service (with gateway signature for downstream auth)
     const response = await axios.post(`${CHAT_SERVICE_URL}/api/v1/chat/messages`, {
       senderId: userId,
       receiverId: recipientId,
       content: content.trim(),
       conversationId,
     }, {
-      headers: { 'x-internal-service': 'ws-gateway' },
+      headers: buildInternalHeaders(userId),
       timeout: 5000,
     });
 
@@ -342,7 +362,7 @@ async function handleChatImage(conn, frame, userId) {
       fileUrl,
       fileName: fileName || null,
     }, {
-      headers: { 'x-internal-service': 'ws-gateway' },
+      headers: buildInternalHeaders(userId),
       timeout: 5000,
     });
 
@@ -372,7 +392,7 @@ async function handleChatRead(conn, frame, userId) {
     if (!conversationId) return;
 
     await axios.patch(`${CHAT_SERVICE_URL}/api/v1/chat/conversations/${conversationId}/read`, {}, {
-      headers: { 'x-user-id': userId },
+      headers: buildInternalHeaders(userId),
       timeout: 5000,
     });
 
