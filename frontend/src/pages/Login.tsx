@@ -37,72 +37,59 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top_left,_var(--tw-gradient-stops))] from-indigo-50 via-white to-sky-50 py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Decorative Blur Orbs */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/20 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-sky-200/20 rounded-full blur-[120px] pointer-events-none"></div>
-
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 py-12 px-4">
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-        className="max-w-md w-full space-y-8 relative z-10"
+        transition={{ duration: 0.4 }}
+        className="max-w-sm w-full"
       >
-        <div className="bg-white/70 backdrop-blur-2xl p-8 sm:p-10 rounded-[3rem] shadow-[0_32px_64px_-16px_rgba(79,70,229,0.15)] border border-white/80 relative overflow-hidden">
-          {/* Top highlight line */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-1 bg-gradient-to-r from-transparent via-indigo-500/30 to-transparent"></div>
-          
-          <div className="text-center mb-12">
-            <motion.div 
-              initial={{ scale: 0.8, rotate: -10 }}
-              animate={{ scale: 1, rotate: -5 }}
-              whileHover={{ rotate: 0, scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 200 }}
-              className="inline-flex items-center justify-center w-24 h-24 rounded-[2rem] bg-gradient-to-br from-indigo-600 to-violet-600 text-white shadow-2xl shadow-indigo-200 mb-8 cursor-pointer"
-            >
-              <LogIn size={44} className="ml-1" />
-            </motion.div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-3">Xin chào!</h1>
-            <p className="text-slate-500 font-bold flex items-center justify-center gap-2 text-sm uppercase tracking-wider">
-              <ShieldCheck size={18} className="text-indigo-500" />
+        <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-slate-900 text-white mb-4">
+              <LogIn size={24} />
+            </div>
+            <h1 className="text-2xl font-bold text-slate-900 mb-1">Xin chào!</h1>
+            <p className="text-slate-500 text-sm flex items-center justify-center gap-1.5">
+              <ShieldCheck size={14} className="text-slate-400" />
               Portal Sinh Viên IUH
             </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[13px] font-black text-slate-700 ml-1 uppercase tracking-widest">Tài khoản</label>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors duration-300">
-                  <UserIcon size={20} />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1.5 block">Tài khoản</label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <UserIcon size={16} />
                 </div>
                 <input 
                   type="text" 
                   required
                   placeholder="Email hoặc Mã số SV"
-                  className="w-full pl-12 pr-5 py-4 rounded-2xl border border-slate-200 bg-white/50 focus:bg-white focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-300 font-semibold text-slate-700"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-slate-400 focus:outline-none transition-all text-sm placeholder:text-slate-300"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <div className="flex justify-between items-center px-1">
-                <label className="text-[13px] font-black text-slate-700 uppercase tracking-widest">Mật khẩu</label>
-                <Link to="/forgot-password" className="text-xs font-black text-indigo-600 hover:text-indigo-700 transition-colors uppercase tracking-wider">
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs font-medium text-slate-600">Mật khẩu</label>
+                <Link to="/forgot-password" className="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors">
                   Quên?
                 </Link>
               </div>
-              <div className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors duration-300">
-                  <Lock size={20} />
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <Lock size={16} />
                 </div>
                 <input 
                   type="password" 
                   required
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-5 py-4 rounded-2xl border border-slate-200 bg-white/50 focus:bg-white focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/5 outline-none transition-all duration-300 placeholder:text-slate-300 font-semibold text-slate-700"
+                  className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-slate-400 focus:outline-none transition-all text-sm placeholder:text-slate-300"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
@@ -112,15 +99,12 @@ const Login: React.FC = () => {
             <AnimatePresence mode="wait">
               {error && (
                 <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="bg-red-50/50 border border-red-100 p-4 rounded-2xl"
+                  exit={{ opacity: 0, y: -6 }}
+                  className="bg-red-50 border border-red-200 p-3 rounded-lg"
                 >
-                  <p className="text-red-600 text-xs font-black flex items-center gap-2 italic">
-                    <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span>
-                    {error}
-                  </p>
+                  <p className="text-red-600 text-xs font-medium">{error}</p>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -128,34 +112,31 @@ const Login: React.FC = () => {
             <button 
               type="submit"
               disabled={loading}
-              className="w-full relative py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-indigo-100 hover:shadow-indigo-200 active:scale-[0.98] transition-all duration-300 disabled:opacity-50 overflow-hidden group"
+              className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              <div className="relative z-10 flex items-center justify-center gap-3">
-                {loading ? (
-                  <div className="w-5 h-5 border-3 border-white/30 border-t-white rounded-full animate-spin"></div>
-                ) : (
-                  <>
-                    <span>Đăng nhập</span>
-                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                  </>
-                )}
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-700 to-violet-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              {loading ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+              ) : (
+                <>
+                  <span>Đăng nhập</span>
+                  <ArrowRight size={16} />
+                </>
+              )}
             </button>
           </form>
 
-          <div className="mt-12 pt-8 border-t border-slate-100 text-center">
-            <p className="text-xs text-slate-500 font-black uppercase tracking-widest">
+          <div className="mt-6 pt-6 border-t border-slate-100 text-center">
+            <p className="text-xs text-slate-500">
               Bạn mới đến?{' '}
-              <Link to="/register" className="text-indigo-600 hover:text-indigo-700 transition-colors ml-1 border-b-2 border-indigo-100 hover:border-indigo-600 pb-0.5">
+              <Link to="/register" className="text-slate-900 font-medium hover:underline">
                 Đăng ký ngay
               </Link>
             </p>
           </div>
         </div>
         
-        <p className="text-center text-[10px] text-slate-400 font-bold uppercase tracking-[0.3em]">
-          &copy; {new Date().getFullYear()} IUH Exchange Hub • v1.0.2
+        <p className="text-center text-[11px] text-slate-400 mt-4">
+          &copy; {new Date().getFullYear()} IUH Campus Exchange
         </p>
       </motion.div>
     </div>
