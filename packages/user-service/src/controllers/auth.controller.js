@@ -149,14 +149,13 @@ export async function login(req, res) {
     ApiResponse.ok(
       {
         accessToken,
-        user: {
-          id: user._id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          permissions: user.permissions,
-          karmaPoint: user.karmaPoint,
-        },
+        userId: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+        permissions: user.permissions,
+        karmaPoint: user.karmaPoint,
+        studentId: user.studentId,
       },
       'Đăng nhập thành công'
     )

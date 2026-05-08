@@ -28,7 +28,7 @@ export class OrderController {
       throw new BadRequestException('Missing X-User-Id header');
     }
 
-    const idempotencyKey = req.headers['idempotency-key'];
+    const idempotencyKey = req.headers['idempotency-key'] || req.body?.idempotencyKey;
     if (!idempotencyKey) {
       throw new BadRequestException('Missing Idempotency-Key header');
     }

@@ -36,6 +36,18 @@ const uploadUrlSchema = z.object({
   contentType: z.string().min(1),
 });
 
+// ── Response Mapper ──
+
+function mapItem(item) {
+  const obj = item.toObject ? item.toObject() : item;
+  return {
+    ...obj,
+    id: obj._id?.toString() || obj.id,
+    imageUrls: obj.images || [],
+    studentId: obj.userId?.toString() || obj.userId,
+  };
+}
+
 // ── Controllers ──
 
 /**
@@ -66,7 +78,7 @@ export async function listItems(req, res, next) {
     ]);
 
     const pageData = new PageResponse({
-      content: items,
+      content: items.map(mapItem),
       page,
       size,
       totalElements: total,
@@ -87,7 +99,7 @@ export async function getItemById(req, res, next) {
   try {
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
-    res.json(ApiResponse.ok(item));
+    res.json(ApiResponse.ok(mapItem(item)));
   } catch (err) {
     next(err);
   }
@@ -99,14 +111,19 @@ export async function getItemById(req, res, next) {
  */
 export async function createItem(req, res, next) {
   try {
-    const data = createItemSchema.parse(req.body);
+    const rawData = { ...req.body };
+    // Support frontend field name: imageUrls → images
+    if (rawData.imageUrls && !rawData.images) {
+      rawData.images = rawData.imageUrls;
+    }
+    const data = createItemSchema.parse(rawData);
     const item = await LostFoundItem.create({
       ...data,
       userId: req.user.sub,
     });
 
     logger.info(`LostFoundItem created: ${item._id} by user ${req.user.sub}`);
-    res.status(201).json(ApiResponse.created(item));
+    res.status(201).json(ApiResponse.created(mapItem(item)));
   } catch (err) {
     next(err);
   }
@@ -135,7 +152,7 @@ export async function updateItem(req, res, next) {
     await item.save();
 
     logger.info(`LostFoundItem updated: ${item._id} by user ${req.user.sub}`);
-    res.json(ApiResponse.ok(item));
+    res.json(ApiResponse.ok(mapItem(item)));
   } catch (err) {
     next(err);
   }
@@ -189,7 +206,7 @@ export async function claimItem(req, res, next) {
     await item.save();
 
     logger.info(`LostFoundItem claimed: ${item._id} by user ${req.user.sub}`);
-    res.json(ApiResponse.ok(item, 'Item claimed successfully'));
+    res.json(ApiResponse.ok(mapItem(item), 'Item claimed successfully'));
   } catch (err) {
     next(err);
   }
