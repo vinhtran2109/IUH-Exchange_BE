@@ -8,6 +8,7 @@ import { orderService } from '../services/orderService';
 import type { Product } from '../services/productService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
+import ReviewSection from '../components/ReviewSection';
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -17,6 +18,7 @@ const ProductDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [ordering, setOrdering] = useState(false);
+  const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -35,6 +37,22 @@ const ProductDetail: React.FC = () => {
     };
     fetchProduct();
   }, [id]);
+
+  // Check if user has a completed order for this product (for review)
+  useEffect(() => {
+    if (!id || !user) return;
+    const checkOrder = async () => {
+      try {
+        const res = await api.get(`/orders?productId=${id}&status=COMPLETED&page=0&size=1`);
+        if (res.data?.success && res.data?.data?.content?.length > 0) {
+          setCompletedOrderId(res.data.data.content[0].id);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    checkOrder();
+  }, [id, user]);
 
   const handleDelete = async () => {
     if (!id || !window.confirm("Bạn có chắc chắn muốn gỡ bài đăng này không? Hành động này không thể hoàn tác.")) return;
@@ -235,6 +253,9 @@ const ProductDetail: React.FC = () => {
 
         </motion.div>
       </div>
+
+      {/* Reviews Section */}
+      <ReviewSection productId={product.id} orderId={completedOrderId || undefined} />
     </div>
   );
 };
