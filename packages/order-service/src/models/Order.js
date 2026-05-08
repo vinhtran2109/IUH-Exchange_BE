@@ -8,6 +8,9 @@ const orderSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     status: {
       type: String,
+      // NOTE: PENDING here means "buyer placed an order, awaiting product reservation"
+      // This is different from Product.status PENDING which means "awaiting admin approval"
+      // See also: AWAITING_SELLER (formerly CONFIRMED) = product reserved, waiting for seller
       enum: ['PENDING', 'AWAITING_SELLER', 'COMPLETED', 'CANCELLED'],
       default: 'PENDING',
       index: true,
