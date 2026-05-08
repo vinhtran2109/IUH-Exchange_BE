@@ -12,7 +12,7 @@ export interface ChatMessage {
 }
 
 let stompClient: Stomp.Client | null = null;
-const socketUrl = 'http://localhost:8080/ws'; // Qua API Gateway
+const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 let listeners: Array<(msg: ChatMessage) => void> = [];
 let openChatListeners: Array<(recipientId: string, recipientName: string) => void> = [];
 

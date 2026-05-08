@@ -179,6 +179,23 @@ const CreateProduct: React.FC = () => {
                 </div>
               </div>
 
+              <div className="space-y-1.5">
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
+                  Tình trạng
+                </label>
+                <select
+                  name="condition"
+                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-bold"
+                  value={formData.condition}
+                  onChange={handleChange}
+                >
+                  <option value="NEW">Mới</option>
+                  <option value="LIKE_NEW">Như mới</option>
+                  <option value="GOOD">Tốt</option>
+                  <option value="FAIR">Còn dùng được</option>
+                </select>
+              </div>
+
               {/* Mô tả */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">

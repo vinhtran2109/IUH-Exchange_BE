@@ -145,7 +145,7 @@ const OrderDetail: React.FC = () => {
               
               <div className="flex flex-col md:flex-row gap-8 p-6 bg-slate-50 rounded-[2.5rem] border border-slate-100 items-center">
                  <div className="w-40 h-40 shrink-0 bg-white rounded-3xl overflow-hidden ring-4 ring-white shadow-xl">
-                    {product?.imageUrls?.[0] ? <img src={product.imageUrls[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300"><ShoppingBag size={48} /></div>}
+                    {product?.imageUrls?.[0] ? <img src={product.imageUrls[0]} alt={product?.title || 'Sản phẩm'} className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-300"><ShoppingBag size={48} /></div>}
                  </div>
                  <div className="flex-1 text-center md:text-left">
                     <h4 className="text-2xl font-black text-slate-800 mb-2 leading-tight uppercase tracking-tight">{product?.title || 'Sản phẩm đang tải...'}</h4>

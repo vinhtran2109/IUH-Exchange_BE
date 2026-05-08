@@ -2,10 +2,12 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatManager from './components/ChatManager';
+import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
 import CreateProduct from './pages/CreateProduct';
 import ProductDetail from './pages/ProductDetail';
 import LostFoundCenter from './pages/LostFoundCenter';
@@ -35,7 +37,8 @@ const App: React.FC = () => {
           <Route path="lost-found/:id" element={<LostFoundDetail />} />
           <Route path="register" element={<Register />} />
           <Route path="profile" element={<Profile />} />
-          <Route path="admin" element={<AdminDashboard />} />
+          <Route path="admin" element={<ProtectedRoute requiredRole="ADMIN"><AdminDashboard /></ProtectedRoute>} />
+          <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="orders/:id" element={<OrderDetail />} />
           <Route path="not-found" element={<NotFound />} />
 

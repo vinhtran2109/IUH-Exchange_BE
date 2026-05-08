@@ -125,7 +125,7 @@ const AdminDashboard: React.FC = () => {
            <p className="text-slate-400 font-medium">Đang xử lý dữ liệu...</p>
         </div>
       ) : activeTab === 'overview' ? (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-[fadeIn_0.5s_ease-out]">
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm hover:border-indigo-200 transition-all group">
                  <div className="flex justify-between items-start mb-4">
