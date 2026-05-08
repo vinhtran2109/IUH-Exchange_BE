@@ -1,5 +1,4 @@
 import axios from "axios";
-import { useAuthStore } from "../store/authStore";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8080/api/v1";
 
@@ -12,21 +11,15 @@ const api = axios.create({
 });
 
 // Inject Access Token to every request
+// NOTE: X-User-Id and X-User-Role are NOT set here — they are derived from
+// the JWT by the API gateway auth filter and signed with HMAC.
+// Setting them client-side would be a security risk (header spoofing).
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
-    const user = useAuthStore.getState().user;
 
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    if (user?.id) {
-      config.headers["X-User-Id"] = user.id;
-    }
-
-    if (user?.role) {
-      config.headers["X-User-Role"] = user.role;
     }
 
     return config;
