@@ -28,10 +28,20 @@ const Layout: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!isAuthenticated) return;
     fetchNotifs();
-    // Poll every 1 minute for a real-time feel (without WebSocket implementation for now)
-    const interval = setInterval(fetchNotifs, 60000);
-    return () => clearInterval(interval);
+
+    // Real-time notification via WebSocket
+    const removeNotifListener = chatService.addNotificationListener((notif: Notification) => {
+      setNotifications(prev => [notif, ...prev]);
+    });
+
+    // Fallback polling every 2 minutes (in case WS disconnects)
+    const interval = setInterval(fetchNotifs, 120000);
+    return () => {
+      clearInterval(interval);
+      removeNotifListener();
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { createConsumer, logger } from '@iuh-exchange/common';
 import { Notification } from '../models/Notification.js';
 import { publishNotification } from './socket.service.js';
+import { sendOrderEmail } from './email.service.js';
 
 const GROUP_ID = 'notification-service-group';
 
@@ -12,6 +13,21 @@ const TOPICS = [
   { topic: 'karma.updated', fromBeginning: false },
   { topic: 'report.created', fromBeginning: false },
 ];
+
+const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+
+/**
+ * Fetch user email from user-service (internal call).
+ */
+async function getUserEmail(userId) {
+  try {
+    const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${userId}`);
+    const data = await res.json();
+    return data?.data?.email || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Create and persist a notification, then publish it via Redis pub/sub.
@@ -59,6 +75,17 @@ const eventHandlers = {
       type: 'ORDER',
       targetId: orderId,
     });
+    // Send email
+    const email = await getUserEmail(sellerId);
+    if (email) {
+      await sendOrderEmail(email, {
+        subject: 'Đơn hàng mới',
+        title: 'Bạn có đơn hàng mới!',
+        body: `Một người mua vừa gửi yêu cầu mua sản phẩm của bạn. Vui lòng kiểm tra và xác nhận đơn hàng.`,
+        orderId,
+        status: 'Chờ xác nhận',
+      });
+    }
   },
 
   'order.completed': async (payload) => {
@@ -72,6 +99,16 @@ const eventHandlers = {
         type: 'ORDER',
         targetId: orderId,
       });
+      const email = await getUserEmail(recipientId);
+      if (email) {
+        await sendOrderEmail(email, {
+          subject: 'Giao dịch thành công',
+          title: 'Giao dịch hoàn tất! 🎉',
+          body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
+          orderId,
+          status: 'Hoàn tất',
+        });
+      }
     }
   },
 
@@ -86,6 +123,16 @@ const eventHandlers = {
         type: 'ORDER',
         targetId: orderId,
       });
+      const email = await getUserEmail(recipientId);
+      if (email) {
+        await sendOrderEmail(email, {
+          subject: 'Đơn hàng đã bị hủy',
+          title: 'Đơn hàng bị hủy',
+          body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
+          orderId,
+          status: 'Đã hủy',
+        });
+      }
     }
   },
 

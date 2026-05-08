@@ -12,8 +12,9 @@ export interface ChatMessage {
 }
 
 let stompClient: Stomp.Client | null = null;
-const socketUrl = 'http://localhost:8080/ws'; // Qua API Gateway
+const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
 let listeners: Array<(msg: ChatMessage) => void> = [];
+let notificationListeners: Array<(notif: any) => void> = [];
 let openChatListeners: Array<(recipientId: string, recipientName: string) => void> = [];
 
 export const chatService = {
@@ -22,6 +23,14 @@ export const chatService = {
     listeners.push(callback);
     return () => {
       listeners = listeners.filter(l => l !== callback);
+    };
+  },
+
+  // Đăng ký listener cho notification real-time
+  addNotificationListener: (callback: (notif: any) => void) => {
+    notificationListeners.push(callback);
+    return () => {
+      notificationListeners = notificationListeners.filter(l => l !== callback);
     };
   },
 
@@ -63,14 +72,23 @@ export const chatService = {
       console.warn('✅ [WebSocket] Real-time Link Established!', frame);
       
       if (stompClient?.connected) {
-        // Subscribe vào hàng User Destination của Spring (Kênh riêng)
+        // Subscribe vào hàng User Destination (Kênh riêng cho tin nhắn)
         stompClient.subscribe('/user/queue/messages', (payload) => {
           try {
             const message: ChatMessage = JSON.parse(payload.body);
-            console.error("🔥 [DIRECT RECEIVE] TIN NHẮN TỚI RIÊNG!", message);
             listeners.forEach(callback => callback(message));
           } catch (e) {
             console.error("❌ Error parsing private message:", e);
+          }
+        });
+
+        // Subscribe vào notification queue (real-time notifications)
+        stompClient.subscribe('/user/queue/notifications', (payload) => {
+          try {
+            const notification = JSON.parse(payload.body);
+            notificationListeners.forEach(callback => callback(notification));
+          } catch (e) {
+            console.error("❌ Error parsing notification:", e);
           }
         });
 

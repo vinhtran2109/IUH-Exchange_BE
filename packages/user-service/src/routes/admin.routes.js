@@ -6,6 +6,7 @@ import {
   adjustKarmaSchema,
 } from './admin.schema.js';
 import * as adminCtrl from '../controllers/admin.controller.js';
+import { getUserKarmaHistory } from '../controllers/karma.controller.js';
 
 const router = Router();
 
@@ -32,5 +33,8 @@ router.put('/:id/karma', validate(adjustKarmaSchema), adminCtrl.adjustKarma);
 
 // GET /api/v1/users/admin/stats — user statistics
 router.get('/stats', adminCtrl.getUserStats);
+
+// GET /api/v1/users/admin/:id/karma-history — user karma history
+router.get('/:id/karma-history', getUserKarmaHistory);
 
 export default router;
