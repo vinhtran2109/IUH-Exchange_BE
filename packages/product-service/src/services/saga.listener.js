@@ -52,6 +52,12 @@ async function handleOrderCreated(payload) {
     return;
   }
 
+  if (product.status === 'PENDING') {
+    logger.info(`[SAGA] Product already reserved: ${productId}, skipping`);
+    await publishProductEvent('product.reserved', { id: orderId, orderId, productId });
+    return;
+  }
+
   if (product.status !== 'AVAILABLE') {
     logger.warn(`[SAGA] Product not available: ${productId}, status=${product.status}`);
     await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: `Product not available (status=${product.status})` });
@@ -74,6 +80,10 @@ async function handleOrderCompleted(payload) {
 
   const product = await Product.findById(productId);
   if (product) {
+    if (product.status === 'SOLD') {
+      logger.info(`[SAGA] Product already marked as SOLD: ${productId}, skipping`);
+      return;
+    }
     product.status = 'SOLD';
     await product.save();
     logger.info(`[SAGA] Product marked as SOLD: ${productId}`);

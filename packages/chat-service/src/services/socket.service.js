@@ -335,6 +335,17 @@ async function handleChatSend(conn, frame, userId) {
     const body = JSON.parse(frame.body);
     const { recipientId, content, conversationId: providedConvId } = body;
 
+    if (content.length > 5000) {
+      sendFrame(conn, 'ERROR', {
+        'message': 'Validation failed',
+        'content-type': 'application/json',
+      }, JSON.stringify({
+        success: false,
+        message: 'Message content exceeds maximum length of 5000 characters',
+      }));
+      return;
+    }
+
     if (!recipientId || !content || typeof content !== 'string' || content.trim().length === 0) {
       sendFrame(conn, 'ERROR', {
         'message': 'Validation failed',

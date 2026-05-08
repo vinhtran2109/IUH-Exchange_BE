@@ -47,7 +47,10 @@ function buildSortOption(sortParam) {
  * List available products with pagination, sort, and optional category filter.
  */
 export async function listProducts(req, res) {
-  const { page, size, sort, category } = req.query;
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
+  const sort = req.query.sort;
+  const category = req.query.category;
   const skip = (page - 1) * size;
 
   const filter = { status: 'AVAILABLE' };
@@ -75,7 +78,9 @@ export async function listProducts(req, res) {
  * Fuzzy search via ElasticSearch.
  */
 export async function searchProductsHandler(req, res) {
-  const { keyword, page, size } = req.query;
+  const keyword = req.query.keyword;
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const result = await searchProducts(keyword, page, size);
 
   const pageResponse = new PageResponse({
@@ -96,7 +101,8 @@ export async function searchProductsHandler(req, res) {
  */
 export async function getMyProducts(req, res) {
   const sellerId = req.user.sub;
-  const { page, size } = req.query;
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const skip = (page - 1) * size;
 
   const [products, total] = await Promise.all([
@@ -241,7 +247,8 @@ export async function getUploadUrl(req, res) {
  * List products pending approval (admin only).
  */
 export async function getPendingProducts(req, res) {
-  const { page, size } = req.query;
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const skip = (page - 1) * size;
 
   const [products, total] = await Promise.all([
