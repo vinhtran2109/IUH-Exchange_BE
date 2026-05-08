@@ -60,6 +60,15 @@ const Products: React.FC = () => {
           }
         }
 
+        // Client-side sort
+        const [sortField, sortDir] = sortBy.split(',');
+        data.sort((a: any, b: any) => {
+          const aVal = a[sortField];
+          const bVal = b[sortField];
+          if (sortDir === 'asc') return aVal > bVal ? 1 : -1;
+          return aVal < bVal ? 1 : -1;
+        });
+
         setProducts(data);
         setTotalPages(response.data.totalPages || 1);
       }
@@ -68,7 +77,7 @@ const Products: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedSearch, selectedCategory, selectedCondition]);
+  }, [page, debouncedSearch, selectedCategory, selectedCondition, sortBy]);
 
   useEffect(() => {
     setPage(0);
@@ -222,7 +231,7 @@ const Products: React.FC = () => {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-3 mt-12">
+            <div className="flex items-center justify-center gap-2 mt-12">
               <button
                 onClick={() => setPage(p => Math.max(0, p - 1))}
                 disabled={page === 0}
@@ -230,15 +239,36 @@ const Products: React.FC = () => {
               >
                 <ChevronLeft size={20} />
               </button>
-              {[...Array(totalPages)].map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setPage(i)}
-                  className={`w-10 h-10 rounded-2xl font-bold text-sm transition-all ${page === i ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+              {(() => {
+                const pages: (number | string)[] = [];
+                const windowSize = 2;
+                const start = Math.max(0, page - windowSize);
+                const end = Math.min(totalPages - 1, page + windowSize);
+
+                if (start > 0) {
+                  pages.push(0);
+                  if (start > 1) pages.push('...');
+                }
+                for (let i = start; i <= end; i++) pages.push(i);
+                if (end < totalPages - 1) {
+                  if (end < totalPages - 2) pages.push('...');
+                  pages.push(totalPages - 1);
+                }
+
+                return pages.map((p, i) =>
+                  typeof p === 'string' ? (
+                    <span key={`dots-${i}`} className="w-10 h-10 flex items-center justify-center text-slate-400 font-bold">…</span>
+                  ) : (
+                    <button
+                      key={p}
+                      onClick={() => setPage(p)}
+                      className={`w-10 h-10 rounded-2xl font-bold text-sm transition-all ${page === p ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300 hover:text-indigo-600'}`}
+                    >
+                      {p + 1}
+                    </button>
+                  )
+                );
+              })()}
               <button
                 onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
                 disabled={page === totalPages - 1}

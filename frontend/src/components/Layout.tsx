@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { 
   Bell, MessageSquare, Search, User as UserIcon, 
@@ -13,6 +13,7 @@ import type { Notification } from '../services/notificationService';
 
 const Layout: React.FC = () => {
   const { user, isAuthenticated } = (useAuthStore as any)();
+  const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -95,7 +96,7 @@ const Layout: React.FC = () => {
               </span>
               <input
                 type="text"
-                placeholder="Tìm kiến sản phẩm..."
+                placeholder="Tìm kiếm sản phẩm..."
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     window.location.href = `/products?search=${encodeURIComponent(e.currentTarget.value)}`;
@@ -129,38 +130,29 @@ const Layout: React.FC = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-4 w-80 bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200 origin-top-right ring-4 ring-slate-100/50">
+                    <div className="absolute right-0 mt-4 w-80 bg-white rounded-[2rem] border border-slate-200 shadow-2xl overflow-hidden animate-[fadeIn_0.2s_ease-out] origin-top-right ring-4 ring-slate-100/50">
                        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                           <h4 className="font-black text-slate-800 text-sm uppercase tracking-wider">Thông báo</h4>
                           <button onClick={handleMarkAllRead} className="text-[10px] font-black text-indigo-600 uppercase hover:underline">Đã đọc hết</button>
                        </div>
-                       <div className="max-h-[350px] overflow-y-auto scrollbar-hide">
+                       <div className="max-h-[350px] overflow-y-auto custom-scrollbar">
                           {notifications.length === 0 ? (
                             <div className="p-10 text-center text-slate-400 italic text-sm">Chưa có thông báo nào.</div>
                           ) : (
                             notifications.map(n => (
                               <div 
                                 key={n.id} 
-                                onMouseDown={(e) => {
-                                  // Chặn đứng mọi sự kiện đóng cửa sổ khác
-                                  e.stopPropagation();
-                                  e.nativeEvent.stopImmediatePropagation();
-                                  
-                                  console.log("🔥 [CRITICAL DEBUG] Bắt được sự kiện MouseDown!", n.id);
-                                  
+                                onClick={() => {
                                   if (n.targetId && n.type && n.type.includes('ORDER')) {
-                                    console.log("🚀 [FORCE] Chuyển hướng ngay lập tức:", n.targetId);
-                                    window.location.href = `/orders/${n.targetId}`;
-                                    setShowNotifications(false);
+                                    navigate(`/orders/${n.targetId}`);
                                   } else {
                                     handleMarkRead(n.id);
-                                    setShowNotifications(false);
                                   }
+                                  setShowNotifications(false);
                                 }}
-                                className="block p-4 border-b border-slate-50 cursor-pointer transition-colors hover:bg-slate-100 bg-white relative"
-                                style={{ pointerEvents: 'auto', zIndex: 10000, minHeight: '60px' }}
+                                className="block p-4 border-b border-slate-50 cursor-pointer transition-colors hover:bg-slate-100 bg-white"
                               >
-                                 <div className="flex gap-3 pointer-events-none">
+                                 <div className="flex gap-3">
                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${n.type && n.type.includes('ORDER') ? 'bg-emerald-100 text-emerald-600' : 'bg-indigo-100 text-indigo-600'}`}>
                                        {n.type === 'KARMA_UPDATE' ? <AlertOctagon size={16}/> : (n.type && n.type.includes('ORDER')) ? <ShoppingCart size={16}/> : <Info size={16}/>}
                                     </div>

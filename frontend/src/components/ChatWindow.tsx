@@ -109,7 +109,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="Nhập tin nhắn..."
             className="flex-1 bg-transparent border-none outline-none px-2 py-1 text-sm text-slate-800"
           />
