@@ -1,8 +1,10 @@
 import { createConsumer, logger } from '@iuh-exchange/common';
 import { Notification } from '../models/Notification.js';
 import { DlqEvent } from '../models/DlqEvent.js';
+import { FcmToken } from '../models/FcmToken.js';
 import { publishNotification } from './socket.service.js';
 import { sendOrderEmail } from './email.service.js';
+import { sendPushNotification } from './fcm.service.js';
 
 const GROUP_ID = 'notification-service-group';
 
@@ -58,6 +60,20 @@ async function sendNotification({ recipientId, title, message, type, targetId })
 
   // Publish to Redis — chat-service delivers to connected WebSocket users
   publishNotification(notificationObj);
+
+  // Send FCM push notification to user's registered devices
+  try {
+    const tokens = await FcmToken.find({ userId: recipientId, isActive: true });
+    for (const t of tokens) {
+      await sendPushNotification(t.token, { title, body: message }, {
+        type,
+        targetId: targetId || '',
+        notificationId: notificationObj._id?.toString() || '',
+      });
+    }
+  } catch (fcmErr) {
+    logger.warn(`FCM push failed for ${recipientId}: ${fcmErr.message}`);
+  }
 
   logger.info(`Notification sent to ${recipientId}: ${title}`);
   return notificationObj;
