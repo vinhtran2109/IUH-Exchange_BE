@@ -140,6 +140,17 @@ export function initSocketService(httpServer) {
     sessions.set(conn.id, sessionData);
 
     conn.on('data', (message) => {
+      // Bug #7 fix: Limit buffer size to prevent OOM attacks (1MB)
+      const MAX_BUFFER_BYTES = 1 * 1024 * 1024;
+      const msgBytes = Buffer.byteLength(message, 'utf8');
+      if (!conn._totalBytes) conn._totalBytes = 0;
+      conn._totalBytes += msgBytes;
+      if (conn._totalBytes > MAX_BUFFER_BYTES) {
+        logger.warn(`WebSocket buffer overflow, closing connection: ${conn.id}`);
+        conn.close(3000, 'Buffer limit exceeded');
+        return;
+      }
+
       accumulator.push(message);
 
       while (accumulator.hasFrames()) {
@@ -191,6 +202,25 @@ export function initSocketService(httpServer) {
   });
 
   sockServer.installHandlers(httpServer, { prefix: '/ws' });
+
+  // Bug #11 fix: Periodic cleanup of stale sessions every 60s
+  setInterval(() => {
+    const now = Date.now();
+    for (const [connId, data] of sessions.entries()) {
+      if (data.conn.readyState !== 1 && data.conn.readyState !== 0) {
+        // Connection is closed/closing — clean up
+        if (data.userId) {
+          const conns = userSessions.get(data.userId);
+          if (conns) {
+            conns.delete(connId);
+            if (conns.size === 0) userSessions.delete(data.userId);
+          }
+        }
+        sessions.delete(connId);
+      }
+    }
+    logger.debug(`Session cleanup: ${sessions.size} sessions, ${userSessions.size} users`);
+  }, 60_000);
 
   logger.info('SockJS + STOMP server initialized on /ws');
 

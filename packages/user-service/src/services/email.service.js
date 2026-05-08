@@ -8,6 +8,17 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
 const APP_NAME = process.env.APP_NAME || 'IUH Exchange';
 
+// Bug #5 fix: Escape HTML to prevent XSS in email templates
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 const transporter = nodemailer.createTransport({
   host: SMTP_HOST,
   port: SMTP_PORT,
@@ -55,6 +66,9 @@ export async function sendPasswordResetOtpEmail(toEmail, otpCode, userName) {
 }
 
 function buildOtpTemplate(userName, otp, purpose) {
+  const safeUserName = escapeHtml(userName);
+  const safeOtp = escapeHtml(otp);
+  const safePurpose = escapeHtml(purpose);
   return `
 <!DOCTYPE html>
 <html>
@@ -70,16 +84,16 @@ function buildOtpTemplate(userName, otp, purpose) {
           <!-- Header -->
           <tr>
             <td style="background:linear-gradient(135deg,#1a73e8,#0d47a1);padding:32px 40px;text-align:center;">
-              <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:600;">🎓 ${APP_NAME}</h1>
+              <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:600;">🎓 ${escapeHtml(APP_NAME)}</h1>
             </td>
           </tr>
           <!-- Body -->
           <tr>
             <td style="padding:36px 40px;">
-              <p style="color:#333;font-size:15px;margin:0 0 12px;">Xin chào <strong>${userName}</strong>,</p>
-              <p style="color:#555;font-size:14px;margin:0 0 24px;">Bạn đã yêu cầu ${purpose.toLowerCase()}. Dưới đây là mã OTP của bạn:</p>
+              <p style="color:#333;font-size:15px;margin:0 0 12px;">Xin chào <strong>${safeUserName}</strong>,</p>
+              <p style="color:#555;font-size:14px;margin:0 0 24px;">Bạn đã yêu cầu ${safePurpose.toLowerCase()}. Dưới đây là mã OTP của bạn:</p>
               <div style="background:#f0f4ff;border:2px dashed #1a73e8;border-radius:10px;padding:24px;text-align:center;margin:0 0 24px;">
-                <span style="font-size:36px;font-weight:700;color:#1a73e8;letter-spacing:8px;">${otp}</span>
+                <span style="font-size:36px;font-weight:700;color:#1a73e8;letter-spacing:8px;">${safeOtp}</span>
               </div>
               <p style="color:#888;font-size:13px;margin:0 0 8px;">⏰ Mã này có hiệu lực trong <strong>10 phút</strong>.</p>
               <p style="color:#888;font-size:13px;margin:0;">🔒 Vui lòng không chia sẻ mã này với bất kỳ ai.</p>

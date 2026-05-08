@@ -2,6 +2,7 @@ import { createConsumer, logger } from '@iuh-exchange/common';
 import { Notification } from '../models/Notification.js';
 import { DlqEvent } from '../models/DlqEvent.js';
 import { FcmToken } from '../models/FcmToken.js';
+import { NotificationPreference } from '../models/NotificationPreference.js';
 import { publishNotification } from './socket.service.js';
 import { sendOrderEmail } from './email.service.js';
 import { sendPushNotification } from './fcm.service.js';
@@ -48,6 +49,23 @@ async function getUserEmail(userId) {
 async function sendNotification({ recipientId, title, message, type, targetId }) {
   if (!recipientId) return;
 
+  // Check user's notification preferences
+  let shouldSendInApp = true;
+  let shouldSendPush = true;
+  let shouldSendEmail = true;
+
+  try {
+    const prefs = await NotificationPreference.findOne({ userId: recipientId }).lean();
+    if (prefs) {
+      shouldSendInApp = prefs.inApp?.[type] !== false; // default true
+      shouldSendPush = prefs.push?.[type] !== false;
+      shouldSendEmail = prefs.email?.[type] !== false;
+    }
+  } catch (prefErr) {
+    logger.warn(`Failed to check notification preferences for ${recipientId}: ${prefErr.message}`);
+  }
+
+  // Always create notification record (for in-app display if enabled)
   const notification = await Notification.create({
     recipientId,
     title,
@@ -58,25 +76,29 @@ async function sendNotification({ recipientId, title, message, type, targetId })
 
   const notificationObj = notification.toObject();
 
-  // Publish to Redis — chat-service delivers to connected WebSocket users
-  publishNotification(notificationObj);
-
-  // Send FCM push notification to user's registered devices
-  try {
-    const tokens = await FcmToken.find({ userId: recipientId, isActive: true });
-    for (const t of tokens) {
-      await sendPushNotification(t.token, { title, body: message }, {
-        type,
-        targetId: targetId || '',
-        notificationId: notificationObj._id?.toString() || '',
-      });
-    }
-  } catch (fcmErr) {
-    logger.warn(`FCM push failed for ${recipientId}: ${fcmErr.message}`);
+  // Publish to Redis for WebSocket delivery (if in-app enabled)
+  if (shouldSendInApp) {
+    publishNotification(notificationObj);
   }
 
-  logger.info(`Notification sent to ${recipientId}: ${title}`);
-  return notificationObj;
+  // Send FCM push notification (if push enabled)
+  if (shouldSendPush) {
+    try {
+      const tokens = await FcmToken.find({ userId: recipientId, isActive: true });
+      for (const t of tokens) {
+        await sendPushNotification(t.token, { title, body: message }, {
+          type,
+          targetId: targetId || '',
+          notificationId: notificationObj._id?.toString() || '',
+        });
+      }
+    } catch (fcmErr) {
+      logger.warn(`FCM push failed for ${recipientId}: ${fcmErr.message}`);
+    }
+  }
+
+  logger.info(`Notification sent to ${recipientId}: ${title} [inApp=${shouldSendInApp}, push=${shouldSendPush}, email=${shouldSendEmail}]`);
+  return { notificationObj, shouldSendEmail };
 }
 
 /**
@@ -87,23 +109,25 @@ async function sendNotification({ recipientId, title, message, type, targetId })
 const eventHandlers = {
   'order.created': async (payload) => {
     const { sellerId, orderId, buyerName } = payload;
-    await sendNotification({
+    const { shouldSendEmail } = await sendNotification({
       recipientId: sellerId,
       title: 'New Order',
       message: `You have a new purchase request for order ${orderId}${buyerName ? ` from ${buyerName}` : ''}`,
       type: 'ORDER',
       targetId: orderId,
     });
-    // Send email
-    const email = await getUserEmail(sellerId);
-    if (email) {
-      await sendOrderEmail(email, {
-        subject: 'Đơn hàng mới',
-        title: 'Bạn có đơn hàng mới!',
-        body: `Một người mua vừa gửi yêu cầu mua sản phẩm của bạn. Vui lòng kiểm tra và xác nhận đơn hàng.`,
-        orderId,
-        status: 'Chờ xác nhận',
-      });
+    // Send email (respect preference)
+    if (shouldSendEmail) {
+      const email = await getUserEmail(sellerId);
+      if (email) {
+        await sendOrderEmail(email, {
+          subject: 'Đơn hàng mới',
+          title: 'Bạn có đơn hàng mới!',
+          body: `Một người mua vừa gửi yêu cầu mua sản phẩm của bạn. Vui lòng kiểm tra và xác nhận đơn hàng.`,
+          orderId,
+          status: 'Chờ xác nhận',
+        });
+      }
     }
   },
 
@@ -111,22 +135,24 @@ const eventHandlers = {
     const { buyerId, sellerId, orderId } = payload;
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
-      await sendNotification({
+      const { shouldSendEmail } = await sendNotification({
         recipientId,
         title: 'Transaction Complete',
         message: `Order ${orderId} has been completed successfully!`,
         type: 'ORDER',
         targetId: orderId,
       });
-      const email = await getUserEmail(recipientId);
-      if (email) {
-        await sendOrderEmail(email, {
-          subject: 'Giao dịch thành công',
-          title: 'Giao dịch hoàn tất! 🎉',
-          body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
-          orderId,
-          status: 'Hoàn tất',
-        });
+      if (shouldSendEmail) {
+        const email = await getUserEmail(recipientId);
+        if (email) {
+          await sendOrderEmail(email, {
+            subject: 'Giao dịch thành công',
+            title: 'Giao dịch hoàn tất! 🎉',
+            body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
+            orderId,
+            status: 'Hoàn tất',
+          });
+        }
       }
     }
   },
@@ -135,22 +161,24 @@ const eventHandlers = {
     const { buyerId, sellerId, orderId, reason } = payload;
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
-      await sendNotification({
+      const { shouldSendEmail } = await sendNotification({
         recipientId,
         title: 'Order Cancelled',
         message: `Order ${orderId} has been cancelled${reason ? `: ${reason}` : ''}`,
         type: 'ORDER',
         targetId: orderId,
       });
-      const email = await getUserEmail(recipientId);
-      if (email) {
-        await sendOrderEmail(email, {
-          subject: 'Đơn hàng đã bị hủy',
-          title: 'Đơn hàng bị hủy',
-          body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
-          orderId,
-          status: 'Đã hủy',
-        });
+      if (shouldSendEmail) {
+        const email = await getUserEmail(recipientId);
+        if (email) {
+          await sendOrderEmail(email, {
+            subject: 'Đơn hàng đã bị hủy',
+            title: 'Đơn hàng bị hủy',
+            body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
+            orderId,
+            status: 'Đã hủy',
+          });
+        }
       }
     }
   },

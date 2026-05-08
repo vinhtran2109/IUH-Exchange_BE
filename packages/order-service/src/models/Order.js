@@ -17,6 +17,20 @@ const orderSchema = new mongoose.Schema(
     },
     buyerNote: { type: String, default: '' },
     idempotencyKey: { type: String, unique: true, sparse: true, index: true },
+    paymentStatus: {
+      type: String,
+      enum: ['UNPAID', 'PAID', 'REFUNDED'],
+      default: 'UNPAID',
+      index: true,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['VNPAY_MOCK', 'CASH', 'NONE'],
+      default: 'NONE',
+    },
+    paymentTransactionId: { type: String, default: null },
+    paidAt: { type: Date, default: null },
+    refundedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

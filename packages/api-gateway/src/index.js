@@ -47,9 +47,10 @@ app.use(helmet({
 }));
 
 app.use(cors({
+  // Bug #4 fix: Default to specific origins instead of '*' (incompatible with credentials: true)
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-    : '*',
+    : ['http://localhost:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Requested-With'],
   exposedHeaders: ['X-Request-ID'],
@@ -214,16 +215,19 @@ app.get('/health', async (_req, res) => {
   for (const [name, url] of Object.entries(SERVICES)) {
     const breakerState = breakers[name].getState();
     let reachable = false;
+    let latencyMs = null;
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
+      const start = Date.now();
       const resp = await fetch(`${url}/health`, { signal: controller.signal });
+      latencyMs = Date.now() - start;
       clearTimeout(timeout);
       reachable = resp.ok;
     } catch {
       reachable = false;
     }
-    serviceStates[name] = { ...breakerState, reachable };
+    serviceStates[name] = { ...breakerState, reachable, latencyMs };
   }
 
   const allReachable = Object.values(serviceStates).every(s => s.reachable);
@@ -233,6 +237,37 @@ app.get('/health', async (_req, res) => {
     service: 'api-gateway',
     uptime: process.uptime(),
     services: serviceStates,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Liveness probe — simple "am I alive" check (no dependency checks)
+app.get('/health/live', (_req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'api-gateway',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Readiness probe — checks Redis connectivity
+app.get('/health/ready', async (_req, res) => {
+  let redisOk = false;
+  try {
+    const pong = await redis.ping();
+    redisOk = pong === 'PONG';
+  } catch {
+    redisOk = false;
+  }
+
+  const ready = redisOk;
+  res.status(ready ? 200 : 503).json({
+    status: ready ? 'ok' : 'not_ready',
+    service: 'api-gateway',
+    dependencies: {
+      redis: redisOk ? 'connected' : 'disconnected',
+    },
     timestamp: new Date().toISOString(),
   });
 });

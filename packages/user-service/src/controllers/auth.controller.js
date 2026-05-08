@@ -40,7 +40,8 @@ export async function register(req, res) {
     otpAttemptCount: 0,
   });
 
-  logger.debug(`OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext to console/logs
+  logger.debug(`OTP sent to: ${email}`);
   await sendOtpEmail(email, otp, name);
 
   res.status(201).json(
@@ -105,7 +106,8 @@ export async function resendOtp(req, res) {
   user.otpAttemptCount = 0;
   await user.save();
 
-  logger.debug(`Resend OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext
+  logger.debug(`Resend OTP sent to: ${email}`);
   await sendOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi lại mã OTP'));
@@ -122,8 +124,39 @@ export async function login(req, res) {
   if (!user.isVerified) throw new BadRequestException('Vui lòng xác nhận email trước');
   if (!user.isActive) throw new BadRequestException('Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Admin.');
 
+  // Check if account is locked
+  if (user.lockUntil && user.lockUntil > new Date()) {
+    const remainingMs = user.lockUntil.getTime() - Date.now();
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    throw new BadRequestException(`Tài khoản tạm khóa do nhập sai quá nhiều lần. Vui lòng thử lại sau ${remainingMin} phút.`);
+  }
+
   const valid = await comparePassword(password, user.passwordHash);
-  if (!valid) throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
+  if (!valid) {
+    // Increment failed login attempts
+    user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+    const MAX_ATTEMPTS = 5;
+    const LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+    if (user.failedLoginAttempts >= MAX_ATTEMPTS) {
+      user.lockUntil = new Date(Date.now() + LOCK_DURATION_MS);
+      user.failedLoginAttempts = 0;
+      await user.save();
+      logger.warn(`[Auth] Account locked due to failed login attempts: ${email}`);
+      throw new BadRequestException('Tài khoản tạm khóa 15 phút do nhập sai quá 5 lần. Vui lòng thử lại sau.');
+    }
+
+    await user.save();
+    const remaining = MAX_ATTEMPTS - user.failedLoginAttempts;
+    throw new UnauthorizedException(`Email hoặc mật khẩu không đúng. Còn ${remaining} lần thử.`);
+  }
+
+  // Reset failed login attempts on successful login
+  if (user.failedLoginAttempts > 0 || user.lockUntil) {
+    user.failedLoginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
+  }
 
   const payload = {
     sub: user._id.toString(),
@@ -256,7 +289,8 @@ export async function forgotPassword(req, res) {
   user.passwordResetOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
   await user.save();
 
-  logger.debug(`Password reset OTP for ${email}: ${otp}`);
+  // Bug #8 fix: Don't log OTP plaintext
+  logger.debug(`Password reset OTP sent to: ${email}`);
   await sendPasswordResetOtpEmail(email, otp, user.name);
 
   res.json(ApiResponse.ok(null, 'Đã gửi mã OTP đặt lại mật khẩu'));

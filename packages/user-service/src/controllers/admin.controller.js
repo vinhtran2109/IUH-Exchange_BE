@@ -10,6 +10,11 @@ import {
   logger,
 } from '@iuh-exchange/common';
 
+// Bug #6 fix: Escape special regex chars to prevent ReDoS
+function escapeRegex(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function mapToProfile(user) {
   return {
     id: user._id,
@@ -38,7 +43,7 @@ export async function listUsers(req, res) {
   const filter = {};
 
   if (search) {
-    const regex = new RegExp(search, 'i');
+    const regex = new RegExp(escapeRegex(search), 'i');
     filter.$or = [
       { email: regex },
       { name: regex },

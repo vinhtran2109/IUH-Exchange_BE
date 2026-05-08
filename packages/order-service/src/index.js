@@ -3,6 +3,7 @@ import { config, logger, connectMongo, errorHandler, getRedis } from '@iuh-excha
 import { OrderService } from './services/order.service.js';
 import { initProducer, startSagaConsumer } from './services/saga.service.js';
 import { createOrderRoutes } from './routes/order.routes.js';
+import paymentRoutes from './routes/payment.routes.js';
 
 const PORT = process.env.PORT || 3003;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_orders';
@@ -30,6 +31,9 @@ app.get('/health', (req, res) => {
 
 // Mount order routes
 app.use('/api/v1/orders', createOrderRoutes(orderService));
+
+// Mount payment routes
+app.use('/api/v1/orders', paymentRoutes);
 
 // Global error handler (must be after routes)
 app.use(errorHandler);

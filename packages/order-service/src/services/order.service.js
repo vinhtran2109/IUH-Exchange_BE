@@ -90,15 +90,28 @@ export class OrderService {
       }
 
       // Step 3: Save order to MongoDB with status PENDING
-      const order = await Order.create({
-        buyerId,
-        sellerId: request.sellerId,
-        productId: request.productId,
-        price: request.price,
-        buyerNote: request.buyerNote || '',
-        idempotencyKey: request.idempotencyKey,
-        status: 'PENDING',
-      });
+      let order;
+      try {
+        order = await Order.create({
+          buyerId,
+          sellerId: request.sellerId,
+          productId: request.productId,
+          price: request.price,
+          buyerNote: request.buyerNote || '',
+          idempotencyKey: request.idempotencyKey,
+          status: 'PENDING',
+        });
+      } catch (dbErr) {
+        // Bug #3 fix: Handle duplicate key error from race condition (TOCTOU)
+        if (dbErr.code === 11000) {
+          const existing = await Order.findOne({ idempotencyKey: request.idempotencyKey });
+          if (existing) {
+            await redis.set(redisKey, existing._id.toString(), 'EX', IDEMPOTENCY_TTL_SECONDS);
+            return existing.toObject();
+          }
+        }
+        throw dbErr;
+      }
 
       logger.info(`[SAGA Step 1] Order created: orderId=${order._id}, productId=${order.productId}`);
 
@@ -116,8 +129,10 @@ export class OrderService {
 
       return order.toObject();
     } catch (err) {
-      // Clean up idempotency key on failure so user can retry
-      await redis.del(redisKey);
+      // Only clean up idempotency key for non-duplicate errors
+      if (!(err instanceof ConflictException)) {
+        await redis.del(redisKey);
+      }
       throw err;
     }
   }
@@ -192,6 +207,11 @@ export class OrderService {
 
     if (order.sellerId !== sellerId) {
       throw new ForbiddenException('Bạn không có quyền xác nhận đơn này');
+    }
+
+    // Bug #21 fix: Only allow confirm when order is in AWAITING_SELLER status
+    if (order.status !== 'AWAITING_SELLER') {
+      throw new BadRequestException(`Đơn hàng không ở trạng thái chờ xác nhận (hiện tại: ${order.status})`);
     }
 
     if (order.status === 'CANCELLED') {
@@ -310,6 +330,48 @@ export class OrderService {
       .lean();
 
     return orders;
+  }
+
+  /**
+   * Buyer cancels their own order.
+   * Allowed when order is PENDING or AWAITING_SELLER.
+   *
+   * @param {string} orderId
+   * @param {string} buyerId - Authenticated buyer's user ID
+   * @param {string} [reason]
+   * @returns {object} Updated order
+   */
+  async cancelByBuyer(orderId, buyerId, reason) {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ResourceNotFoundException('Order', orderId);
+    }
+
+    if (order.buyerId !== buyerId) {
+      throw new ForbiddenException('Bạn không có quyền hủy đơn này');
+    }
+
+    if (order.status === 'COMPLETED') {
+      throw new BadRequestException('Đơn hàng đã hoàn tất, không thể hủy');
+    }
+
+    if (order.status === 'CANCELLED') {
+      throw new BadRequestException('Đơn hàng đã bị hủy trước đó');
+    }
+
+    this._assertTransition(order.status, 'CANCELLED');
+
+    order.status = 'CANCELLED';
+    await order.save();
+    logger.info(`[BUYER CANCEL] Order cancelled: orderId=${orderId}, buyerId=${buyerId}, reason=${reason || 'N/A'}`);
+
+    await publishOrderCancelled({
+      orderId: order._id.toString(),
+      productId: order.productId,
+      reason: reason || 'Người mua hủy đơn hàng',
+    });
+
+    return order.toObject();
   }
 
   /**

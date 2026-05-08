@@ -30,6 +30,10 @@ const userSchema = new mongoose.Schema({
   refreshToken: { type: String },
   passwordResetOtp: { type: String },
   passwordResetOtpExpiry: { type: Date },
+  failedLoginAttempts: { type: Number, default: 0 },
+  lockUntil: { type: Date, default: null },
+  isDeleted: { type: Boolean, default: false, index: true },
+  deletedAt: { type: Date, default: null },
 }, {
   timestamps: true,
 });

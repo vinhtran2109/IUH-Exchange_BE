@@ -89,6 +89,16 @@ const Profile: React.FC = () => {
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Bug #26 fix: Validate file size (max 5MB) and type before upload
+    const MAX_AVATAR_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_AVATAR_SIZE) {
+      alert("Kích thước ảnh không được vượt quá 5MB");
+      return;
+    }
+    if (!file.type.startsWith('image/')) {
+      alert("Vui lòng chọn file ảnh");
+      return;
+    }
     setUploadingAvatar(true);
     try {
       const presignRes = await api.post('/users/avatar/presign', { contentType: file.type });

@@ -84,13 +84,21 @@ export async function listProducts(req, res) {
 
 /**
  * GET /api/v1/products/search?keyword=xxx
- * Fuzzy search via ElasticSearch.
+ * Fuzzy search via ElasticSearch with optional filters.
  */
 export async function searchProductsHandler(req, res) {
-  const keyword = req.query.keyword;
+  const keyword = req.query.keyword || '';
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
-  const result = await searchProducts(keyword, page, size);
+
+  const filters = {};
+  if (req.query.minPrice) filters.minPrice = parseFloat(req.query.minPrice);
+  if (req.query.maxPrice) filters.maxPrice = parseFloat(req.query.maxPrice);
+  if (req.query.category) filters.category = req.query.category;
+  if (req.query.condition) filters.condition = req.query.condition;
+  if (req.query.sort) filters.sort = req.query.sort;
+
+  const result = await searchProducts(keyword, page, size, filters);
 
   const pageResponse = new PageResponse({
     content: result.hits,

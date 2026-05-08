@@ -63,8 +63,11 @@ export function hashToken(token) {
 }
 
 /**
- * Compare a plaintext token against a SHA-256 hash
+ * Compare a plaintext token against a SHA-256 hash (timing-safe).
  */
 export function compareToken(token, hash) {
-  return hashToken(token) === hash;
+  const tokenHash = hashToken(token);
+  // Bug #9 fix: Use timingSafeEqual to prevent timing attacks
+  if (tokenHash.length !== hash.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(tokenHash), Buffer.from(hash));
 }

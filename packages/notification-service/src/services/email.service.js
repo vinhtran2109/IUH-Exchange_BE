@@ -8,6 +8,17 @@ const SMTP_PASS = process.env.SMTP_PASS || '';
 const SMTP_FROM = process.env.SMTP_FROM || SMTP_USER;
 const APP_NAME = process.env.APP_NAME || 'IUH Exchange';
 
+// Bug #5 fix: Escape HTML to prevent XSS in email templates
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 let transporter = null;
 
 function getTransporter() {
@@ -32,6 +43,10 @@ export async function sendOrderEmail(toEmail, { subject, title, body, orderId, s
     return;
   }
 
+  const safeTitle = escapeHtml(title);
+  const safeBody = escapeHtml(body);
+  const safeStatus = escapeHtml(status);
+
   const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
@@ -41,18 +56,18 @@ export async function sendOrderEmail(toEmail, { subject, title, body, orderId, s
       <table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
         <tr>
           <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 40px;text-align:center;">
-            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">🎓 ${APP_NAME}</h1>
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">🎓 ${escapeHtml(APP_NAME)}</h1>
           </td>
         </tr>
         <tr>
           <td style="padding:32px 40px;">
-            <h2 style="color:#1e293b;margin:0 0 12px;font-size:18px;">${title}</h2>
-            <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">${body}</p>
+            <h2 style="color:#1e293b;margin:0 0 12px;font-size:18px;">${safeTitle}</h2>
+            <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">${safeBody}</p>
             ${orderId ? `<div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 20px;">
               <p style="margin:0;color:#64748b;font-size:13px;">Mã đơn hàng</p>
-              <p style="margin:4px 0 0;font-size:16px;font-weight:700;color:#1e293b;">#${orderId.substring(0, 8)}</p>
+              <p style="margin:4px 0 0;font-size:16px;font-weight:700;color:#1e293b;">#${escapeHtml(orderId?.substring(0, 8))}</p>
             </div>` : ''}
-            ${status ? `<p style="margin:0;color:#4f46e5;font-size:14px;font-weight:600;">Trạng thái: ${status}</p>` : ''}
+            ${status ? `<p style="margin:0;color:#4f46e5;font-size:14px;font-weight:600;">Trạng thái: ${safeStatus}</p>` : ''}
           </td>
         </tr>
         <tr>

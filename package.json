@@ -17,9 +17,15 @@
     "dev:notification": "npm run dev --workspace=packages/notification-service",
     "dev:lostfound": "npm run dev --workspace=packages/lost-found-service",
     "lint": "eslint packages/*/src",
-    "test": "npm run test --workspaces --if-present"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "engines": {
     "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.5",
+    "vitest": "^4.1.5"
   }
 }

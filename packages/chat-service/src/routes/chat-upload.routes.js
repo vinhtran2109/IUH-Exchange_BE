@@ -11,13 +11,18 @@ router.use(authenticate);
  * POST /api/v1/chat/upload-url
  * Get a presigned S3 URL for chat image upload.
  */
-router.post('/upload-url', async (req, res) => {
-  const { filename, contentType } = req.body;
-  if (!filename || !contentType) {
-    return res.status(400).json({ success: false, message: 'filename and contentType required' });
+router.post('/upload-url', async (req, res, next) => {
+  try {
+    const { filename, contentType } = req.body;
+    if (!filename || !contentType) {
+      return res.status(400).json({ success: false, message: 'filename and contentType required' });
+    }
+    const { presignedUrl, publicUrl } = await generatePresignedUploadUrl(filename, contentType);
+    res.json(ApiResponse.ok({ presignedUrl, publicUrl }));
+  } catch (err) {
+    // Bug #14 fix: Catch async errors to prevent unhandled rejection crash
+    next(err);
   }
-  const { presignedUrl, publicUrl } = await generatePresignedUploadUrl(filename, contentType);
-  res.json(ApiResponse.ok({ presignedUrl, publicUrl }));
 });
 
 export default router;

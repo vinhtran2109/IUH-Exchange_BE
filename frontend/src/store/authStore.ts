@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface User {
   [key: string]: any;
@@ -20,28 +19,24 @@ interface AuthState {
   logout: () => void;
 }
 
+// Bug #25 fix: Don't persist user object to localStorage (XSS can steal auth data).
+// Only keep in memory. Token stays in localStorage (separate).
 export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      user: null,
-      isAuthenticated: false,
-      login: (user, accessToken) => {
-        localStorage.setItem("accessToken", accessToken);
-        set({ user, isAuthenticated: true });
-      },
-      updateUser: (updatedFields) => {
-        set((state) => ({
-          user: state.user ? { ...state.user, ...updatedFields } : null
-        }));
-      },
-      logout: () => {
-        localStorage.removeItem("accessToken");
-        set({ user: null, isAuthenticated: false });
-      },
-    }),
-
-    {
-      name: "auth-storage",
-    }
-  )
+  (set) => ({
+    user: null,
+    isAuthenticated: false,
+    login: (user, accessToken) => {
+      localStorage.setItem("accessToken", accessToken);
+      set({ user, isAuthenticated: true });
+    },
+    updateUser: (updatedFields) => {
+      set((state) => ({
+        user: state.user ? { ...state.user, ...updatedFields } : null
+      }));
+    },
+    logout: () => {
+      localStorage.removeItem("accessToken");
+      set({ user: null, isAuthenticated: false });
+    },
+  })
 );

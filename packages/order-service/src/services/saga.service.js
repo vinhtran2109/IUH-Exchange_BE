@@ -104,7 +104,14 @@ export async function startSagaConsumer(orderService) {
 
   await consumer.run({
     eachMessage: async ({ topic, message }) => {
-      const payload = JSON.parse(message.value.toString());
+      // Bug #15 fix: Handle corrupt Kafka messages gracefully
+      let payload;
+      try {
+        payload = JSON.parse(message.value.toString());
+      } catch (parseErr) {
+        logger.error(`[Saga] Failed to parse Kafka message on topic ${topic}: ${parseErr.message}`);
+        return; // Skip invalid message
+      }
 
       switch (topic) {
         case TOPICS.PRODUCT_RESERVED: {

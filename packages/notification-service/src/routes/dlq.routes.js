@@ -1,6 +1,16 @@
 import { Router } from 'express';
-import { authenticate, ForbiddenException, ApiResponse, PageResponse, parsePagination } from '@iuh-exchange/common';
+import { authenticate, ForbiddenException, ApiResponse, PageResponse, parsePagination, logger } from '@iuh-exchange/common';
 import { DlqEvent } from '../models/DlqEvent.js';
+import { createProducer } from '@iuh-exchange/common';
+
+// Bug #17 fix: Lazy-initialize Kafka producer for DLQ replay
+let dlqProducer = null;
+async function getDlqProducer() {
+  if (!dlqProducer) {
+    dlqProducer = await createProducer('notification-dlq-retry');
+  }
+  return dlqProducer;
+}
 
 const router = Router();
 
@@ -55,12 +65,27 @@ router.post('/:id/retry', async (req, res) => {
   const event = await DlqEvent.findById(req.params.id);
   if (!event) return res.status(404).json({ success: false, message: 'Not found' });
 
-  event.status = 'RETRYING';
-  event.retryCount += 1;
-  await event.save();
-
-  // TODO: re-publish to Kafka topic
-  res.json(ApiResponse.ok(event, 'Event queued for retry'));
+  // Bug #17 fix: Actually replay message to original Kafka topic
+  try {
+    const producer = await getDlqProducer();
+    await producer.send({
+      topic: event.topic,
+      messages: [{
+        key: event.key || event._id.toString(),
+        value: typeof event.payload === 'string' ? event.payload : JSON.stringify(event.payload),
+      }],
+    });
+    event.status = 'RETRYING';
+    event.retryCount += 1;
+    await event.save();
+    logger.info(`DLQ event ${event._id} replayed to topic ${event.topic}`);
+    res.json(ApiResponse.ok(event, 'Event replayed to Kafka'));
+  } catch (err) {
+    logger.error(`DLQ replay failed for ${event._id}: ${err.message}`);
+    event.status = 'RETRY_FAILED';
+    await event.save();
+    res.status(500).json(ApiResponse.error('Failed to replay event'));
+  }
 });
 
 // DELETE /api/v1/notifications/dlq/:id — dismiss a DLQ event

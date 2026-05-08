@@ -19,7 +19,17 @@ const { publishNotification, sendNotificationToUser, getOnlineUsers } = initSock
 // ── REST endpoint for other services to push notifications ──
 app.use(express.json());
 
-app.post('/internal/notify', (req, res) => {
+// Bug #2 fix: Internal endpoints require x-internal-key header
+function requireInternalKey(req, res, next) {
+  const key = req.headers['x-internal-key'];
+  const expected = process.env.INTERNAL_API_KEY || 'iuh-internal-secret';
+  if (!key || key !== expected) {
+    return res.status(403).json({ error: 'Forbidden: invalid or missing x-internal-key' });
+  }
+  next();
+}
+
+app.post('/internal/notify', requireInternalKey, (req, res) => {
   const { userId, notification } = req.body;
   if (!userId || !notification) {
     return res.status(400).json({ error: 'userId and notification required' });
@@ -28,7 +38,7 @@ app.post('/internal/notify', (req, res) => {
   res.json({ success: true });
 });
 
-app.post('/internal/broadcast', (req, res) => {
+app.post('/internal/broadcast', requireInternalKey, (req, res) => {
   const { notification } = req.body;
   if (!notification) {
     return res.status(400).json({ error: 'notification required' });
@@ -37,7 +47,7 @@ app.post('/internal/broadcast', (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/internal/online-users', (_req, res) => {
+app.get('/internal/online-users', requireInternalKey, (_req, res) => {
   res.json({ users: getOnlineUsers() });
 });
 
