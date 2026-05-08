@@ -10,6 +10,8 @@ const TOPICS = [
   { topic: 'order.completed', fromBeginning: false },
   { topic: 'order.cancelled', fromBeginning: false },
   { topic: 'product.reserved', fromBeginning: false },
+  { topic: 'product.approved', fromBeginning: false },
+  { topic: 'product.rejected', fromBeginning: false },
   { topic: 'karma.updated', fromBeginning: false },
   { topic: 'report.created', fromBeginning: false },
 ];
@@ -143,6 +145,28 @@ const eventHandlers = {
       title: 'Product Reserved',
       message: `Your product has been reserved${buyerName ? ` by ${buyerName}` : ''}`,
       type: 'ORDER',
+      targetId: productId,
+    });
+  },
+
+  'product.approved': async (payload) => {
+    const { sellerId, productId, productTitle } = payload;
+    await sendNotification({
+      recipientId: sellerId,
+      title: 'Sản phẩm được duyệt',
+      message: `Sản phẩm "${productTitle || 'của bạn'}" đã được duyệt và đang hiển thị trên cửa hàng.`,
+      type: 'PRODUCT',
+      targetId: productId,
+    });
+  },
+
+  'product.rejected': async (payload) => {
+    const { sellerId, productId, productTitle, reason } = payload;
+    await sendNotification({
+      recipientId: sellerId,
+      title: 'Sản phẩm bị từ chối',
+      message: `Sản phẩm "${productTitle || 'của bạn'}" đã bị từ chối.${reason ? ` Lý do: ${reason}` : ''}`,
+      type: 'PRODUCT',
       targetId: productId,
     });
   },
