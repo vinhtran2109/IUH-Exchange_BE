@@ -131,4 +131,44 @@ describe('user.controller', () => {
       await expect(userController.getAvatarPresign(req, res)).rejects.toThrow();
     });
   });
+
+  describe('deleteAccount', () => {
+    it('should soft-delete user account', async () => {
+      const user = {
+        ...mockUser,
+        isDeleted: false,
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockUserModel.findById.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes();
+      await userController.deleteAccount(req, res);
+
+      expect(user.isDeleted).toBe(true);
+      expect(user.isActive).toBe(false);
+      expect(user.name).toBe('Tài khoản đã xóa');
+      expect(user.studentId).toBe('');
+      expect(user.refreshToken).toBeNull();
+      expect(user.permissions).toEqual([]);
+      expect(user.save).toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should reject if already deleted', async () => {
+      mockUserModel.findById.mockResolvedValue({
+        ...mockUser,
+        isDeleted: true,
+      });
+
+      const { req, res } = mockReqRes();
+      await expect(userController.deleteAccount(req, res)).rejects.toThrow('đã bị xóa trước đó');
+    });
+
+    it('should throw 404 if user not found', async () => {
+      mockUserModel.findById.mockResolvedValue(null);
+
+      const { req, res } = mockReqRes();
+      await expect(userController.deleteAccount(req, res)).rejects.toThrow();
+    });
+  });
 });

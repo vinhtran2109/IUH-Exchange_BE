@@ -15,5 +15,6 @@ router.patch('/me', authenticate, validate(updateProfileSchema), userCtrl.update
 router.post('/password', authenticate, validate(changePasswordSchema), changePassword);
 router.get('/me/karma-history', authenticate, getMyKarmaHistory);
 router.post('/avatar/presign', authenticate, validate(avatarPresignSchema), userCtrl.getAvatarPresign);
+router.delete('/me', authenticate, userCtrl.deleteAccount);
 
 export default router;

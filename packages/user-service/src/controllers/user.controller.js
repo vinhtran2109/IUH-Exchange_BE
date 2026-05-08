@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { User } from '../models/User.js';
 import {
   ResourceNotFoundException,
@@ -6,6 +7,7 @@ import {
   parsePagination,
   logger,
   cache,
+  hashPassword,
 } from '@iuh-exchange/common';
 import { getAvatarUploadUrl } from '../services/s3.service.js';
 
@@ -90,4 +92,39 @@ export async function getAvatarPresign(req, res) {
   const { uploadUrl, publicUrl } = await getAvatarUploadUrl(userId, contentType);
 
   res.json(ApiResponse.ok({ uploadUrl, publicUrl }, 'Tạo URL upload thành công'));
+}
+
+/**
+ * DELETE /api/v1/users/me
+ * Soft-delete the authenticated user's account.
+ * Anonymizes personal data and marks account as deleted.
+ */
+export async function deleteAccount(req, res) {
+  const userId = req.user.sub;
+
+  const user = await User.findById(userId);
+  if (!user) throw new ResourceNotFoundException('User', userId);
+  if (user.isDeleted) throw new BadRequestException('Tài khoản đã bị xóa trước đó');
+
+  // Anonymize personal data
+  const anonymizedEmail = `deleted_${userId.substring(0, 8)}@deleted.iuh.edu.vn`;
+  user.email = anonymizedEmail;
+  user.name = 'Tài khoản đã xóa';
+  user.studentId = '';
+  user.avatarUrl = '';
+  user.isDeleted = true;
+  user.deletedAt = new Date();
+  user.isActive = false;
+  user.refreshToken = null;
+  user.permissions = [];
+  user.passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+
+  await user.save();
+
+  // Invalidate cache
+  await cache.del(`users:profile:${userId}`);
+
+  logger.info(`[User] Account soft-deleted: userId=${userId}`);
+
+  res.json(ApiResponse.ok(null, 'Tài khoản đã được xóa thành công'));
 }
