@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import ProductCard from '../components/ProductCard';
+import SEO from '../components/SEO';
 
 const Home: React.FC = () => {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -28,6 +29,7 @@ const Home: React.FC = () => {
 
   return (
     <div className="space-y-16 pb-12">
+      <SEO title="Trang chủ" description="Nền tảng trao đổi, mua bán đồ dùng sinh viên IUH. Tìm kiếm và đăng bán đồ dùng dễ dàng." />
       {/* Hero Section */}
       <section className="relative overflow-hidden bg-white/20 rounded-3xl border border-white/40 shadow-2xl shadow-indigo-100/40 p-12 md:p-20 text-center">
         <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-[400px] h-[400px] bg-indigo-200/20 blur-[100px] rounded-full"></div>

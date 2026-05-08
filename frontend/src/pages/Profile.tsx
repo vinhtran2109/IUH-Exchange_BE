@@ -3,8 +3,9 @@ import { motion } from 'framer-motion';
 import { 
   User, Camera, Save, ShieldCheck, UserCircle,
   CheckCircle2, AlertCircle, ShoppingBag, 
-  Store, Trash2, Clock, Check
+  Store, Trash2, Clock, Check, Flag
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
 import { productService } from '../services/productService';
@@ -14,6 +15,7 @@ import type { User as ProfileUser } from '../types/api';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
   
@@ -157,11 +159,12 @@ const Profile: React.FC = () => {
               { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
               { id: 'products', label: 'Món đồ đang bán', icon: Store },
               { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
+              { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
               { id: 'password', label: 'Bảo mật', icon: ShieldCheck },
             ].map(tab => (
               <button 
                 key={tab.id}
-                onClick={() => { setActiveTab(tab.id as any); setMessage(null); }}
+                onClick={() => { if ('action' in tab && tab.action) { tab.action(); } else { setActiveTab(tab.id as any); setMessage(null); } }}
                 className={`w-full flex items-center gap-3 px-4 py-4 rounded-2xl font-bold transition-all ${
                   activeTab === tab.id 
                     ? 'bg-slate-900 text-white shadow-xl shadow-slate-200' 
