@@ -8,6 +8,7 @@ const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true,
 });
 
 // Inject Access Token to every request
@@ -43,20 +44,15 @@ api.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const refreshToken = localStorage.getItem("refreshToken");
-        if (!refreshToken) throw new Error("No refresh token");
-
-        const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken });
-        const { accessToken, refreshToken: newRefreshToken } = res.data.data;
+        // Refresh token is in httpOnly cookie — browser sends it automatically
+        const res = await axios.post(`${API_BASE_URL}/auth/refresh-token`, {}, { withCredentials: true });
+        const { accessToken } = res.data.data;
 
         localStorage.setItem("accessToken", accessToken);
-        if (newRefreshToken) localStorage.setItem("refreshToken", newRefreshToken);
-
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
       } catch (refreshError) {
         localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
         window.location.href = "/login";
         return Promise.reject(refreshError);
       }
