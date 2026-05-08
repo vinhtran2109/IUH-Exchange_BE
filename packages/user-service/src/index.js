@@ -17,8 +17,19 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_us
 app.use(express.json());
 
 // ── Health ──
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'user-service', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  const mongoose = await import('mongoose');
+  const dbState = mongoose.default.connection.readyState; // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
+  const dbOk = dbState === 1;
+
+  res.status(dbOk ? 200 : 503).json({
+    status: dbOk ? 'ok' : 'degraded',
+    service: 'user-service',
+    dependencies: {
+      mongodb: dbOk ? 'connected' : 'disconnected',
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // ── Routes ──
