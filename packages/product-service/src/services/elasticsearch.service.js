@@ -34,6 +34,7 @@ export async function ensureIndex() {
               description: { type: 'text', analyzer: 'standard' },
               price: { type: 'double' },
               category: { type: 'keyword' },
+              condition: { type: 'keyword' },
               status: { type: 'keyword' },
             },
           },
@@ -61,6 +62,7 @@ export async function indexProduct(product) {
           description: product.description,
           price: product.price,
           category: product.category,
+          condition: product.condition || 'GOOD',
           status: product.status,
         },
       });
@@ -87,34 +89,90 @@ export async function removeProduct(productId) {
 }
 
 /**
- * Search products in ElasticSearch with fuzzy matching.
+ * Search products in ElasticSearch with fuzzy matching and filters.
  * @param {string} keyword
  * @param {number} page - 1-based
  * @param {number} size
+ * @param {object} [filters] - Optional filters
+ * @param {number} [filters.minPrice] - Minimum price
+ * @param {number} [filters.maxPrice] - Maximum price
+ * @param {string} [filters.category] - Category filter
+ * @param {string} [filters.condition] - Condition filter (NEW, LIKE_NEW, GOOD, FAIR, POOR)
+ * @param {string} [filters.sort] - Sort option (price_asc, price_desc, date_asc, date_desc)
  * @returns {Promise<{ hits: object[], total: number }>}
  */
-export async function searchProducts(keyword, page = 1, size = 20) {
+export async function searchProducts(keyword, page = 1, size = 20, filters = {}) {
   const from = (page - 1) * size;
+
   try {
+    // Build the bool query
+    const must = [];
+    const filterClauses = [{ term: { status: 'AVAILABLE' } }];
+
+    // Keyword search (fuzzy)
+    if (keyword && keyword.trim()) {
+      must.push({
+        multi_match: {
+          query: keyword,
+          fields: ['title^2', 'description'],
+          type: 'best_fields',
+          fuzziness: 'AUTO',
+        },
+      });
+    } else {
+      must.push({ match_all: {} });
+    }
+
+    // Price range filter
+    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+      const priceRange = {};
+      if (filters.minPrice !== undefined) priceRange.gte = filters.minPrice;
+      if (filters.maxPrice !== undefined) priceRange.lte = filters.maxPrice;
+      filterClauses.push({ range: { price: priceRange } });
+    }
+
+    // Category filter
+    if (filters.category) {
+      filterClauses.push({ term: { category: filters.category } });
+    }
+
+    // Condition filter
+    if (filters.condition) {
+      filterClauses.push({ term: { condition: filters.condition } });
+    }
+
+    // Build sort
+    let sort = [];
+    if (filters.sort) {
+      switch (filters.sort) {
+        case 'price_asc':
+          sort = [{ price: 'asc' }, '_score'];
+          break;
+        case 'price_desc':
+          sort = [{ price: 'desc' }, '_score'];
+          break;
+        case 'date_asc':
+          sort = [{ createdAt: 'asc' }, '_score'];
+          break;
+        case 'date_desc':
+          sort = [{ createdAt: 'desc' }, '_score'];
+          break;
+        default:
+          sort = ['_score'];
+      }
+    }
+
     const result = await esClient.search({
       index: INDEX,
       from,
       size,
       query: {
         bool: {
-          must: [
-            {
-              multi_match: {
-                query: keyword,
-                fields: ['title^2', 'description'],
-                type: 'best_fields',
-                fuzziness: 'AUTO',
-              },
-            },
-          ],
-          filter: [{ term: { status: 'AVAILABLE' } }],
+          must,
+          filter: filterClauses,
         },
       },
+      ...(sort.length > 0 ? { sort } : {}),
     });
 
     return {
