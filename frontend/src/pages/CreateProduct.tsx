@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Camera, Tag, DollarSign, TextQuote, Send, ArrowLeft, Loader2 } from 'lucide-react';
+import { Package, Camera, Tag, DollarSign, TextQuote, Send, ArrowLeft, Loader2, X, GripVertical } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { productService } from '../services/productService';
+
+const MAX_IMAGES = 8;
 
 const CreateProduct: React.FC = () => {
   const navigate = useNavigate();
@@ -14,66 +16,95 @@ const CreateProduct: React.FC = () => {
     category: 'ELECTRONICS',
     condition: 'NEW',
   });
-  const [image, setImage] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setImage(file);
-      setPreview(URL.createObjectURL(file));
+    if (!e.target.files) return;
+    const newFiles = Array.from(e.target.files);
+    const total = images.length + newFiles.length;
+    if (total > MAX_IMAGES) {
+      alert(`Tối đa ${MAX_IMAGES} ảnh. Bạn đang chọn ${newFiles.length} ảnh mới, đã có ${images.length} ảnh.`);
+      return;
     }
+    const updated = [...images, ...newFiles];
+    const newPreviews = newFiles.map(f => URL.createObjectURL(f));
+    setImages(updated);
+    setPreviews([...previews, ...newPreviews]);
+    e.target.value = ''; // reset input
+  };
+
+  const removeImage = (index: number) => {
+    URL.revokeObjectURL(previews[index]);
+    setImages(images.filter((_, i) => i !== index));
+    setPreviews(previews.filter((_, i) => i !== index));
+  };
+
+  const handleDragStart = (index: number) => {
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) return;
+    const newImages = [...images];
+    const newPreviews = [...previews];
+    const [draggedImg] = newImages.splice(dragIndex, 1);
+    const [draggedPrev] = newPreviews.splice(dragIndex, 1);
+    newImages.splice(index, 0, draggedImg);
+    newPreviews.splice(index, 0, draggedPrev);
+    setImages(newImages);
+    setPreviews(newPreviews);
+    setDragIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDragIndex(null);
+  };
+
+  const uploadSingleImage = async (file: File): Promise<string> => {
+    const uploadInfo = await productService.getUploadUrl(file.name, file.type);
+    if (!uploadInfo.success) throw new Error('Failed to get upload URL');
+    const { presignedUrl, publicUrl } = uploadInfo.data;
+    await fetch(presignedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type },
+    });
+    return publicUrl;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (images.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 ảnh sản phẩm');
+      return;
+    }
     setLoading(true);
 
     try {
-      let finalImageUrl = "https://placehold.co/600x400/indigo/white?text=Product+Image";
+      // Upload all images in parallel
+      const uploadPromises = images.map(file => uploadSingleImage(file));
+      const imageUrls = await Promise.all(uploadPromises);
 
-      if (image) {
-        // 1. Lấy Pre-signed URL từ Backend
-        const uploadInfo = await productService.getUploadUrl(image.name, image.type);
-        
-        if (uploadInfo.success) {
-          // ✅ FIX: Backend trả về presignedUrl và publicUrl
-          const { presignedUrl, publicUrl } = uploadInfo.data;
-          
-          // 2. Đẩy ảnh trực tiếp lên S3 (Dùng fetch/axios chay)
-          await fetch(presignedUrl, {
-            method: 'PUT',
-            body: image,
-            headers: {
-              'Content-Type': image.type
-            }
-          });
-          
-          finalImageUrl = publicUrl;
-        }
-
-      }
-
-      // 3. Gửi toàn bộ dữ liệu (kèm URL ảnh thật) lên Backend để lưu vào MongoDB
       const productData = {
         ...formData,
         price: parseFloat(formData.price),
-        imageUrls: [finalImageUrl]
+        imageUrls,
       };
 
       const response = await productService.createProduct(productData);
-
-      
       if (response.success) {
-        alert("🎉 Chúc mừng! Món đồ của bạn đã được đăng bán thành công.");
+        alert('🎉 Chúc mừng! Món đồ của bạn đã được đăng bán thành công.');
         navigate('/');
       }
     } catch (error: any) {
-      alert("⚠️ Lỗi: " + (error.response?.data?.message || "Không thể đăng bài. Vui lòng kiểm tra lại."));
+      alert('⚠️ Lỗi: ' + (error.response?.data?.message || error.message || 'Không thể đăng bài.'));
     } finally {
       setLoading(false);
     }
@@ -86,7 +117,7 @@ const CreateProduct: React.FC = () => {
         Quay lại trang chủ
       </Link>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="bg-white rounded-[2.5rem] border border-slate-100 shadow-2xl shadow-indigo-100/50 overflow-hidden"
@@ -94,41 +125,69 @@ const CreateProduct: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2">
           {/* Left: Image Upload Area */}
           <div className="bg-slate-50 p-8 border-r border-slate-100 flex flex-col items-center justify-center text-center space-y-4">
-             <div className="w-full aspect-square rounded-3xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center overflow-hidden bg-white relative group cursor-pointer hover:border-indigo-300 transition-all">
-                {preview ? (
-                  <>
-                    <img src={preview} alt="Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <Camera className="text-white" size={32} />
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex flex-col items-center text-slate-400">
-                    <Camera size={48} className="mb-2" />
-                    <p className="text-xs font-bold uppercase tracking-widest">Tải ảnh sản phẩm</p>
+            {/* Image Grid */}
+            <div className="w-full grid grid-cols-2 gap-3">
+              {previews.map((preview, i) => (
+                <div
+                  key={i}
+                  draggable
+                  onDragStart={() => handleDragStart(i)}
+                  onDragOver={(e) => handleDragOver(e, i)}
+                  onDragEnd={handleDragEnd}
+                  className={`relative aspect-square rounded-2xl border-2 overflow-hidden group cursor-move transition-all ${
+                    dragIndex === i ? 'border-indigo-500 scale-95 opacity-70' : 'border-slate-200 hover:border-indigo-300'
+                  }`}
+                >
+                  <img src={preview} alt={`Preview ${i + 1}`} className="w-full h-full object-cover" />
+                  <div className="absolute top-1 left-1 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center">
+                    <GripVertical size={12} className="text-white" />
                   </div>
-                )}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageChange}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-             </div>
-             <p className="text-xs text-slate-400 leading-relaxed px-6">
-                Chụp ảnh rõ nét, đầy đủ ánh sáng sẽ giúp món đồ của bạn "bay" nhanh hơn ⚡
-             </p>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); removeImage(i); }}
+                    className="absolute top-1 right-1 w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-rose-600"
+                  >
+                    <X size={12} className="text-white" />
+                  </button>
+                  {i === 0 && (
+                    <span className="absolute bottom-1 left-1 px-2 py-0.5 bg-indigo-600 text-white text-[10px] font-bold rounded-full">
+                      Ảnh bìa
+                    </span>
+                  )}
+                </div>
+              ))}
+
+              {/* Add Image Button */}
+              {images.length < MAX_IMAGES && (
+                <label className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 flex flex-col items-center justify-center cursor-pointer hover:border-indigo-300 hover:bg-white transition-all">
+                  <Camera size={24} className="text-slate-400 mb-1" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    {images.length === 0 ? 'Tải ảnh' : 'Thêm ảnh'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed px-6">
+              Kéo thả để sắp xếp. Ảnh đầu tiên sẽ là ảnh bìa. Tối đa {MAX_IMAGES} ảnh ⚡
+            </p>
           </div>
 
           {/* Right: Form Info */}
           <div className="p-10">
             <h1 className="text-3xl font-black text-slate-900 mb-8 flex items-center gap-3">
-               <Package className="text-indigo-600" size={32} />
-               Đăng bán đồ mới
+              <Package className="text-indigo-600" size={32} />
+              Đăng bán đồ mới
             </h1>
 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Tiêu đề */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
                   <Tag size={14} /> Tiêu đề tin đăng
@@ -144,7 +203,6 @@ const CreateProduct: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                {/* Giá tiền */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
                     <DollarSign size={14} /> Giá bán (VNĐ)
@@ -159,11 +217,8 @@ const CreateProduct: React.FC = () => {
                     onChange={handleChange}
                   />
                 </div>
-                {/* Danh mục */}
                 <div className="space-y-1.5">
-                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                    Danh mục
-                  </label>
+                  <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Danh mục</label>
                   <select
                     name="category"
                     className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-bold"
@@ -180,9 +235,7 @@ const CreateProduct: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
-                  Tình trạng
-                </label>
+                <label className="text-xs font-black uppercase text-slate-400 tracking-wider">Tình trạng</label>
                 <select
                   name="condition"
                   className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 focus:border-indigo-500 transition-all font-bold"
@@ -196,7 +249,6 @@ const CreateProduct: React.FC = () => {
                 </select>
               </div>
 
-              {/* Mô tả */}
               <div className="space-y-1.5">
                 <label className="text-xs font-black uppercase text-slate-400 tracking-wider flex items-center gap-2">
                   <TextQuote size={14} /> Mô tả tình trạng
@@ -212,7 +264,6 @@ const CreateProduct: React.FC = () => {
                 />
               </div>
 
-              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}

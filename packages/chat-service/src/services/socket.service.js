@@ -315,6 +315,8 @@ function handleSend(conn, frame, sessionData) {
 
   if (destination === '/app/chat') {
     handleChatSend(conn, frame, userId);
+  } else if (destination === '/app/chat.image') {
+    handleChatImage(conn, frame, userId);
   } else if (destination === '/app/chat.read') {
     handleChatRead(conn, frame, userId);
   } else if (destination === '/app/typing') {
@@ -432,6 +434,78 @@ async function handleChatSend(conn, frame, userId) {
       'message': 'Failed to send message',
       'content-type': 'application/json',
     }, JSON.stringify({ success: false, message: 'Failed to send message' }));
+  }
+}
+
+/**
+ * Process image/file message send.
+ */
+async function handleChatImage(conn, frame, userId) {
+  try {
+    const body = JSON.parse(frame.body);
+    const { recipientId, fileUrl, fileName, conversationId: providedConvId } = body;
+
+    if (!recipientId || !fileUrl) {
+      sendFrame(conn, 'ERROR', {
+        'message': 'Validation failed',
+        'content-type': 'application/json',
+      }, JSON.stringify({
+        success: false,
+        message: 'recipientId and fileUrl are required',
+      }));
+      return;
+    }
+
+    const conversationId = providedConvId || buildConversationId(userId, recipientId);
+
+    const message = await ChatMessage.create({
+      senderId: userId,
+      receiverId: recipientId,
+      content: fileName || 'Image',
+      conversationId,
+      messageType: 'IMAGE',
+      fileUrl,
+      fileName: fileName || null,
+    });
+
+    const messageObj = message.toObject();
+    const messageJson = JSON.stringify(messageObj);
+    const receiptId = frame.headers['receipt'];
+
+    // Deliver to conversation topic
+    broadcastToTopic(`/topic/chat/${conversationId}`, 'MESSAGE', {
+      'destination': `/topic/chat/${conversationId}`,
+      'content-type': 'application/json',
+      'message-id': `msg-${messageObj._id}`,
+    }, messageJson);
+
+    // Deliver to recipient's private queue
+    const recipientConnIds = userSessions.get(String(recipientId));
+    if (recipientConnIds) {
+      for (const connId of recipientConnIds) {
+        const recipientSession = sessions.get(connId);
+        if (!recipientSession) continue;
+        for (const sub of recipientSession.subscriptions.values()) {
+          if (sub.destination === '/user/queue/messages') {
+            sendFrame(recipientSession.conn, 'MESSAGE', {
+              'destination': '/user/queue/messages',
+              'content-type': 'application/json',
+              'message-id': `msg-${messageObj._id}`,
+            }, messageJson);
+          }
+        }
+      }
+    }
+
+    if (receiptId) {
+      sendFrame(conn, 'RECEIPT', { 'receipt-id': receiptId });
+    }
+  } catch (err) {
+    logger.error('chat image send error', { error: err.message, userId });
+    sendFrame(conn, 'ERROR', {
+      'message': 'Failed to send image',
+      'content-type': 'application/json',
+    }, JSON.stringify({ success: false, message: 'Failed to send image' }));
   }
 }
 

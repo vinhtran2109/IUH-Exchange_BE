@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { X, Send, User, ChevronLeft } from 'lucide-react';
+import { X, Send, User, ChevronLeft, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import type { ChatMessage } from '../services/chatService';
 import { useAuthStore } from '../store/authStore';
@@ -16,7 +16,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
   const { user } = useAuthStore() as any;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
+  const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -57,6 +59,55 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user?.id) return;
+
+    // Max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Ảnh tối đa 5MB');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Get presigned URL
+      const uploadInfo = await chatService.getChatUploadUrl(file.name, file.type);
+      if (!uploadInfo.success) throw new Error('Failed to get upload URL');
+
+      const { presignedUrl, publicUrl } = uploadInfo.data;
+
+      // Upload to S3
+      await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      // Send image message via WebSocket
+      chatService.sendImage(recipientId, publicUrl, file.name);
+
+      // Optimistic add to local messages
+      setMessages((prev) => [
+        ...prev,
+        {
+          senderId: user.id,
+          recipientId,
+          content: file.name,
+          messageType: 'IMAGE',
+          fileUrl: publicUrl,
+          timestamp: new Date().toISOString(),
+        } as any,
+      ]);
+    } catch (err) {
+      console.error('Image upload failed:', err);
+      alert('Không thể gửi ảnh. Thử lại sau.');
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -90,12 +141,24 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50/50 custom-scrollbar">
         {messages.map((msg, index) => {
           const isMe = msg.senderId === user?.id;
+          const isImage = (msg as any).messageType === 'IMAGE' || (msg as any).fileUrl;
           return (
             <div key={index} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-              <div className={`max-w-[75%] p-3 text-sm rounded-2xl ${
+              <div className={`max-w-[75%] text-sm rounded-2xl ${
                 isMe ? 'bg-indigo-600 text-white shadow-md rounded-br-none' : 'bg-white text-slate-800 border border-slate-100 shadow-sm rounded-bl-none'
               }`}>
-                {msg.content}
+                {isImage && (msg as any).fileUrl ? (
+                  <a href={(msg as any).fileUrl} target="_blank" rel="noopener noreferrer">
+                    <img
+                      src={(msg as any).fileUrl}
+                      alt="shared image"
+                      className="max-w-full rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
+                      style={{ maxHeight: 240 }}
+                    />
+                  </a>
+                ) : (
+                  <div className="p-3">{msg.content}</div>
+                )}
               </div>
             </div>
           );
@@ -105,6 +168,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
 
       <div className="p-4 border-t border-slate-100 bg-white">
         <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+          <input
+            type="file"
+            accept="image/*"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all disabled:opacity-50"
+            title="Gửi ảnh"
+          >
+            {uploading ? <Loader2 size={18} className="animate-spin" /> : <ImageIcon size={18} />}
+          </button>
           <input
             type="text"
             value={inputValue}
