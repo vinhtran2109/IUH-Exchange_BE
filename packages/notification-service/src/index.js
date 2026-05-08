@@ -6,6 +6,7 @@ import { startKafkaConsumer } from './services/kafka-consumer.service.js';
 import notificationRoutes from './routes/notification.routes.js';
 import dlqRoutes from './routes/dlq.routes.js';
 import fcmRoutes from './routes/fcm.routes.js';
+import preferenceRoutes from './routes/preference.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +26,7 @@ app.get('/health', (_req, res) => {
 app.use('/api/v1/notifications', dlqRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/notifications', fcmRoutes);
+app.use('/api/v1/notifications/preferences', preferenceRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);
