@@ -19,4 +19,5 @@ export { logger } from './utils/logger.js';
 export { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, verifyToken, parsePagination, hashToken, compareToken } from './utils/helpers.js';
 export { connectMongo } from './utils/mongo.js';
 export { createRedis, getRedis } from './utils/redis.js';
+export { cache } from './utils/cache.js';
 export { createKafka, getKafka, createProducer, createConsumer } from './utils/kafka.js';

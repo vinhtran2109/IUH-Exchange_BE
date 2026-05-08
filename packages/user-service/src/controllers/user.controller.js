@@ -5,6 +5,7 @@ import {
   ApiResponse,
   parsePagination,
   logger,
+  cache,
 } from '@iuh-exchange/common';
 import { getAvatarUploadUrl } from '../services/s3.service.js';
 
@@ -39,10 +40,16 @@ export async function getMyProfile(req, res) {
  * GET /api/v1/users/:id
  */
 export async function getUserProfile(req, res) {
+  const cacheKey = `users:profile:${req.params.id}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const user = await User.findById(req.params.id).select('name email studentId avatarUrl karmaPoint role isVerified createdAt');
   if (!user) throw new ResourceNotFoundException('User', req.params.id);
 
-  res.json(ApiResponse.ok(mapToProfile(user)));
+  const response = ApiResponse.ok(mapToProfile(user));
+  await cache.set(cacheKey, response, 600); // Cache 10 minutes
+  res.json(response);
 }
 
 /**
@@ -61,6 +68,9 @@ export async function updateProfile(req, res) {
   await user.save();
 
   logger.info(`[User] Profile updated for user: ${user.email}`);
+
+  // Invalidate user profile cache
+  await cache.del(`users:profile:${userId}`);
 
   res.json(ApiResponse.ok(mapToProfile(user), 'Cập nhật hồ sơ thành công'));
 }

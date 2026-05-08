@@ -154,9 +154,9 @@ export const chatService = {
     return response.data;
   },
 
-  // 5. Lấy danh sách Inbox (các UserId đã từng chat)
-  getConversations: async (_userId: string) => {
-    const response = await api.get('/chat/conversations');
+  // 5. Lấy danh sách Inbox (các UserId đã từng chat) - with pagination
+  getConversations: async (_userId: string, page = 0, size = 15) => {
+    const response = await api.get(`/chat/conversations?page=${page}&size=${size}`);
     return response.data;
   },
 

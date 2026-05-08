@@ -10,6 +10,7 @@ import {
   ResourceNotFoundException,
   ForbiddenException,
   logger,
+  cache,
 } from '@iuh-exchange/common';
 
 // ── Helpers ──
@@ -53,6 +54,12 @@ export async function listProducts(req, res) {
   const category = req.query.category;
   const skip = (page - 1) * size;
 
+  // Build cache key from query params
+  const cacheKey = `products:list:${page}:${size}:${sort || 'default'}:${category || 'all'}`;
+  
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const filter = { status: 'AVAILABLE' };
   if (category) filter.category = category;
 
@@ -70,7 +77,9 @@ export async function listProducts(req, res) {
     last: page * size >= total,
   });
 
-  res.json(ApiResponse.ok(pageResponse, 'Success'));
+  const response = ApiResponse.ok(pageResponse, 'Success');
+  await cache.set(cacheKey, response, 120); // Cache 2 minutes
+  res.json(response);
 }
 
 /**
@@ -127,9 +136,16 @@ export async function getMyProducts(req, res) {
  * Get a single product by ID.
  */
 export async function getProductById(req, res) {
+  const cacheKey = `products:detail:${req.params.id}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
   const product = await Product.findById(req.params.id).lean();
   if (!product) throw new ResourceNotFoundException('Product', req.params.id);
-  res.json(ApiResponse.ok(toResponse(product), 'Success'));
+
+  const response = ApiResponse.ok(toResponse(product), 'Success');
+  await cache.set(cacheKey, response, 300); // Cache 5 minutes
+  res.json(response);
 }
 
 /**
@@ -157,6 +173,9 @@ export async function createProduct(req, res) {
   });
 
   logger.info(`Product created: id=${product._id}, title=${title}`);
+
+  // Invalidate product list cache
+  await cache.delPattern('products:list:*');
 
   res.status(201).json(ApiResponse.created(toResponse(product)));
 }
@@ -200,6 +219,10 @@ export async function updateProduct(req, res) {
     status: saved.status,
   });
 
+  // Invalidate cache
+  await cache.del(`products:detail:${saved._id}`);
+  await cache.delPattern('products:list:*');
+
   res.json(ApiResponse.ok(toResponse(saved), 'Updated successfully'));
 }
 
@@ -224,6 +247,10 @@ export async function deleteProduct(req, res) {
 
   // Publish delete event for ElasticSearch cleanup
   await publishProductEvent(TOPICS.PRODUCT_DELETED, { id: product._id.toString() });
+
+  // Invalidate cache
+  await cache.del(`products:detail:${product._id}`);
+  await cache.delPattern('products:list:*');
 
   logger.info(`Product deleted: id=${product._id}`);
   res.json(ApiResponse.ok(null, 'Deleted successfully'));
@@ -317,6 +344,11 @@ export async function resolveProduct(req, res) {
   }
 
   logger.info(`Product ${action}: id=${saved._id}`);
+
+  // Invalidate cache
+  await cache.del(`products:detail:${saved._id}`);
+  await cache.delPattern('products:list:*');
+
   res.json(ApiResponse.ok(toResponse(saved), 'Resolved successfully'));
 }
 

@@ -79,31 +79,52 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const pageSize = 15;
+
+  const fetchConversations = async (pageNum: number, append = false) => {
+    if (!user?.id) return;
+    if (pageNum === 0) setLoading(true);
+    else setLoadingMore(true);
+    try {
+      const res = await chatService.getConversations(user.id, pageNum, pageSize);
+      if (res.success) {
+        const convos = res.data?.content || [];
+        const partners = convos.map((c: any) => {
+          const partnerId = c.lastMessage?.senderId === user.id 
+            ? c.lastMessage?.receiverId 
+            : c.lastMessage?.senderId;
+          return {
+            partnerId: partnerId || c._id,
+            lastMessage: c.lastMessage?.content || '',
+            conversationId: c._id,
+          };
+        });
+        setConversations(prev => append ? [...prev, ...partners] : partners);
+        setHasMore(!res.data?.last);
+      }
+    } catch (err) {
+      console.error("Failed to load conversations:", err);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
-      chatService.getConversations(user.id)
-        .then(res => {
-          if (res.success) {
-            const convos = res.data || [];
-            // Extract partner IDs from conversation data
-            const partners = convos.map((c: any) => {
-              const partnerId = c.lastMessage?.senderId === user.id 
-                ? c.lastMessage?.receiverId 
-                : c.lastMessage?.senderId;
-              return {
-                partnerId: partnerId || c._id,
-                lastMessage: c.lastMessage?.content || '',
-                conversationId: c._id,
-              };
-            });
-            setConversations(partners);
-          }
-        })
-        .catch(err => console.error("Failed to load conversations:", err))
-        .finally(() => setLoading(false));
+      setPage(0);
+      fetchConversations(0);
     }
   }, [user?.id]);
+
+  const loadMore = () => {
+    const nextPage = page + 1;
+    setPage(nextPage);
+    fetchConversations(nextPage, true);
+  };
 
   // Search messages
   useEffect(() => {
@@ -220,6 +241,19 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
                 onSelect={onSelectUser} 
               />
             ))}
+            {hasMore && (
+              <button 
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full py-3 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all flex items-center justify-center gap-2"
+              >
+                {loadingMore ? (
+                  <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <>Tải thêm</>
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
