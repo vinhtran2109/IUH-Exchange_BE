@@ -25,6 +25,7 @@ data/
 
 # ── Firebase ──
 firebase-service-account.json
+*iuhexchange-firebase-adminsdk*.json
 
 # ── Load test results ──
 tests/load/results/

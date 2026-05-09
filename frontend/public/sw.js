@@ -37,22 +37,11 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
-  // API calls: network-first
-  if (url.pathname.startsWith('/api/') || url.pathname.includes('/ws')) {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Cache successful API GET responses
-          if (response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          }
-          return response;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
+  // Skip cross-origin requests (API Gateway, external resources)
+  if (url.origin !== self.location.origin) return;
+
+  // Skip API calls and WebSocket
+  if (url.pathname.startsWith('/api/') || url.pathname.includes('/ws')) return;
 
   // Static assets: cache-first
   event.respondWith(

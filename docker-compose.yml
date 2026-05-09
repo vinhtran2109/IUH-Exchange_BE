@@ -29,12 +29,12 @@ services:
     ports:
       - "27018:27017"
     environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-root}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-iuh_exchange_root}
       MONGO_INITDB_DATABASE: iuh_exchange
     volumes:
       - mongo_data:/data/db
-      - ../infra/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
+      - ./infra/mongo/init-mongo.js:/docker-entrypoint-initdb.d/init-mongo.js:ro
     networks:
       - iuh-exchange-net
     healthcheck:
@@ -304,6 +304,9 @@ services:
       PORT: "3004"
       SERVICE_NAME: notification-service
       MONGODB_URI: ${NOTIFICATION_SERVICE_MONGO_URI}
+      FIREBASE_SERVICE_ACCOUNT_PATH: /app/firebase-service-account.json
+    volumes:
+      - ./iuhexchange-firebase-adminsdk-fbsvc-6dede7d24b.json:/app/firebase-service-account.json:ro
     depends_on:
       - mongodb
       - kafka

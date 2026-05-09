@@ -9,7 +9,7 @@ import { initSagaListener } from './services/saga.listener.js';
 
 const app = express();
 const PORT = process.env.PORT || 3002;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_products';
+const MONGODB_URI = process.env.PRODUCT_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27018/iuh_products';
 
 // ── Middleware ──
 app.use(express.json());
@@ -31,9 +31,9 @@ app.get('/health', async (req, res) => {
 });
 
 // ── Routes ──
+app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/products', reviewRoutes);
 app.use('/api/v1/products', wishlistRoutes);
-app.use('/api/v1/products', productRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);

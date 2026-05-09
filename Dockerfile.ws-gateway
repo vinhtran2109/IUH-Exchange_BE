@@ -10,6 +10,7 @@ COPY packages/common/package.json ./packages/common/
 COPY packages/ws-gateway/package.json ./packages/ws-gateway/
 
 # Install dependencies (npm workspaces will resolve @iuh-exchange/common)
+RUN apk add --no-cache curl
 RUN npm install --omit=dev
 
 # Copy source code AFTER install to leverage Docker layer caching
