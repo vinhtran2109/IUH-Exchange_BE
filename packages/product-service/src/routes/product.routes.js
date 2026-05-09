@@ -21,6 +21,7 @@ import {
 } from '../controllers/product.controller.js';
 
 const router = Router();
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function validateBody(schema) {
   return validate(schema, 'body');
@@ -31,32 +32,32 @@ function validateQuery(schema) {
 
 function adminOnly(req, _res, next) {
   if (!req.user || req.user.role !== 'ADMIN') {
-    throw new ForbiddenException('Admin access required');
+    return next(new ForbiddenException('Admin access required'));
   }
   next();
 }
 
 // ── Admin Routes (MUST be before /:id to avoid conflicts) ──
 
-router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), getPendingProducts);
-router.patch('/admin/:id/resolve', authenticate, adminOnly, resolveProduct);
-router.get('/admin/stats', authenticate, adminOnly, getProductStats);
+router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), asyncHandler(getPendingProducts));
+router.patch('/admin/:id/resolve', authenticate, adminOnly, asyncHandler(resolveProduct));
+router.get('/admin/stats', authenticate, adminOnly, asyncHandler(getProductStats));
 
 // ── Public Routes ──
 
-router.get('/search', validateQuery(searchSchema), searchProductsHandler);
-router.get('/', validateQuery(paginationSchema), listProducts);
+router.get('/search', validateQuery(searchSchema), asyncHandler(searchProductsHandler));
+router.get('/', validateQuery(paginationSchema), asyncHandler(listProducts));
 
 // ── Authenticated Routes ──
 
-router.get('/me', authenticate, validateQuery(paginationSchema), getMyProducts);
-router.post('/', authenticate, validateBody(createProductSchema), createProduct);
-router.post('/upload-url', authenticate, validateBody(uploadUrlSchema), getUploadUrl);
+router.get('/me', authenticate, validateQuery(paginationSchema), asyncHandler(getMyProducts));
+router.post('/', authenticate, validateBody(createProductSchema), asyncHandler(createProduct));
+router.post('/upload-url', authenticate, validateBody(uploadUrlSchema), asyncHandler(getUploadUrl));
 
 // ── Parameterized Routes (must come after static paths) ──
 
-router.get('/:id', getProductById);
-router.put('/:id', authenticate, validateBody(createProductSchema), updateProduct);
-router.delete('/:id', authenticate, deleteProduct);
+router.get('/:id', asyncHandler(getProductById));
+router.put('/:id', authenticate, validateBody(createProductSchema), asyncHandler(updateProduct));
+router.delete('/:id', authenticate, asyncHandler(deleteProduct));
 
 export default router;

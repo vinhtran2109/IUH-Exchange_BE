@@ -13,15 +13,19 @@ import * as authCtrl from '../controllers/auth.controller.js';
 
 const router = Router();
 
-router.post('/register', validate(registerSchema), authCtrl.register);
-router.post('/verify-otp', validate(verifyOtpSchema), authCtrl.verifyOtp);
-router.post('/resend-otp', validate(resendOtpSchema), authCtrl.resendOtp);
-router.post('/login', validate(loginSchema), authCtrl.login);
-router.post('/refresh-token', authCtrl.refreshToken);
-router.post('/logout', authenticate, authCtrl.logout);
+// Express 4 does NOT catch async errors — they become unhandled rejections
+// and crash the process. This wrapper catches them and forwards to the error handler.
+const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
-router.put('/change-password', authenticate, validate(changePasswordSchema), authCtrl.changePassword);
-router.post('/forgot-password', validate(forgotPasswordSchema), authCtrl.forgotPassword);
-router.post('/reset-password', validate(resetPasswordSchema), authCtrl.resetPassword);
+router.post('/register', validate(registerSchema), asyncHandler(authCtrl.register));
+router.post('/verify-otp', validate(verifyOtpSchema), asyncHandler(authCtrl.verifyOtp));
+router.post('/resend-otp', validate(resendOtpSchema), asyncHandler(authCtrl.resendOtp));
+router.post('/login', validate(loginSchema), asyncHandler(authCtrl.login));
+router.post('/refresh-token', asyncHandler(authCtrl.refreshToken));
+router.post('/logout', authenticate, asyncHandler(authCtrl.logout));
+
+router.put('/change-password', authenticate, validate(changePasswordSchema), asyncHandler(authCtrl.changePassword));
+router.post('/forgot-password', validate(forgotPasswordSchema), asyncHandler(authCtrl.forgotPassword));
+router.post('/reset-password', validate(resetPasswordSchema), asyncHandler(authCtrl.resetPassword));
 
 export default router;
