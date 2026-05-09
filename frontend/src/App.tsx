@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import ChatManager from './components/ChatManager';
 import ProtectedRoute from './components/ProtectedRoute';
 import Home from './pages/Home';
+import { useAuthStore } from './store/authStore';
 
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -23,6 +24,22 @@ import MyReports from './pages/MyReports';
 const NotFound = () => <div className="text-center py-20"><h1 className="text-9xl font-black text-indigo-100 mb-4">404</h1><h2 className="text-2xl font-bold text-slate-800 mb-6">Trang không được tìm thấy</h2><button onClick={() => window.history.back()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">Quay lại</button></div>;
 
 const App: React.FC = () => {
+  const restoreAuth = useAuthStore((s) => s.restoreAuth);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  useEffect(() => {
+    restoreAuth();
+  }, [restoreAuth]);
+
+  // Show loading spinner while restoring auth (prevents flash of login page)
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
   return (
     <BrowserRouter>
       <ChatManager />

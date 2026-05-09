@@ -386,6 +386,10 @@ const sockjsProxy = createProxyMiddleware({
 
 // Mount SockJS HTTP transport proxy at /ws
 app.use('/ws', (req, res, next) => {
+  // Restore full path — Express strips mount prefix (/ws) from req.url,
+  // but downstream service expects the full /ws/... path.
+  req.url = req.originalUrl;
+
   // WebSocket upgrade requests are handled by server.on('upgrade') below.
   // This middleware handles only HTTP-based SockJS transports.
   if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
