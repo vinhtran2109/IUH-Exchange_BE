@@ -1,33 +1,36 @@
 import winston from 'winston';
+import Transport from 'winston-transport';
 import http from 'http';
 import { createRequire } from 'module';
 
 /**
  * Logstash HTTP transport - sends JSON logs to Logstash via HTTP input.
+ * Extends winston-transport directly (not Stream) to avoid isStream() validation.
  */
-class LogstashHttpTransport extends winston.transports.Stream {
+class LogstashHttpTransport extends Transport {
   constructor(opts = {}) {
-    const logstashUrl = opts.logstashUrl || process.env.LOGSTASH_URL || 'http://localhost:9600';
-    super({
-      write: (chunk) => {
-        try {
-          const data = typeof chunk === 'string' ? JSON.parse(chunk) : chunk;
-          const body = JSON.stringify(data);
-          const url = new URL(logstashUrl);
-          const req = http.request({
-            hostname: url.hostname,
-            port: url.port,
-            path: '/_bulk',
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-            timeout: 3000,
-          });
-          req.on('error', () => {}); // Silent fail - don't crash app on log shipping failure
-          req.write(body);
-          req.end();
-        } catch (e) { /* ignore parse errors */ }
-      }
-    });
+    super(opts);
+    this.logstashUrl = opts.logstashUrl || process.env.LOGSTASH_URL || 'http://localhost:9600';
+  }
+
+  log(info, callback) {
+    setImmediate(() => this.emit('logged', info));
+    try {
+      const body = JSON.stringify(info);
+      const url = new URL(this.logstashUrl);
+      const req = http.request({
+        hostname: url.hostname,
+        port: url.port,
+        path: '/_bulk',
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+        timeout: 3000,
+      });
+      req.on('error', () => {}); // Silent fail - don't crash app on log shipping failure
+      req.write(body);
+      req.end();
+    } catch (e) { /* ignore parse errors */ }
+    callback();
   }
 }
 

@@ -50,7 +50,7 @@ app.use(cors({
   // Bug #4 fix: Default to specific origins instead of '*' (incompatible with credentials: true)
   origin: process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
-    : ['http://localhost:5173', 'http://localhost:3000'],
+    : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Requested-With'],
   exposedHeaders: ['X-Request-ID'],
@@ -180,6 +180,15 @@ function createServiceProxy(serviceName) {
         proxyReq(proxyReq, req) {
           // Forward correlation ID
           proxyReq.setHeader('X-Request-ID', req.requestId);
+
+          // Fix: express.json() consumes the body stream, so http-proxy-middleware
+          // can't forward the body. We write the parsed body back to the proxy request.
+          if (req.body && Object.keys(req.body).length > 0) {
+            const bodyData = JSON.stringify(req.body);
+            proxyReq.setHeader('Content-Type', 'application/json');
+            proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
+            proxyReq.write(bodyData);
+          }
         },
         proxyRes(proxyRes, req) {
           const status = proxyRes.statusCode;
@@ -273,28 +282,36 @@ app.get('/health/ready', async (_req, res) => {
 });
 
 // ────────────────────────────────────────────────────────
-// Mount Routes
+// Mount Routes — use express.Router() per route for reliable
+// middleware chaining with http-proxy-middleware v3 async middleware.
 // ────────────────────────────────────────────────────────
 for (const route of routes) {
   const { path, service, public: isPublic, rateLimiter: limiterKey, methods } = route;
-  const middlewares = [];
+  const router = express.Router();
+
+  // Restore full path — Express strips mount path from req.url,
+  // but downstream services expect the full /api/v1/... path.
+  router.use((req, _res, next) => {
+    req.url = req.originalUrl;
+    next();
+  });
 
   // Rate limiter
   if (limiterKey && limiters[limiterKey]) {
-    middlewares.push(limiters[limiterKey]);
+    router.use(limiters[limiterKey]);
   }
 
   // Auth filter
   if (isPublic) {
-    middlewares.push(optionalAuthFilter);
+    router.use(optionalAuthFilter);
   } else {
-    middlewares.push(authFilter);
+    router.use(authFilter);
   }
 
   // Method restriction for public routes with limited methods
   if (methods && methods.length > 0) {
     const allowed = new Set(methods.map(m => m.toUpperCase()));
-    middlewares.push((req, res, next) => {
+    router.use((req, res, next) => {
       if (!allowed.has(req.method.toUpperCase())) {
         // Not an allowed method for this public route — check if it needs auth
         // This is a public route with restricted methods, so non-GET needs auth
@@ -305,9 +322,11 @@ for (const route of routes) {
   }
 
   // Proxy
-  middlewares.push(...createServiceProxy(service));
+  for (const mw of createServiceProxy(service)) {
+    router.use(mw);
+  }
 
-  app.use(path, ...middlewares);
+  app.use(path, router);
 }
 
 // ────────────────────────────────────────────────────────

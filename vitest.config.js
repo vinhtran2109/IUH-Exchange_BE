@@ -5,6 +5,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['packages/*/src/**/*.test.js', 'frontend/src/**/*.test.{ts,tsx}'],
+    env: {
+      JWT_SECRET: 'test-jwt-secret-for-testing',
+      NODE_ENV: 'test',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'text-summary'],

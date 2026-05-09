@@ -35,7 +35,8 @@ async function initFirebase() {
     // Try service account file first, then environment variables
     let credential;
     try {
-      const serviceAccountPath = join(__dirname, '../../firebase-service-account.json');
+      const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+        || join(__dirname, '../../../iuhexchange-firebase-adminsdk-fbsvc-6dede7d24b.json');
       const serviceAccount = JSON.parse(readFileSync(serviceAccountPath, 'utf-8'));
       credential = admin.default.credential.cert(serviceAccount);
     } catch {

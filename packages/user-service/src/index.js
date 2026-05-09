@@ -11,7 +11,7 @@ import adminRoutes from './routes/admin.routes.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_users';
+const MONGODB_URI = process.env.USER_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27018/iuh_users';
 
 // ── Middleware ──
 app.use(express.json());
