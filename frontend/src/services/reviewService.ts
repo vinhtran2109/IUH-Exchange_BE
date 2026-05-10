@@ -19,7 +19,7 @@ export interface ReviewResponse {
 
 export const reviewService = {
   // Get reviews for a product
-  getProductReviews: async (productId: string, page = 0, size = 10) => {
+  getProductReviews: async (productId: string, page = 1, size = 10) => {
     const response = await api.get(`/products/${productId}/reviews?page=${page}&size=${size}`);
     return response.data;
   },
@@ -37,7 +37,7 @@ export const reviewService = {
   },
 
   // Get reviews for a seller
-  getSellerReviews: async (userId: string, page = 0, size = 10) => {
+  getSellerReviews: async (userId: string, page = 1, size = 10) => {
     const response = await api.get(`/products/seller/${userId}/reviews?page=${page}&size=${size}`);
     return response.data;
   },

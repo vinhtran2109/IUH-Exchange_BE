@@ -68,16 +68,16 @@ const AdminDashboard: React.FC = () => {
         ]);
         setStats({ user: uStats.data, product: pStats.data });
       } else if (activeTab === 'users') {
-        const res = await adminService.getAllUsers(0, 100);
+        const res = await adminService.getAllUsers(1, 100);
         if (res.success) setUsers(res.data.content);
       } else if (activeTab === 'reports') {
-        const res = await adminService.getReports("PENDING", 0, 50);
+        const res = await adminService.getReports("PENDING", 1, 50);
         if (res.success) setReports(res.data.content);
       } else if (activeTab === 'products') {
-        const res = await adminService.getPendingProducts(0, 50);
+        const res = await adminService.getPendingProducts(1, 50);
         if (res.success) setProducts(res.data.content);
       } else if (activeTab === 'dlq') {
-        const res = await adminService.getDlqEvents(0, 50);
+        const res = await adminService.getDlqEvents(1, 50);
         if (res.success) {
           setDlqEvents(res.data.content || []);
           setDlqStats(res.data.stats || {});

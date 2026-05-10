@@ -42,7 +42,7 @@ const ProductDetail: React.FC = () => {
     if (!id || !user) return;
     const checkOrder = async () => {
       try {
-        const res = await api.get(`/orders?productId=${id}&status=COMPLETED&page=0&size=1`);
+        const res = await api.get(`/orders?productId=${id}&status=COMPLETED&page=1&size=1`);
         if (res.data?.success && res.data?.data?.content?.length > 0) {
           setCompletedOrderId(res.data.data.content[0].id);
         }

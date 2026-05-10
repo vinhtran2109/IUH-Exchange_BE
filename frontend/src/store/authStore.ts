@@ -53,10 +53,15 @@ export const useAuthStore = create<AuthState>()(
         const res = await api.get("/users/me");
         const user = res.data.data;
         set({ user, isAuthenticated: true, isLoading: false });
-      } catch {
-        // Token expired or invalid — clear it
-        localStorage.removeItem("accessToken");
-        set({ user: null, isAuthenticated: false, isLoading: false });
+      } catch (error: any) {
+        // Only clear token if it's actually invalid (401 or 403)
+        // Don't clear on network errors or 5xx (server might be restarting)
+        if (error.response?.status === 401 || error.response?.status === 403) {
+          localStorage.removeItem("accessToken");
+          set({ user: null, isAuthenticated: false, isLoading: false });
+        } else {
+          set({ isLoading: false });
+        }
       }
     },
   })
