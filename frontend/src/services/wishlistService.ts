@@ -14,7 +14,7 @@ export const wishlistService = {
   },
 
   // Get user's wishlist
-  getMyWishlist: async (page = 0, size = 20) => {
+  getMyWishlist: async (page = 1, size = 20) => {
     const response = await api.get(`/products/me/wishlist?page=${page}&size=${size}`);
     return response.data;
   },

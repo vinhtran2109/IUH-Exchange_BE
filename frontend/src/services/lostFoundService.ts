@@ -32,7 +32,7 @@ export interface LostFoundItem {
 
 export const lostFoundService = {
   // Lấy danh sách đồ thất lạc (Phân trang và lọc theo Loại)
-  getItems: async (type: ItemType = ItemType.LOST, page = 0, size = 20) => {
+  getItems: async (type: ItemType = ItemType.LOST, page = 1, size = 20) => {
     const response = await api.get(`/lost-found?type=${type}&page=${page}&size=${size}`);
     return response.data;
   },

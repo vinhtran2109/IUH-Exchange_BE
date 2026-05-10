@@ -39,7 +39,7 @@ const MyReports: React.FC = () => {
   const fetchReports = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/reports/my?page=0&size=50');
+      const res = await api.get('/reports/my?page=1&size=50');
       if (res.data?.success) {
         setReports(res.data.data.content || []);
       }

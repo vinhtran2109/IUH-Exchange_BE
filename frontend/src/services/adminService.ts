@@ -27,7 +27,7 @@ export interface ReportData {
 
 export const adminService = {
   // Users Management
-  getAllUsers: async (page = 0, size = 20) => {
+  getAllUsers: async (page = 1, size = 20) => {
     const response = await api.get(`/users/admin/all?page=${page}&size=${size}`);
     return response.data;
   },
@@ -53,7 +53,7 @@ export const adminService = {
   },
 
   // Reports Management
-  getReports: async (status = "PENDING", page = 0, size = 20) => {
+  getReports: async (status = "PENDING", page = 1, size = 20) => {
     const response = await api.get(`/reports/admin?status=${status}&page=${page}&size=${size}`);
     return response.data;
   },
@@ -64,7 +64,7 @@ export const adminService = {
   },
 
   // Product Moderation
-  getPendingProducts: async (page = 0, size = 20) => {
+  getPendingProducts: async (page = 1, size = 20) => {
     const response = await api.get(`/products/admin/pending?page=${page}&size=${size}`);
     return response.data;
   },
@@ -86,7 +86,7 @@ export const adminService = {
   },
 
   // DLQ Monitoring
-  getDlqEvents: async (page = 0, size = 20, status?: string) => {
+  getDlqEvents: async (page = 1, size = 20, status?: string) => {
     let url = `/notifications/dlq?page=${page}&size=${size}`;
     if (status) url += `&status=${status}`;
     const response = await api.get(url);

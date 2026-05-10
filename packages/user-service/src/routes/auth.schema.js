@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const registerSchema = z.object({
   email: z
     .string()
+    .trim()
     .email()
     .regex(/@student\.iuh\.edu\.vn$/, 'Email phải có đuôi @student.iuh.edu.vn'),
   password: z.string().min(6, 'Mật khẩu phải ít nhất 6 ký tự'),
@@ -11,17 +12,17 @@ export const registerSchema = z.object({
 });
 
 export const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   password: z.string().min(1),
 });
 
 export const verifyOtpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   otp: z.string().length(6),
 });
 
 export const resendOtpSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
 });
 
 export const refreshTokenSchema = z.object({
@@ -34,11 +35,11 @@ export const changePasswordSchema = z.object({
 });
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
 });
 
 export const resetPasswordSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().email(),
   otp: z.string().length(6),
   newPassword: z.string().min(6, 'Mật khẩu mới phải ít nhất 6 ký tự'),
 });

@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "docker compose up -d mongodb redis kafka elasticsearch && npm run dev:services",
-    "dev:services": "npm run dev --workspace=packages/api-gateway & npm run dev --workspace=packages/user-service & npm run dev --workspace=packages/product-service & npm run dev --workspace=packages/order-service & npm run dev --workspace=packages/notification-service & npm run dev --workspace=packages/chat-service & npm run dev --workspace=packages/lost-found-service",
+    "dev:services": "concurrently \"npm run dev --workspace=packages/api-gateway\" \"npm run dev --workspace=packages/user-service\" \"npm run dev --workspace=packages/product-service\" \"npm run dev --workspace=packages/order-service\" \"npm run dev --workspace=packages/notification-service\" \"npm run dev --workspace=packages/chat-service\" \"npm run dev --workspace=packages/lost-found-service\"",
     "dev:gateway": "npm run dev --workspace=packages/api-gateway",
     "dev:user": "npm run dev --workspace=packages/user-service",
     "dev:product": "npm run dev --workspace=packages/product-service",
@@ -26,6 +26,7 @@
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.5",
+    "concurrently": "^9.2.1",
     "vitest": "^4.1.5"
   }
 }
