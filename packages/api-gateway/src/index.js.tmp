@@ -1,0 +1,16 @@
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    statusCode: 429,
+    message: 'Too many authentication attempts. Please try again later.',
+    timestamp: new Date().toISOString(),
+  },
+  store: new RedisStore({
+    sendCommand: (...args) => redis.call(...args),
+    prefix: 'rl:auth:',
+  }),
+});

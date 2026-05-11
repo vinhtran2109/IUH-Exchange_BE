@@ -22,7 +22,15 @@ function requireAdmin(req, _res, next) {
 router.use(authenticate, requireAdmin);
 
 // GET /api/v1/users/admin/all — list all users (paginated)
+// Also available as GET /api/v1/admin/users
 router.get('/all', asyncHandler(adminCtrl.listUsers));
+router.get('/users', asyncHandler(adminCtrl.listUsers));
+
+// POST /api/v1/users/admin/:id/ban — ban user
+router.post('/:id/ban', asyncHandler(adminCtrl.banUser));
+
+// POST /api/v1/users/admin/:id/unban — unban user
+router.post('/:id/unban', asyncHandler(adminCtrl.unbanUser));
 
 // PATCH /api/v1/users/admin/:id/toggle-ban — toggle ban status
 router.patch('/:id/toggle-ban', asyncHandler(adminCtrl.toggleBanUser));

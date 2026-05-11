@@ -80,7 +80,7 @@ const redis = getRedis();
 
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -97,7 +97,7 @@ const globalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -114,7 +114,7 @@ const authLimiter = rateLimit({
 
 const sensitiveLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 50,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => req.headers['x-user-id'] || req.ip,

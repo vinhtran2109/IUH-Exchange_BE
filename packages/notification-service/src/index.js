@@ -23,7 +23,7 @@ app.get('/health', (_req, res) => {
 });
 
 // ── REST API routes ──
-app.use('/api/v1/notifications', dlqRoutes);
+app.use('/api/v1/notifications/dlq', dlqRoutes);
 app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/notifications', fcmRoutes);
 app.use('/api/v1/notifications/preferences', preferenceRoutes);

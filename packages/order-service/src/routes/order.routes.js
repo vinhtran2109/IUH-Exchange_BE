@@ -52,10 +52,10 @@ export function createOrderRoutes(orderService) {
   });
 
   /**
-   * POST /api/v1/orders/:id/confirm
+   * PATCH /api/v1/orders/:id/confirm
    * Seller confirms an order → completes the transaction.
    */
-  router.post('/:id/confirm', (req, res, next) => {
+  router.patch('/:id/confirm', (req, res, next) => {
     controller.confirmOrder(req, res).catch(next);
   });
 

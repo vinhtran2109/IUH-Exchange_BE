@@ -1,0 +1,1 @@
+db.users.updateOne({email:"admin_1778500466638@student.iuh.edu.vn"},{$set:{role:"ADMIN",isVerified:true}})
