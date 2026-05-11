@@ -47,21 +47,13 @@ export const useAuthStore = create<AuthState>()(
         return;
       }
       try {
-        // console.log("📡 [AuthStore] Restoring session...");
-        const res = await api.get("/users/me", {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const res = await api.get("/users/me");
         const user = res.data.data;
-        // console.log("✅ [AuthStore] Session restored:", user.email);
         set({ user, isAuthenticated: true, isLoading: false });
       } catch (error: any) {
-        // console.error("❌ [AuthStore] Restore failed:", error.response?.status);
-        if (error.response?.status === 401 || error.response?.status === 403) {
-          localStorage.removeItem("accessToken");
-          set({ user: null, isAuthenticated: false, isLoading: false });
-        } else {
-          set({ isLoading: false });
-        }
+        // Interceptor handles 401 refresh automatically — don't double-clear token here.
+        // Only set unauthenticated; if interceptor also fails it will redirect to /login.
+        set({ user: null, isAuthenticated: false, isLoading: false });
       }
     },
   })
