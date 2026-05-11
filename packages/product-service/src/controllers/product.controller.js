@@ -285,6 +285,7 @@ export async function getUploadUrl(req, res) {
  * List products pending approval (admin only).
  */
 export async function getPendingProducts(req, res) {
+  logger.info(`getPendingProducts called by: user=${req.user?.sub}, role=${req.user?.role}`);
   const page = Math.max(1, parseInt(req.query.page || '1', 10));
   const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const skip = (page - 1) * size;

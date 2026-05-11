@@ -33,7 +33,9 @@ export const uploadUrlSchema = z.object({
 });
 
 export const paginationSchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  // Cho phép 0 để tránh lỗi đồng bộ Frontend/Backend, 
+  // nhưng controller sẽ luôn dùng Math.max(1, page)
+  page: z.coerce.number().int().min(0).default(1),
   size: z.coerce.number().int().min(1).max(100).default(20),
   sort: z.string().optional(),
   category: z.string().optional(),
@@ -41,7 +43,7 @@ export const paginationSchema = z.object({
 
 export const searchSchema = z.object({
   keyword: z.string().min(1, 'Search keyword is required'),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(0).default(1),
   size: z.coerce.number().int().min(1).max(100).default(20),
 });
 

@@ -36,6 +36,8 @@ app.get('/health', async (req, res) => {
 app.use('/api/v1/auth', authRoutes);
 // Admin routes MUST be before /users to avoid /:id catching "admin"
 app.use('/api/v1/users/admin', adminRoutes);
+// Also mount at /api/v1/admin for spec-compliant paths
+app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/users', userRoutes);
 
 // ── Error handler ──

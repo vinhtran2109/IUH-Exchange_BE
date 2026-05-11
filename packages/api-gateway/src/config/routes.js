@@ -36,6 +36,15 @@ const routes = [
     rateLimiter: 'auth',
   },
 
+  // ── Protected: Admin Product Moderation ────────────
+  // Specific match for admin product routes to ensure they are NOT treated as public GET
+  {
+    path: '/api/v1/products/admin',
+    service: 'product',
+    public: false,
+    rateLimiter: 'sensitive',
+  },
+
   // ── Public: Product browsing (GET only) ───────────────
   {
     path: '/api/v1/products',
@@ -52,6 +61,14 @@ const routes = [
     public: true,
     methods: ['GET'],
     rateLimiter: 'global',
+  },
+
+  // ── Protected: Admin ──────────────────────────────────
+  {
+    path: '/api/v1/admin',
+    service: 'user',
+    public: false,
+    rateLimiter: 'sensitive',
   },
 
   // ── Protected: User profile ───────────────────────────

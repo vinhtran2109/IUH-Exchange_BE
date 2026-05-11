@@ -22,14 +22,11 @@ interface AuthState {
   restoreAuth: () => Promise<void>;
 }
 
-// Bug #25 fix: Don't persist user object to localStorage (XSS can steal auth data).
-// Only keep in memory. Token stays in localStorage (separate).
-// restoreAuth() rehydrates user from token on app init (F5 refresh).
 export const useAuthStore = create<AuthState>()(
   (set) => ({
     user: null,
     isAuthenticated: false,
-    isLoading: true, // true until restoreAuth completes
+    isLoading: true,
     login: (user, accessToken) => {
       localStorage.setItem("accessToken", accessToken);
       set({ user, isAuthenticated: true, isLoading: false });
@@ -50,12 +47,15 @@ export const useAuthStore = create<AuthState>()(
         return;
       }
       try {
-        const res = await api.get("/users/me");
+        // console.log("📡 [AuthStore] Restoring session...");
+        const res = await api.get("/users/me", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
         const user = res.data.data;
+        // console.log("✅ [AuthStore] Session restored:", user.email);
         set({ user, isAuthenticated: true, isLoading: false });
       } catch (error: any) {
-        // Only clear token if it's actually invalid (401 or 403)
-        // Don't clear on network errors or 5xx (server might be restarting)
+        // console.error("❌ [AuthStore] Restore failed:", error.response?.status);
         if (error.response?.status === 401 || error.response?.status === 403) {
           localStorage.removeItem("accessToken");
           set({ user: null, isAuthenticated: false, isLoading: false });

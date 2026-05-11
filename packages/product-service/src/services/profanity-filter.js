@@ -27,11 +27,12 @@ function normalizeVietnamese(text) {
 export function containsProfanity(text) {
   if (!text || !text.trim()) return false;
   
-  const lower = text.toLowerCase();
   const normalized = normalizeVietnamese(text);
   
   return BLACKLIST.some((word) => {
     const normalizedWord = normalizeVietnamese(word);
-    return lower.includes(word) || normalized.includes(normalizedWord);
+    // Use regex with word boundaries to avoid false positives like "admin" containing "dm"
+    const regex = new RegExp(`\\b${normalizedWord.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+    return regex.test(normalized);
   });
 }
