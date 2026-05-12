@@ -4,6 +4,7 @@ import {
   createProductSchema,
   uploadUrlSchema,
   paginationSchema,
+  adminProductListSchema,
   searchSchema,
 } from '../validations/product.validation.js';
 import {
@@ -17,6 +18,7 @@ import {
   deleteProductAsAdmin,
   getUploadUrl,
   getPendingProducts,
+  listAdminProducts,
   resolveProduct,
   getProductStats,
 } from '../controllers/product.controller.js';
@@ -40,6 +42,7 @@ function adminOnly(req, _res, next) {
 }
 
 router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), asyncHandler(getPendingProducts));
+router.get('/admin', authenticate, adminOnly, validateQuery(adminProductListSchema), asyncHandler(listAdminProducts));
 router.patch('/admin/:id/resolve', authenticate, adminOnly, asyncHandler(resolveProduct));
 router.delete('/admin/:id', authenticate, adminOnly, asyncHandler(deleteProductAsAdmin));
 router.get('/admin/stats', authenticate, adminOnly, asyncHandler(getProductStats));

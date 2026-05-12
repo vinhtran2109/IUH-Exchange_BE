@@ -35,6 +35,7 @@ const PERMISSION_LABELS: Record<string, string> = {
 };
 
 type AdminTab = 'overview' | 'users' | 'reports' | 'products' | 'dlq' | 'analytics';
+type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECTED';
 
 const AdminDashboard: React.FC = () => {
   const { user, isLoading } = useAuthStore() as any;
@@ -42,6 +43,7 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [productFilter, setProductFilter] = useState<ProductFilter>('ALL');
 
   const [users, setUsers] = useState<UserAdminData[]>([]);
   const [products, setProducts] = useState<any[]>([]);
@@ -66,7 +68,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     void fetchData();
-  }, [activeTab, user, isLoading, navigate]);
+  }, [activeTab, productFilter, user, isLoading, navigate]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -85,7 +87,7 @@ const AdminDashboard: React.FC = () => {
       }
 
       if (activeTab === 'products') {
-        const res = await adminService.getPendingProducts(1, 50);
+        const res = await adminService.getAdminProducts(productFilter, 1, 100);
         if (res.success) setProducts(res.data.content);
       }
     } catch (error) {
@@ -407,44 +409,75 @@ const AdminDashboard: React.FC = () => {
   );
 
   const renderProducts = () => (
-    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-x-auto">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="bg-slate-50 border-b border-slate-200 text-sm uppercase tracking-wider text-slate-500">
-            <th className="p-4 font-bold">Người bán</th>
-            <th className="p-4 font-bold">Sản phẩm</th>
-            <th className="p-4 font-bold">Giá</th>
-            <th className="p-4 font-bold">Hành động</th>
-          </tr>
-        </thead>
-        <tbody>
-          {products.map((product) => (
-            <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-              <td className="p-4 text-sm text-slate-600 truncate max-w-[140px]">{product.sellerId}</td>
-              <td className="p-4">
-                <div className="font-bold text-slate-800">{product.title}</div>
-                <div className="text-xs text-slate-400 mt-1 line-clamp-1 max-w-[260px]">{product.description}</div>
-              </td>
-              <td className="p-4 font-black text-rose-500">{product.price?.toLocaleString()}đ</td>
-              <td className="p-4">
-                <div className="flex gap-2 flex-wrap">
-                  <button onClick={() => openProductDetail(product.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Xem chi tiết">
-                    <Eye size={16} />
-                  </button>
-                  <button onClick={() => handleResolveProduct(product.id, 'APPROVE')} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md shadow-emerald-200">DUYỆT</button>
-                  <button onClick={() => handleResolveProduct(product.id, 'REJECT')} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">TỪ CHỐI</button>
-                  <button onClick={() => handleDeleteProduct(product.id)} className="px-4 py-2 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-100">GỠ BÀI</button>
-                </div>
-              </td>
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {[
+          { id: 'ALL', label: 'Tất cả' },
+          { id: 'PENDING_APPROVAL', label: 'Chờ duyệt' },
+          { id: 'AVAILABLE', label: 'Đã duyệt' },
+          { id: 'SOLD', label: 'Đã bán' },
+          { id: 'REJECTED', label: 'Từ chối' },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setProductFilter(item.id as ProductFilter)}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              productFilter === item.id
+                ? 'bg-slate-900 text-white'
+                : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+            }`}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 text-sm uppercase tracking-wider text-slate-500">
+              <th className="p-4 font-bold">Người bán</th>
+              <th className="p-4 font-bold">Sản phẩm</th>
+              <th className="p-4 font-bold">Trạng thái</th>
+              <th className="p-4 font-bold">Giá</th>
+              <th className="p-4 font-bold">Hành động</th>
             </tr>
-          ))}
-          {products.length === 0 && (
-            <tr>
-              <td colSpan={4} className="p-10 text-center text-slate-400">Không có bài đăng nào cần duyệt.</td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {products.map((product) => (
+              <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                <td className="p-4 text-sm text-slate-600 truncate max-w-[140px]">{product.sellerId}</td>
+                <td className="p-4">
+                  <div className="font-bold text-slate-800">{product.title}</div>
+                  <div className="text-xs text-slate-400 mt-1 line-clamp-1 max-w-[260px]">{product.description}</div>
+                </td>
+                <td className="p-4 text-sm font-medium text-slate-600">{product.status}</td>
+                <td className="p-4 font-black text-rose-500">{product.price?.toLocaleString()}đ</td>
+                <td className="p-4">
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => openProductDetail(product.id)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Xem chi tiết">
+                      <Eye size={16} />
+                    </button>
+                    {product.status === 'PENDING_APPROVAL' && (
+                      <>
+                        <button onClick={() => handleResolveProduct(product.id, 'APPROVE')} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700 shadow-md shadow-emerald-200">DUYỆT</button>
+                        <button onClick={() => handleResolveProduct(product.id, 'REJECT')} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold hover:bg-slate-200">TỪ CHỐI</button>
+                      </>
+                    )}
+                    <button onClick={() => handleDeleteProduct(product.id)} className="px-4 py-2 bg-rose-50 text-rose-700 rounded-xl text-xs font-bold hover:bg-rose-100">GỠ BÀI</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {products.length === 0 && (
+              <tr>
+                <td colSpan={5} className="p-10 text-center text-slate-400">Không có bài đăng phù hợp.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 
@@ -632,8 +665,12 @@ const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap justify-end gap-2">
                   <button onClick={() => handleDeleteProduct(productDetail.id)} className="px-4 py-2 bg-rose-50 text-rose-700 rounded-xl text-sm font-bold hover:bg-rose-100">Gỡ bài</button>
-                  <button onClick={() => handleResolveProduct(productDetail.id, 'REJECT')} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-200">Từ chối</button>
-                  <button onClick={() => handleResolveProduct(productDetail.id, 'APPROVE')} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700">Duyệt bài</button>
+                  {productDetail.status === 'PENDING_APPROVAL' && (
+                    <>
+                      <button onClick={() => handleResolveProduct(productDetail.id, 'REJECT')} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-200">Từ chối</button>
+                      <button onClick={() => handleResolveProduct(productDetail.id, 'APPROVE')} className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700">Duyệt bài</button>
+                    </>
+                  )}
                 </div>
               </div>
             ) : null}

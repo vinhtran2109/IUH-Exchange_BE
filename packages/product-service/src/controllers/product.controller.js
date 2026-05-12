@@ -331,6 +331,38 @@ export async function getPendingProducts(req, res) {
 }
 
 /**
+ * GET /api/v1/products/admin
+ * List products for admin moderation with optional status filter.
+ */
+export async function listAdminProducts(req, res) {
+  const page = Math.max(1, parseInt(req.query.page || '1', 10));
+  const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
+  const skip = (page - 1) * size;
+  const { status } = req.query;
+
+  const filter = {};
+  if (status && status !== 'ALL') {
+    filter.status = status;
+  }
+
+  const [products, total] = await Promise.all([
+    Product.find(filter).sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
+    Product.countDocuments(filter),
+  ]);
+
+  const pageResponse = new PageResponse({
+    content: products.map(toResponse),
+    page,
+    size,
+    totalElements: total,
+    totalPages: Math.ceil(total / size),
+    last: page * size >= total,
+  });
+
+  res.json(ApiResponse.ok(pageResponse, 'Success'));
+}
+
+/**
  * PATCH /api/v1/products/admin/:id/resolve
  * Approve or reject a product (admin only).
  */

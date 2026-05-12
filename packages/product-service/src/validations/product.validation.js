@@ -41,6 +41,10 @@ export const paginationSchema = z.object({
   category: z.string().optional(),
 });
 
+export const adminProductListSchema = paginationSchema.extend({
+  status: z.string().optional(),
+});
+
 export const searchSchema = z.object({
   keyword: z.string().min(1, 'Search keyword is required'),
   page: z.coerce.number().int().min(0).default(1),
