@@ -6,7 +6,7 @@ const userSchema = new mongoose.Schema({
     required: true,
     unique: true,
     lowercase: true,
-    match: /@student\.iuh\.edu\.vn$/,
+    match: /(@student\.iuh\.edu\.vn$)|(@deleted\.iuh\.edu\.vn$)/,
   },
   passwordHash: { type: String, required: true },
   name: { type: String, required: true, trim: true },

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { 
   User, Camera, Save, ShieldCheck, UserCircle,
   CheckCircle2, AlertCircle, ShoppingBag, 
-  Store, Trash2, Clock, Check, Flag
+  Store, Trash2, Clock, Check, Flag, Pencil
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -253,7 +253,10 @@ const Profile: React.FC = () => {
                                 {p.status === 'PENDING_APPROVAL' ? 'Chờ duyệt' : p.status === 'AVAILABLE' ? 'Đang bán' : p.status === 'SOLD' ? 'Đã bán' : p.status}
                               </span>
                            </div>
-                           <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16}/></button>
+                           <div className="flex items-center gap-1">
+                             <button onClick={() => navigate(`/products/${p.id}/edit`)} className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-lg transition-all"><Pencil size={16}/></button>
+                             <button onClick={() => handleDeleteProduct(p.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={16}/></button>
+                           </div>
                         </div>
                       ))
                     )}

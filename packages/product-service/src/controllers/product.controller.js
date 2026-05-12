@@ -268,6 +268,29 @@ export async function deleteProduct(req, res) {
 }
 
 /**
+ * DELETE /api/v1/products/admin/:id
+ * Delete a product as admin.
+ */
+export async function deleteProductAsAdmin(req, res) {
+  const product = await Product.findById(req.params.id);
+  if (!product) throw new ResourceNotFoundException('Product', req.params.id);
+
+  if (product.imageUrls?.length) {
+    await Promise.all(product.imageUrls.map((url) => deleteFileByUrl(url)));
+  }
+
+  await Product.findByIdAndDelete(req.params.id);
+  await publishProductEvent(TOPICS.PRODUCT_DELETED, { id: product._id.toString() });
+
+  await cache.del(`products:detail:${product._id}`);
+  await cache.delPattern('products:list:*');
+  await cache.del('products:admin:stats');
+
+  logger.info(`[Admin] Product deleted: id=${product._id}`);
+  res.json(ApiResponse.ok(null, 'Deleted successfully'));
+}
+
+/**
  * POST /api/v1/products/upload-url
  * Get a presigned S3 URL for direct image upload.
  */
