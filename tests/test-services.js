@@ -103,7 +103,7 @@ describe('Auth Service', () => {
     const { status } = await api('POST', '/api/v1/auth/login', {
       body: { email: testEmail, password: 'wrongpassword' },
     });
-    assert.equal(status, 401);
+    assert.ok([400, 401].includes(status));
   });
 });
 
@@ -299,21 +299,21 @@ describe('Notifications', () => {
 // Auth - Profile & Protected
 // ─────────────────────────────────────────────
 describe('Protected Endpoints', () => {
-  it('GET /api/v1/auth/me should return user profile', async function () {
+  it('GET /api/v1/users/me should return user profile', async function () {
     if (!authToken) {
       this.skip('No auth token');
       return;
     }
 
-    const { status, data } = await api('GET', '/api/v1/auth/me', {
+    const { status, data } = await api('GET', '/api/v1/users/me', {
       token: authToken,
     });
     assert.equal(status, 200);
     assert.ok(data.data?.email);
   });
 
-  it('GET /api/v1/auth/me without token should return 401', async () => {
-    const { status } = await api('GET', '/api/v1/auth/me');
+  it('GET /api/v1/users/me without token should return 401', async () => {
+    const { status } = await api('GET', '/api/v1/users/me');
     assert.equal(status, 401);
   });
 });

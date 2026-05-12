@@ -16,6 +16,31 @@ import {
 import crypto from 'crypto';
 import { sendOtpEmail, sendPasswordResetOtpEmail } from '../services/email.service.js';
 
+function parseCookieHeader(cookieHeader = '') {
+  return cookieHeader
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce((acc, pair) => {
+      const separatorIndex = pair.indexOf('=');
+      if (separatorIndex === -1) return acc;
+      const key = pair.slice(0, separatorIndex).trim();
+      const value = pair.slice(separatorIndex + 1).trim();
+      acc[key] = decodeURIComponent(value);
+      return acc;
+    }, {});
+}
+
+function getRefreshTokenCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  };
+}
+
 /**
  * Register new user
  */
@@ -171,13 +196,7 @@ export async function login(req, res) {
   user.refreshToken = hashToken(refreshToken);
   await user.save();
 
-  res.cookie('refreshToken', refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    path: '/',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('refreshToken', refreshToken, getRefreshTokenCookieOptions());
 
   res.json(
     ApiResponse.ok(
@@ -200,7 +219,8 @@ export async function login(req, res) {
  * Refresh token
  */
 export async function refreshToken(req, res) {
-  const token = req.cookies?.refreshToken || req.body.refreshToken;
+  const cookies = req.cookies || parseCookieHeader(req.headers.cookie);
+  const token = cookies?.refreshToken || req.body?.refreshToken;
   if (!token) throw new UnauthorizedException('Missing refresh token');
 
   let decoded;
@@ -228,13 +248,7 @@ export async function refreshToken(req, res) {
   user.refreshToken = hashToken(newRefreshToken);
   await user.save();
 
-  res.cookie('refreshToken', newRefreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-    path: '/',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+  res.cookie('refreshToken', newRefreshToken, getRefreshTokenCookieOptions());
 
   res.json(ApiResponse.ok({ accessToken }));
 }
@@ -246,7 +260,12 @@ export async function logout(req, res) {
   const userId = req.user.sub;
   await User.findByIdAndUpdate(userId, { refreshToken: null });
 
-  res.clearCookie('refreshToken', { path: '/' });
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    path: '/',
+  });
   res.json(ApiResponse.ok(null, 'Đăng xuất thành công'));
 }
 
