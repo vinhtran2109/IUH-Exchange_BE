@@ -434,7 +434,7 @@ describe('auth.controller', () => {
       await auth.logout(req, res);
 
       expect(User.findByIdAndUpdate).toHaveBeenCalledWith('user123', { refreshToken: null });
-      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken');
+      expect(res.clearCookie).toHaveBeenCalledWith('refreshToken', expect.objectContaining({ path: '/' }));
     });
   });
 });

@@ -14,14 +14,14 @@ import {
  * Simulates the VNPay payment gateway flow.
  */
 export async function createPayment(req, res) {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user?.sub || req.headers['x-user-id'];
   if (!userId) throw new BadRequestException('Missing X-User-Id header');
 
   const orderId = req.params.id;
   const order = await Order.findById(orderId);
   if (!order) throw new ResourceNotFoundException('Order', orderId);
 
-  if (order.buyerId !== userId) {
+  if (String(order.buyerId) !== String(userId)) {
     throw new ForbiddenException('Chỉ người mua mới có thể thanh toán đơn hàng');
   }
 
@@ -102,7 +102,7 @@ export async function paymentCallback(req, res) {
  * Process a mock refund for a cancelled order.
  */
 export async function processRefund(req, res) {
-  const userId = req.headers['x-user-id'];
+  const userId = req.user?.sub || req.headers['x-user-id'];
   if (!userId) throw new BadRequestException('Missing X-User-Id header');
 
   const orderId = req.params.id;
@@ -110,7 +110,7 @@ export async function processRefund(req, res) {
   if (!order) throw new ResourceNotFoundException('Order', orderId);
 
   // Only buyer or seller can request refund
-  if (order.buyerId !== userId && order.sellerId !== userId) {
+  if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
     throw new ForbiddenException('Bạn không có quyền yêu cầu hoàn tiền cho đơn này');
   }
 

@@ -3,8 +3,16 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '@iuh-exchange/common';
 
-const S3_BUCKET = process.env.AWS_S3_BUCKET_NAME || '';
-const S3_REGION = process.env.AWS_S3_REGION || 'ap-southeast-1';
+const S3_BUCKET =
+  process.env.S3_BUCKET_NAME ||
+  process.env.AWS_S3_BUCKET_NAME ||
+  process.env.AWS_S3_BUCKET ||
+  'iuh-exchange-products';
+const S3_REGION =
+  process.env.S3_REGION ||
+  process.env.AWS_S3_REGION ||
+  process.env.AWS_REGION ||
+  'ap-southeast-1';
 
 const s3Client = new S3Client({
   region: S3_REGION,

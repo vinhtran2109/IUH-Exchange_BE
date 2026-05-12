@@ -183,7 +183,12 @@ function createServiceProxy(serviceName) {
 
           // Fix: express.json() consumes the body stream, so http-proxy-middleware
           // can't forward the body. We write the parsed body back to the proxy request.
-          if (req.body && Object.keys(req.body).length > 0) {
+          const shouldForwardJsonBody =
+            req.body !== undefined &&
+            req.body !== null &&
+            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase());
+
+          if (shouldForwardJsonBody) {
             const bodyData = JSON.stringify(req.body);
             proxyReq.setHeader('Content-Type', 'application/json');
             proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));

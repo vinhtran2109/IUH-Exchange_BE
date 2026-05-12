@@ -48,6 +48,11 @@ export function errorHandler(err, req, res, _next) {
     });
   }
 
+  if (err.name === 'CastError') {
+    logger.warn(`[400] Cast error on ${err.path}: ${err.value}`);
+    return res.status(400).json(ApiResponse.error(400, `Invalid value for: ${err.path}`));
+  }
+
   // Mongoose duplicate key error
   if (err.code === 11000) {
     const field = Object.keys(err.keyPattern).join(', ');

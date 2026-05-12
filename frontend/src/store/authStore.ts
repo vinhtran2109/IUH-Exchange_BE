@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import api from "../services/api";
+import api, { refreshAccessToken } from "../services/api";
 
 export interface User {
   [key: string]: any;
@@ -22,39 +22,37 @@ interface AuthState {
   restoreAuth: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>()(
-  (set) => ({
-    user: null,
-    isAuthenticated: false,
-    isLoading: true,
-    login: (user, accessToken) => {
-      localStorage.setItem("accessToken", accessToken);
+export const useAuthStore = create<AuthState>()((set) => ({
+  user: null,
+  isAuthenticated: false,
+  isLoading: true,
+  login: (user, accessToken) => {
+    localStorage.setItem("accessToken", accessToken);
+    set({ user, isAuthenticated: true, isLoading: false });
+  },
+  updateUser: (updatedFields) => {
+    set((state) => ({
+      user: state.user ? { ...state.user, ...updatedFields } : null,
+    }));
+  },
+  logout: () => {
+    localStorage.removeItem("accessToken");
+    set({ user: null, isAuthenticated: false, isLoading: false });
+  },
+  restoreAuth: async () => {
+    let token = localStorage.getItem("accessToken");
+
+    try {
+      if (!token) {
+        token = await refreshAccessToken();
+      }
+
+      const res = await api.get("/users/me");
+      const user = res.data.data;
       set({ user, isAuthenticated: true, isLoading: false });
-    },
-    updateUser: (updatedFields) => {
-      set((state) => ({
-        user: state.user ? { ...state.user, ...updatedFields } : null
-      }));
-    },
-    logout: () => {
+    } catch {
       localStorage.removeItem("accessToken");
       set({ user: null, isAuthenticated: false, isLoading: false });
-    },
-    restoreAuth: async () => {
-      const token = localStorage.getItem("accessToken");
-      if (!token) {
-        set({ isLoading: false });
-        return;
-      }
-      try {
-        const res = await api.get("/users/me");
-        const user = res.data.data;
-        set({ user, isAuthenticated: true, isLoading: false });
-      } catch (error: any) {
-        // Interceptor handles 401 refresh automatically — don't double-clear token here.
-        // Only set unauthenticated; if interceptor also fails it will redirect to /login.
-        set({ user: null, isAuthenticated: false, isLoading: false });
-      }
-    },
-  })
-);
+    }
+  },
+}));
