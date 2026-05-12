@@ -77,6 +77,12 @@ export const adminService = {
     return response.data;
   },
 
+  getAdminProducts: async (status = 'ALL', page = 1, size = 20) => {
+    const validPage = Math.max(1, page);
+    const response = await api.get(`/products/admin?status=${encodeURIComponent(status)}&page=${validPage}&size=${size}`);
+    return response.data;
+  },
+
   resolveProductStatus: async (productId: string, action: 'APPROVE' | 'REJECT') => {
     const response = await api.patch(`/products/admin/${productId}/resolve?action=${action}`);
     return response.data;
