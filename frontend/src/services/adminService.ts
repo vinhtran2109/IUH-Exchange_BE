@@ -38,6 +38,11 @@ export const adminService = {
     return response.data;
   },
 
+  deleteUser: async (userId: string) => {
+    const response = await api.delete(`/users/admin/${userId}`);
+    return response.data;
+  },
+
   updateUserRole: async (userId: string, role: string) => {
     const response = await api.put(`/users/admin/${userId}/role`, { role });
     return response.data;
@@ -74,6 +79,16 @@ export const adminService = {
 
   resolveProductStatus: async (productId: string, action: 'APPROVE' | 'REJECT') => {
     const response = await api.patch(`/products/admin/${productId}/resolve?action=${action}`);
+    return response.data;
+  },
+
+  deleteProduct: async (productId: string) => {
+    const response = await api.delete(`/products/admin/${productId}`);
+    return response.data;
+  },
+
+  getProductDetail: async (productId: string) => {
+    const response = await api.get(`/products/${productId}`);
     return response.data;
   },
 

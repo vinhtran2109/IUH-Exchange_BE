@@ -50,6 +50,7 @@ const App: React.FC = () => {
           <Route path="products/:id" element={<ProductDetail />} />
           <Route path="products" element={<Products />} />
           <Route path="products/new" element={<CreateProduct />} />
+          <Route path="products/:id/edit" element={<CreateProduct />} />
           <Route path="login" element={<Login />} />
           <Route path="lost-found" element={<LostFoundCenter />} />
           <Route path="lost-found/new" element={<ReportLostFound />} />

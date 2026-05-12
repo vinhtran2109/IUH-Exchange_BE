@@ -14,6 +14,7 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  deleteProductAsAdmin,
   getUploadUrl,
   getPendingProducts,
   resolveProduct,
@@ -26,6 +27,7 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 function validateBody(schema) {
   return validate(schema, 'body');
 }
+
 function validateQuery(schema) {
   return validate(schema, 'query');
 }
@@ -37,24 +39,17 @@ function adminOnly(req, _res, next) {
   next();
 }
 
-// ── Admin Routes (MUST be before /:id to avoid conflicts) ──
-
 router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), asyncHandler(getPendingProducts));
 router.patch('/admin/:id/resolve', authenticate, adminOnly, asyncHandler(resolveProduct));
+router.delete('/admin/:id', authenticate, adminOnly, asyncHandler(deleteProductAsAdmin));
 router.get('/admin/stats', authenticate, adminOnly, asyncHandler(getProductStats));
-
-// ── Public Routes ──
 
 router.get('/search', validateQuery(searchSchema), asyncHandler(searchProductsHandler));
 router.get('/', validateQuery(paginationSchema), asyncHandler(listProducts));
 
-// ── Authenticated Routes ──
-
 router.get('/me', authenticate, validateQuery(paginationSchema), asyncHandler(getMyProducts));
 router.post('/', authenticate, validateBody(createProductSchema), asyncHandler(createProduct));
 router.post('/upload-url', authenticate, validateBody(uploadUrlSchema), asyncHandler(getUploadUrl));
-
-// ── Parameterized Routes (must come after static paths) ──
 
 router.get('/:id', asyncHandler(getProductById));
 router.put('/:id', authenticate, validateBody(createProductSchema), asyncHandler(updateProduct));

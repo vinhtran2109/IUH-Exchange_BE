@@ -12,7 +12,11 @@ export interface ChatMessage {
 }
 
 let stompClient: Stomp.Client | null = null;
-const socketUrl = import.meta.env.VITE_WS_URL || 'http://localhost:8080/ws';
+const inferredSocketUrl =
+  typeof window !== 'undefined'
+    ? `http://${window.location.hostname}:8080/ws`
+    : 'http://localhost:8080/ws';
+const socketUrl = import.meta.env.VITE_WS_URL || inferredSocketUrl;
 let listeners: Array<(msg: ChatMessage) => void> = [];
 let notificationListeners: Array<(notif: any) => void> = [];
 let openChatListeners: Array<(recipientId: string, recipientName: string) => void> = [];
@@ -61,15 +65,15 @@ export const chatService = {
 
   // Hàm nội bộ để khởi tạo kết nối
   _initNewConnection: () => {
-    const socket = new SockJS(socketUrl);
+    const accessToken = localStorage.getItem('accessToken');
+    const connectionUrl = accessToken ? `${socketUrl}?token=${encodeURIComponent(accessToken)}` : socketUrl;
+    const socket = new SockJS(connectionUrl);
     stompClient = Stomp.over(socket);
     stompClient.debug = () => {};
-
-    const accessToken = localStorage.getItem('accessToken');
     const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
 
     stompClient.connect(headers, (frame) => {
-      console.warn('✅ [WebSocket] Real-time Link Established!', frame);
+      console.log('✅ [WebSocket] Real-time Link Established!', frame);
       
       if (stompClient?.connected) {
         // Subscribe vào hàng User Destination (Kênh riêng cho tin nhắn)

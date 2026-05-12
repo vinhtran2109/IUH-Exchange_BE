@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { User } from '../models/User.js';
 import { KarmaHistory } from '../models/KarmaHistory.js';
 import {
@@ -8,6 +9,7 @@ import {
   PageResponse,
   parsePagination,
   logger,
+  hashPassword,
 } from '@iuh-exchange/common';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
@@ -40,7 +42,7 @@ export async function listUsers(req, res) {
   const { page, size, skip } = parsePagination(req.query);
   const { search, role, isActive } = req.query;
 
-  const filter = {};
+  const filter = { isDeleted: { $ne: true } };
 
   if (search) {
     const regex = new RegExp(escapeRegex(search), 'i');
@@ -244,10 +246,10 @@ export async function unbanUser(req, res) {
  */
 export async function getUserStats(req, res) {
   const [total, active, banned, lowKarma] = await Promise.all([
-    User.countDocuments(),
-    User.countDocuments({ isActive: true }),
-    User.countDocuments({ isActive: false }),
-    User.countDocuments({ karmaPoint: { $lt: 0 } }),
+    User.countDocuments({ isDeleted: { $ne: true } }),
+    User.countDocuments({ isDeleted: { $ne: true }, isActive: true }),
+    User.countDocuments({ isDeleted: { $ne: true }, isActive: false }),
+    User.countDocuments({ isDeleted: { $ne: true }, karmaPoint: { $lt: 0 } }),
   ]);
 
   res.json(ApiResponse.ok({ total, active, banned, lowKarma }));
@@ -275,4 +277,45 @@ export async function getUserDetail(req, res) {
     ...mapToProfile(user),
     recentKarmaHistory: karmaHistory,
   }));
+}
+
+/**
+ * DELETE /api/v1/users/admin/:id
+ * Soft-delete a user account as admin.
+ */
+export async function deleteUserAccount(req, res) {
+  const { id } = req.params;
+
+  if (req.user?.sub === id) {
+    throw new ForbiddenException('Admin cannot delete their own account');
+  }
+
+  const user = await User.findById(id);
+  if (!user) throw new ResourceNotFoundException('User', id);
+  if (user.isDeleted) throw new BadRequestException('Tài khoản đã bị xóa trước đó');
+
+  const anonymizedEmail = `deleted_${id.substring(0, 8)}@deleted.iuh.edu.vn`;
+  user.email = anonymizedEmail;
+  user.name = 'Tài khoản đã xóa';
+  user.studentId = '';
+  user.avatarUrl = '';
+  user.isDeleted = true;
+  user.deletedAt = new Date();
+  user.isActive = false;
+  user.refreshToken = null;
+  user.permissions = [];
+  user.passwordHash = await hashPassword(crypto.randomBytes(32).toString('hex'));
+  user.otp = undefined;
+  user.otpExpiry = undefined;
+  user.otpAttemptCount = 0;
+  user.passwordResetOtp = undefined;
+  user.passwordResetOtpExpiry = undefined;
+  user.failedLoginAttempts = 0;
+  user.lockUntil = null;
+
+  await user.save();
+
+  logger.info(`[Admin] User deleted: ${id}`);
+
+  res.json(ApiResponse.ok(null, 'Tài khoản đã được xóa thành công'));
 }
