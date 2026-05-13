@@ -1,19 +1,32 @@
 import { Router } from 'express';
-import { authenticate, optionalAuth } from '@iuh-exchange/common';
+import { authenticate, optionalAuth, ForbiddenException } from '@iuh-exchange/common';
 import {
   listItems,
+  listAdminItems,
   getItemById,
   createItem,
   updateItem,
   deleteItem,
+  deleteItemAsAdmin,
   claimItem,
   getUploadUrl,
 } from '../controllers/lostfound.controller.js';
 
 const router = Router();
 
+function adminOnly(req, _res, next) {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    throw new ForbiddenException('Admin access required');
+  }
+  next();
+}
+
 // Public: browse items (optional auth to know user if logged in)
 router.get('/', optionalAuth, listItems);
+
+// Admin: list/delete all items
+router.get('/admin', authenticate, adminOnly, listAdminItems);
+router.delete('/admin/:id', authenticate, adminOnly, deleteItemAsAdmin);
 
 // Protected: mutations require authentication
 router.post('/', authenticate, createItem);

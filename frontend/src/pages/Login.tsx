@@ -23,8 +23,9 @@ const Login: React.FC = () => {
       const response = await authService.login({ email, password });
       if (response && response.success) {
         const d = response.data;
-        login({ id: d.userId || d.user?.id, email: d.email || d.user?.email, name: d.name || d.user?.name, role: d.role || d.user?.role, studentId: d.studentId || d.user?.studentId || '', karmaPoint: d.karmaPoint || d.user?.karmaPoint || 0 }, d.accessToken);
-        navigate('/');
+        const role = d.role || d.user?.role;
+        login({ id: d.userId || d.user?.id, email: d.email || d.user?.email, name: d.name || d.user?.name, role, studentId: d.studentId || d.user?.studentId || '', karmaPoint: d.karmaPoint || d.user?.karmaPoint || 0 }, d.accessToken);
+        navigate(role === 'ADMIN' ? '/admin' : '/');
       } else {
         setError(response.message || 'Đăng nhập thất bại. Vui lòng thử lại!');
       }

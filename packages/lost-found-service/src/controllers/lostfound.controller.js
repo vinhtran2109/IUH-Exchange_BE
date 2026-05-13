@@ -93,6 +93,49 @@ export async function listItems(req, res, next) {
 }
 
 /**
+ * GET /api/v1/lost-found/admin
+ * Admin list items with optional type/status filter + pagination.
+ */
+export async function listAdminItems(req, res, next) {
+  try {
+    const { page, size, skip } = parsePagination(req.query);
+    const filter = {};
+
+    if (req.query.type && req.query.type !== 'ALL') {
+      if (!['LOST', 'FOUND'].includes(req.query.type)) {
+        throw new BadRequestException('Invalid type. Must be LOST or FOUND');
+      }
+      filter.type = req.query.type;
+    }
+
+    if (req.query.status && req.query.status !== 'ALL') {
+      if (!['OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED'].includes(req.query.status)) {
+        throw new BadRequestException('Invalid status. Must be OPEN, CLAIMED, RESOLVED, or CLOSED');
+      }
+      filter.status = req.query.status;
+    }
+
+    const [items, total] = await Promise.all([
+      LostFoundItem.find(filter).sort({ createdAt: -1 }).skip(skip).limit(size),
+      LostFoundItem.countDocuments(filter),
+    ]);
+
+    const pageData = new PageResponse({
+      content: items.map(mapItem),
+      page,
+      size,
+      totalElements: total,
+      totalPages: Math.ceil(total / size),
+      last: page * size >= total,
+    });
+
+    res.json(ApiResponse.ok(pageData));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * GET /api/v1/lost-found/:id
  */
 export async function getItemById(req, res, next) {
@@ -180,6 +223,28 @@ export async function deleteItem(req, res, next) {
     logger.info(`LostFoundItem deleted: ${req.params.id} by user ${req.user.sub}`);
 
     res.json(ApiResponse.ok(null, 'Item deleted'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * DELETE /api/v1/lost-found/admin/:id
+ * Admin delete an item regardless of owner. Cleans up S3 images.
+ */
+export async function deleteItemAsAdmin(req, res, next) {
+  try {
+    const item = await LostFoundItem.findById(req.params.id);
+    if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
+
+    if (item.images?.length) {
+      await Promise.allSettled(item.images.map((url) => deleteFileByUrl(url)));
+    }
+
+    await item.deleteOne();
+    logger.info(`LostFoundItem deleted by admin: ${req.params.id} by user ${req.user.sub}`);
+
+    res.json(ApiResponse.ok(null, 'Item deleted by admin'));
   } catch (err) {
     next(err);
   }
