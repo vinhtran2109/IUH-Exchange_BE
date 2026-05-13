@@ -12,9 +12,10 @@ import {
 import { chatService } from '../services/chatService';
 import { notificationService } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
+import { authService } from '../services/authService';
 
 const Layout: React.FC = () => {
-  const { user, isAuthenticated } = (useAuthStore as any)();
+  const { user, isAuthenticated, logout } = (useAuthStore as any)();
   const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -47,6 +48,13 @@ const Layout: React.FC = () => {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setNotifications([]);
+      setShowNotifications(false);
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setShowNotifications(false);
@@ -68,6 +76,17 @@ const Layout: React.FC = () => {
       await notificationService.markAllAsRead();
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
     } catch (e) { console.error(e); }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authService.logout();
+    } catch (e) {
+      console.error('Logout request failed', e);
+    } finally {
+      logout();
+      navigate('/login', { replace: true });
+    }
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -211,7 +230,7 @@ const Layout: React.FC = () => {
                 </Link>
 
                 <button 
-                  onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
+                  onClick={handleLogout}
                   className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                   title="Đăng xuất"
                 >
