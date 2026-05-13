@@ -27,7 +27,11 @@ export interface AuthResponse {
 export const authService = {
   login: async (data: LoginRequest) => {
     const response = await api.post("/auth/login", data);
-    // Refresh token is stored in httpOnly cookie by backend — no localStorage needed
+    return response.data;
+  },
+
+  logout: async () => {
+    const response = await api.post("/auth/logout");
     return response.data;
   },
 

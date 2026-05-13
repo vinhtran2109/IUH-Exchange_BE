@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iuh-exchange-v1';
+const CACHE_NAME = 'iuh-exchange-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -29,7 +29,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for static
+// Fetch: network-first for HTML, cache-first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -42,6 +42,22 @@ self.addEventListener('fetch', (event) => {
 
   // Skip API calls and WebSocket
   if (url.pathname.startsWith('/api/') || url.pathname.includes('/ws')) return;
+
+  // Always prefer the network for HTML/doc navigations to avoid stale app shells.
+  if (request.mode === 'navigate' || request.destination === 'document') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match('/index.html')))
+    );
+    return;
+  }
 
   // Static assets: cache-first
   event.respondWith(

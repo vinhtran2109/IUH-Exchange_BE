@@ -20,6 +20,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import OrderDetail from './pages/OrderDetail';
 import KarmaHistory from './pages/KarmaHistory';
 import MyReports from './pages/MyReports';
+import PaymentCallback from './pages/PaymentCallback';
 
 const NotFound = () => <div className="text-center py-20"><h1 className="text-9xl font-black text-indigo-100 mb-4">404</h1><h2 className="text-2xl font-bold text-slate-800 mb-6">Trang không được tìm thấy</h2><button onClick={() => window.history.back()} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100">Quay lại</button></div>;
 
@@ -60,6 +61,7 @@ const App: React.FC = () => {
           <Route path="admin" element={<ProtectedRoute requiredRole="ADMIN"><AdminDashboard /></ProtectedRoute>} />
           <Route path="forgot-password" element={<ForgotPassword />} />
           <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="payment/callback" element={<PaymentCallback />} />
           <Route path="karma-history" element={<KarmaHistory />} />
           <Route path="my-reports" element={<MyReports />} />
           <Route path="not-found" element={<NotFound />} />

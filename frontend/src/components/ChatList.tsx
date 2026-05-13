@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { X, Search, User, MessageSquare, ArrowRight } from 'lucide-react';
+import { ArrowRight, MessageSquare, Search, User, X } from 'lucide-react';
 import { chatService } from '../services/chatService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
@@ -10,24 +10,27 @@ interface ChatListProps {
   onSelectUser: (id: string, name: string) => void;
 }
 
-const ChatPartnerItem: React.FC<{ 
-    partnerId: string; 
-    onSelect: (id: string, name: string) => void;
-    lastMessage?: string;
+const ChatPartnerItem: React.FC<{
+  partnerId: string;
+  onSelect: (id: string, name: string) => void;
+  lastMessage?: string;
 }> = ({ partnerId, onSelect, lastMessage }) => {
-  const [partnerInfo, setPartnerInfo] = useState<{name: string, avatarUrl?: string} | null>(null);
+  const [partnerInfo, setPartnerInfo] = useState<{ name: string; avatarUrl?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (partnerId.startsWith('system')) {
-        setPartnerInfo({ name: 'IUH Support' });
-        setLoading(false);
-        return;
+      setPartnerInfo({ name: 'Hỗ trợ IUH' });
+      setLoading(false);
+      return;
     }
 
-    api.get(`/users/${partnerId}`)
-      .then(res => {
-        if (res.data.success) setPartnerInfo(res.data.data);
+    api
+      .get(`/users/${partnerId}`)
+      .then((res) => {
+        if (res.data.success) {
+          setPartnerInfo(res.data.data);
+        }
       })
       .catch(() => setPartnerInfo({ name: 'Người dùng IUH' }))
       .finally(() => setLoading(false));
@@ -35,42 +38,38 @@ const ChatPartnerItem: React.FC<{
 
   if (loading) {
     return (
-        <div className="flex items-center gap-4 p-3 animate-pulse">
-            <div className="w-12 h-12 rounded-2xl bg-slate-100"></div>
-            <div className="flex-1 space-y-2">
-                <div className="h-4 bg-slate-100 rounded w-1/2"></div>
-                <div className="h-3 bg-slate-50 rounded w-1/4"></div>
-            </div>
+      <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-white px-3 py-3 animate-pulse">
+        <div className="h-11 w-11 rounded-full bg-slate-100" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-1/2 rounded bg-slate-100" />
+          <div className="h-3 w-1/3 rounded bg-slate-50" />
         </div>
+      </div>
     );
   }
 
   return (
     <button
-      onClick={() => onSelect(partnerId, partnerInfo?.name || 'Khách hàng')}
-      className="w-full flex items-center gap-4 p-3 hover:bg-indigo-50 rounded-[1.5rem] transition-all group"
+      onClick={() => onSelect(partnerId, partnerInfo?.name || 'Người dùng IUH')}
+      className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-white px-3 py-3 text-left transition-colors hover:border-slate-200 hover:bg-slate-50"
     >
-      <div className="w-12 h-12 rounded-2xl bg-indigo-100 flex items-center justify-center text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all shadow-sm overflow-hidden">
+      <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-slate-100 text-slate-500">
         {partnerInfo?.avatarUrl ? (
-            <img src={partnerInfo.avatarUrl} alt="avt" className="w-full h-full object-cover" />
+          <img src={partnerInfo.avatarUrl} alt="avatar" className="h-full w-full object-cover" />
         ) : (
-            <User size={24} />
+          <User size={20} />
         )}
       </div>
-      <div className="flex-1 text-left min-w-0">
-        <p className="text-sm font-bold text-slate-800 truncate">
-          {partnerInfo?.name || 'Khách hàng'}
-        </p>
-        {lastMessage && (
-          <p className="text-xs text-slate-400 truncate mt-0.5">{lastMessage}</p>
-        )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-slate-900">{partnerInfo?.name || 'Người dùng IUH'}</p>
+        <p className="mt-0.5 truncate text-xs text-slate-500">{lastMessage || 'Bắt đầu cuộc trò chuyện'}</p>
       </div>
-      <div className="p-2 bg-slate-50 rounded-xl text-slate-300 group-hover:bg-white group-hover:text-indigo-600 transition-all">
-         <ArrowRight size={14} />
+      <div className="rounded-lg p-2 text-slate-300">
+        <ArrowRight size={14} />
       </div>
     </button>
   );
-}
+};
 
 const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
   const { user } = useAuthStore() as any;
@@ -88,25 +87,25 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
     if (!user?.id) return;
     if (pageNum === 0) setLoading(true);
     else setLoadingMore(true);
+
     try {
       const res = await chatService.getConversations(user.id, pageNum, pageSize);
       if (res.success) {
         const convos = res.data?.content || [];
         const partners = convos.map((c: any) => {
-          const partnerId = c.lastMessage?.senderId === user.id 
-            ? c.lastMessage?.receiverId 
-            : c.lastMessage?.senderId;
+          const partnerId =
+            c.lastMessage?.senderId === user.id ? c.lastMessage?.receiverId : c.lastMessage?.senderId;
           return {
             partnerId: partnerId || c._id,
             lastMessage: c.lastMessage?.content || '',
             conversationId: c._id,
           };
         });
-        setConversations(prev => append ? [...prev, ...partners] : partners);
+        setConversations((prev) => (append ? [...prev, ...partners] : partners));
         setHasMore(!res.data?.last);
       }
     } catch (err) {
-      console.error("Failed to load conversations:", err);
+      console.error('Failed to load conversations:', err);
     } finally {
       setLoading(false);
       setLoadingMore(false);
@@ -126,12 +125,12 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
     fetchConversations(nextPage, true);
   };
 
-  // Search messages
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setSearchResults([]);
       return;
     }
+
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
@@ -139,68 +138,71 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
         if (res.success) {
           setSearchResults(res.data?.content || []);
         }
-      } catch (e) { /* ignore */ }
+      } catch (_error) {
+        setSearchResults([]);
+      }
       setSearching(false);
     }, 500);
+
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const displayItems = searchQuery.trim().length >= 2 ? null : conversations;
-
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.9, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.9, y: 20 }}
-      className="fixed bottom-6 right-6 w-96 h-[500px] bg-white rounded-[2.5rem] shadow-2xl border border-slate-100 flex flex-col z-50 overflow-hidden"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      className="fixed bottom-6 right-6 z-50 flex h-[500px] w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
     >
-      {/* Header */}
-      <div className="p-6 bg-gradient-to-r from-indigo-600 to-violet-600 text-white relative">
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors">
-          <X size={20} />
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">Tin nhắn</h3>
+          <p className="mt-0.5 text-xs text-slate-500">Danh sách cuộc trò chuyện gần đây</p>
+        </div>
+        <button
+          onClick={onClose}
+          className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-800"
+        >
+          <X size={18} />
         </button>
-        <h3 className="text-xl font-black mb-1">Tin nhắn</h3>
-        <p className="text-indigo-100 text-sm">Trao đổi & Giải đáp thắc mắc</p>
       </div>
 
-      {/* Search */}
-      <div className="p-4 bg-slate-50 border-b border-slate-100">
+      <div className="border-b border-slate-200 bg-white px-4 py-3">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm kiếm tin nhắn..."
-            className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-800 outline-none transition-colors focus:border-slate-300 focus:bg-white"
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+            >
               <X size={14} />
             </button>
           )}
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto bg-slate-50 px-3 py-3">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
-            <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-xs font-medium">Đang tải hộp thư...</p>
+          <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-400">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-300 border-t-slate-700" />
+            <p className="text-xs font-medium">Đang tải cuộc trò chuyện...</p>
           </div>
         ) : searchQuery.trim().length >= 2 ? (
-          /* Search results */
           searching ? (
             <div className="flex items-center justify-center py-10">
-              <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-sm">
-              Không tìm thấy tin nhắn nào
-            </div>
+            <div className="py-10 text-center text-sm text-slate-400">Không tìm thấy tin nhắn nào.</div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {searchResults.map((msg: any) => {
                 const partnerId = msg.senderId === user?.id ? msg.receiverId : msg.senderId;
                 return (
@@ -210,47 +212,45 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
                       onSelectUser(partnerId, partnerId);
                       setSearchQuery('');
                     }}
-                    className="w-full text-left p-3 hover:bg-indigo-50 rounded-2xl transition-all"
+                    className="w-full rounded-xl border border-slate-100 bg-white p-3 text-left transition-colors hover:bg-slate-50"
                   >
-                    <p className="text-xs text-slate-400 mb-1">
-                      {new Date(msg.createdAt).toLocaleString('vi-VN')}
-                    </p>
-                    <p className="text-sm text-slate-700 line-clamp-2">{msg.content}</p>
+                    <p className="mb-1 text-xs text-slate-400">{new Date(msg.createdAt).toLocaleString('vi-VN')}</p>
+                    <p className="line-clamp-2 text-sm text-slate-700">{msg.content}</p>
                   </button>
                 );
               })}
             </div>
           )
         ) : conversations.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full p-8 text-center gap-4">
-             <div className="w-16 h-16 bg-slate-50 rounded-3xl flex items-center justify-center text-slate-300">
-                <MessageSquare size={32} />
-             </div>
-             <div>
-                <p className="font-bold text-slate-800">Chưa có tin nhắn</p>
-                <p className="text-xs text-slate-400 mt-1">Bắt đầu trò chuyện với người bán.</p>
-             </div>
+          <div className="flex h-full flex-col items-center justify-center gap-4 px-8 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-300 shadow-sm">
+              <MessageSquare size={28} />
+            </div>
+            <div>
+              <p className="font-semibold text-slate-800">Chưa có cuộc trò chuyện</p>
+              <p className="mt-1 text-xs text-slate-400">Hãy bắt đầu nhắn tin với người bán hoặc người mua.</p>
+            </div>
           </div>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {conversations.map((conv) => (
-              <ChatPartnerItem 
-                key={conv.partnerId} 
+              <ChatPartnerItem
+                key={conv.partnerId}
                 partnerId={conv.partnerId}
                 lastMessage={conv.lastMessage}
-                onSelect={onSelectUser} 
+                onSelect={onSelectUser}
               />
             ))}
             {hasMore && (
-              <button 
+              <button
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="w-full py-3 text-sm font-bold text-indigo-600 hover:bg-indigo-50 rounded-2xl transition-all flex items-center justify-center gap-2"
+                className="mt-1 flex w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-50"
               >
                 {loadingMore ? (
-                  <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
                 ) : (
-                  <>Tải thêm</>
+                  <>Xem thêm</>
                 )}
               </button>
             )}
