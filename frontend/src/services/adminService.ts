@@ -16,12 +16,34 @@ export interface UserAdminData {
 export interface ReportData {
   id: string;
   reporterId: string;
-  reportedUserId: string;
   targetType: string;
   targetId: string;
   reason: string;
   status: string;
   adminNote?: string;
+  createdAt: string;
+}
+
+export interface DlqEventData {
+  _id: string;
+  topic: string;
+  key?: string;
+  status: string;
+  retryCount: number;
+  payload?: unknown;
+  createdAt: string;
+}
+
+export interface LostFoundAdminData {
+  id: string;
+  title: string;
+  description?: string;
+  type: 'LOST' | 'FOUND';
+  status: string;
+  location?: string;
+  contactInfo?: string;
+  studentId?: string;
+  imageUrls?: string[];
   createdAt: string;
 }
 
@@ -59,9 +81,12 @@ export const adminService = {
   },
 
   // Reports Management
-  getReports: async (status = "PENDING", page = 1, size = 20) => {
+  getReports: async (status = "ALL", page = 1, size = 20, targetType?: string) => {
     const validPage = Math.max(1, page);
-    const response = await api.get(`/reports/admin?status=${status}&page=${validPage}&size=${size}`);
+    const params = new URLSearchParams({ page: String(validPage), size: String(size) });
+    if (status && status !== 'ALL') params.set('status', status);
+    if (targetType && targetType !== 'ALL') params.set('targetType', targetType);
+    const response = await api.get(`/reports/admin?${params.toString()}`);
     return response.data;
   },
 
@@ -95,6 +120,26 @@ export const adminService = {
 
   getProductDetail: async (productId: string) => {
     const response = await api.get(`/products/${productId}`);
+    return response.data;
+  },
+
+  // Lost & Found Moderation
+  getAdminLostFoundItems: async (type = 'ALL', status = 'ALL', page = 1, size = 20) => {
+    const validPage = Math.max(1, page);
+    const params = new URLSearchParams({ page: String(validPage), size: String(size) });
+    if (type && type !== 'ALL') params.set('type', type);
+    if (status && status !== 'ALL') params.set('status', status);
+    const response = await api.get(`/lost-found/admin?${params.toString()}`);
+    return response.data;
+  },
+
+  getLostFoundDetail: async (itemId: string) => {
+    const response = await api.get(`/lost-found/${itemId}`);
+    return response.data;
+  },
+
+  deleteLostFoundItem: async (itemId: string) => {
+    const response = await api.delete(`/lost-found/admin/${itemId}`);
     return response.data;
   },
 
