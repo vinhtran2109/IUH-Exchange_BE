@@ -10,6 +10,7 @@ export interface Product {
   imageUrls: string[];
   sellerId: string;
   status: string;
+  location?: string;
   createdAt: string;
 }
 
@@ -20,6 +21,7 @@ export interface ProductPayload {
   category: string;
   condition: string;
   imageUrls: string[];
+  location?: string;
 }
 
 export const productService = {
@@ -64,5 +66,30 @@ export const productService = {
   deleteProduct: async (id: string) => {
     const response = await api.delete(`/products/${id}`);
     return response.data;
-  }
+  },
+
+  recordView: async (id: string) => {
+    const response = await api.post(`/products/${id}/view`, {});
+    return response.data;
+  },
+
+  getViewHistory: async (page = 1, size = 20) => {
+    const response = await api.get(`/products/me/history?page=${page}&size=${size}`);
+    return response.data;
+  },
+
+  getSellerTrust: async (sellerId: string) => {
+    const response = await api.get(`/products/sellers/${sellerId}/trust`);
+    return response.data;
+  },
+
+  toggleSellerFollow: async (sellerId: string) => {
+    const response = await api.post(`/products/sellers/${sellerId}/follow`, {});
+    return response.data;
+  },
+
+  checkSellerFollow: async (sellerId: string) => {
+    const response = await api.get(`/products/sellers/${sellerId}/follow/check`);
+    return response.data;
+  },
 };

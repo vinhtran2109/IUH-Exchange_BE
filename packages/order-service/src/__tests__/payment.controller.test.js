@@ -158,6 +158,77 @@ describe('payment.controller', () => {
     });
   });
 
+  describe('bank transfer payment', () => {
+    it('should let buyer report a direct bank transfer', async () => {
+      const order = {
+        ...mockOrder,
+        transactions: [],
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      const { req, res } = mockReqRes({ proofUrl: 'https://example.com/proof.jpg' }, { id: 'order123' });
+      await paymentController.reportBankTransfer(req, res);
+
+      expect(order.paymentMethod).toBe('BANK_TRANSFER');
+      expect(order.paymentProviderStatus).toBe('TRANSFER_REPORTED');
+      expect(order.transferReportedAt).toBeDefined();
+      expect(order.transactions.at(-1)).toMatchObject({
+        type: 'TRANSFER_REPORTED',
+        method: 'BANK_TRANSFER',
+        status: 'REPORTED',
+      });
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should reject bank transfer report from non-buyer', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        transactions: [],
+      });
+
+      const { req, res } = mockReqRes({}, { id: 'order123' }, { 'x-user-id': 'seller123' });
+      await expect(paymentController.reportBankTransfer(req, res)).rejects.toThrow('người mua');
+    });
+
+    it('should let seller confirm a reported bank transfer', async () => {
+      const order = {
+        ...mockOrder,
+        paymentMethod: 'BANK_TRANSFER',
+        paymentTransactionId: 'BANK_123',
+        transferReportedAt: new Date(),
+        transactions: [],
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      const { req, res } = mockReqRes({}, { id: 'order123' }, { 'x-user-id': 'seller123' });
+      await paymentController.confirmBankTransfer(req, res);
+
+      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentProviderStatus).toBe('TRANSFER_CONFIRMED');
+      expect(order.transferConfirmedBy).toBe('seller123');
+      expect(order.transactions.at(-1)).toMatchObject({
+        type: 'TRANSFER_CONFIRMED',
+        method: 'BANK_TRANSFER',
+        status: 'SUCCESS',
+      });
+      expect(res.json).toHaveBeenCalled();
+    });
+
+    it('should reject transfer confirmation before buyer reports it', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        paymentMethod: 'BANK_TRANSFER',
+        transferReportedAt: null,
+        transactions: [],
+      });
+
+      const { req, res } = mockReqRes({}, { id: 'order123' }, { 'x-user-id': 'seller123' });
+      await expect(paymentController.confirmBankTransfer(req, res)).rejects.toThrow('chưa báo');
+    });
+  });
+
   describe('processRefund', () => {
     it('should process refund for cancelled paid order', async () => {
       const order = {

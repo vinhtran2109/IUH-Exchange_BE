@@ -22,17 +22,22 @@ import api from '../services/api';
 import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import { orderService } from '../services/orderService';
+import { wishlistService } from '../services/wishlistService';
 import type { User as ProfileUser } from '../types/api';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
 
   const [name, setName] = useState(user?.name || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountHolder, setAccountHolder] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -40,6 +45,8 @@ const Profile: React.FC = () => {
 
   const [myProducts, setMyProducts] = useState<Product[]>([]);
   const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<any[]>([]);
+  const [viewHistory, setViewHistory] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -52,6 +59,8 @@ const Profile: React.FC = () => {
     fetchProfile();
     fetchMyProducts();
     fetchMyOrders();
+    fetchWishlist();
+    fetchHistory();
   }, []);
 
   const fetchProfile = async () => {
@@ -63,6 +72,10 @@ const Profile: React.FC = () => {
         setProfile(currentProfile);
         setName(currentProfile.name || '');
         setAvatarUrl(currentProfile.avatarUrl || '');
+        setBankName((currentProfile as any).bankInfo?.bankName || '');
+        setAccountNumber((currentProfile as any).bankInfo?.accountNumber || '');
+        setAccountHolder((currentProfile as any).bankInfo?.accountHolder || '');
+        setQrCodeUrl((currentProfile as any).bankInfo?.qrCodeUrl || '');
         updateUser(currentProfile);
       }
     } catch (error) {
@@ -93,6 +106,24 @@ const Profile: React.FC = () => {
       console.error(error);
     } finally {
       setOrdersLoading(false);
+    }
+  };
+
+  const fetchWishlist = async () => {
+    try {
+      const res = await wishlistService.getMyWishlist(1, 50);
+      if (res.success) setWishlistItems(res.data?.content ?? []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await productService.getViewHistory(1, 50);
+      if (res.success) setViewHistory(res.data?.content ?? []);
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -151,10 +182,16 @@ const Profile: React.FC = () => {
     setLoading(true);
     try {
       const trimmedName = name.trim();
-      const payload: Record<string, string> = {};
+      const payload: Record<string, unknown> = {};
 
       if (trimmedName) payload.name = trimmedName;
       if (avatarUrl && /^https?:\/\//.test(avatarUrl)) payload.avatarUrl = avatarUrl;
+      payload.bankInfo = {
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.trim(),
+        accountHolder: accountHolder.trim(),
+        qrCodeUrl: qrCodeUrl.trim(),
+      };
 
       if (Object.keys(payload).length === 0) {
         setMessage({ type: 'error', text: 'Vui lòng nhập tên hợp lệ hoặc chọn ảnh đại diện.' });
@@ -166,10 +203,14 @@ const Profile: React.FC = () => {
         const updated = res.data.data;
         setName(updated?.name || trimmedName);
         setAvatarUrl(updated?.avatarUrl || avatarUrl);
+        setBankName(updated?.bankInfo?.bankName || bankName);
+        setAccountNumber(updated?.bankInfo?.accountNumber || accountNumber);
+        setAccountHolder(updated?.bankInfo?.accountHolder || accountHolder);
+        setQrCodeUrl(updated?.bankInfo?.qrCodeUrl || qrCodeUrl);
         setProfile((prev) =>
-          prev ? { ...prev, name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl } : prev
+          prev ? { ...prev, name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl, bankInfo: updated?.bankInfo } as any : prev
         );
-        updateUser({ name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl });
+        updateUser({ name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl, bankInfo: updated?.bankInfo });
         setMessage({ type: 'success', text: 'Cập nhật thông tin thành công!' });
       }
     } catch {
@@ -214,6 +255,8 @@ const Profile: React.FC = () => {
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
             { id: 'products', label: 'Món đồ đang bán', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
+            { id: 'wishlist', label: 'Đã lưu', icon: Flag },
+            { id: 'history', label: 'Đã xem', icon: Clock },
             { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
             { id: 'password', label: 'Bảo mật', icon: ShieldCheck },
           ].map((tab) => (
@@ -308,6 +351,28 @@ const Profile: React.FC = () => {
                       disabled
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Thông tin nhận chuyển khoản</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Ngân hàng</label>
+                      <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: Vietcombank" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Số tài khoản</label>
+                      <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: 0123456789" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Tên chủ tài khoản</label>
+                      <input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: NGUYEN VAN A" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Link QR chuyển khoản</label>
+                      <input value={qrCodeUrl} onChange={(e) => setQrCodeUrl(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="https://..." />
+                    </div>
                   </div>
                 </div>
 
@@ -432,6 +497,40 @@ const Profile: React.FC = () => {
                 )}
 
                 {!ordersLoading && buyerOrders.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Bạn chưa có đơn mua nào.</div>}
+              </div>
+            )}
+
+            {(activeTab === 'wishlist' || activeTab === 'history') && (
+              <div className="space-y-3">
+                <h3 className="mb-4 text-base font-semibold text-slate-800">
+                  {activeTab === 'wishlist' ? 'Món đồ đã lưu' : 'Món đồ đã xem'}
+                </h3>
+                {(activeTab === 'wishlist' ? wishlistItems : viewHistory).map((item: any) => {
+                  const product = item.product;
+                  if (!product) return null;
+                  return (
+                    <button
+                      key={item.id || item.productId}
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id || product._id}`)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left hover:bg-white"
+                    >
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                        <img src={product.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={product.title} className="h-full w-full object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-slate-800">{product.title}</div>
+                        <div className="text-sm font-bold text-slate-900">{Number(product.price || 0).toLocaleString()}đ</div>
+                        <div className="text-xs text-slate-400">{product.location || product.category || 'IUH'}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {(activeTab === 'wishlist' ? wishlistItems : viewHistory).length === 0 && (
+                  <div className="py-16 text-center text-sm text-slate-400">
+                    {activeTab === 'wishlist' ? 'Bạn chưa lưu món đồ nào.' : 'Bạn chưa có lịch sử xem.'}
+                  </div>
+                )}
               </div>
             )}
 

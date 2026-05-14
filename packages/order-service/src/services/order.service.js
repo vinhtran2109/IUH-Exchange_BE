@@ -11,6 +11,7 @@ import {
   publishOrderCreated,
   publishOrderCancelled,
   publishOrderCompleted,
+  publishOrderDisputeOpened,
 } from './saga.service.js';
 
 const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
@@ -125,6 +126,8 @@ export class OrderService {
           productId: request.productId,
           price: request.price,
           buyerNote: request.buyerNote || '',
+          handoverLocation: request.handoverLocation || '',
+          handoverTime: request.handoverTime || null,
           idempotencyKey: request.idempotencyKey,
           status: 'PENDING',
           statusHistory: [{
@@ -228,6 +231,8 @@ export class OrderService {
     await publishOrderCancelled({
       orderId: order._id.toString(),
       productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
       reason,
     });
   }
@@ -318,6 +323,8 @@ export class OrderService {
     await publishOrderCancelled({
       orderId: order._id.toString(),
       productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
       reason,
     });
 
@@ -331,7 +338,7 @@ export class OrderService {
    * @param {object} options - { page, size, status, role }
    * @returns {{ content: object[], page: number, size: number, totalElements: number, totalPages: number, last: boolean }}
    */
-  async getOrders(userId, { page = 1, size = 20, status, role = 'buyer' }) {
+  async getOrders(userId, { page = 1, size = 20, status, role = 'buyer', productId } = {}) {
     const filter = {};
 
     // Filter by role: buyer sees orders they placed, seller sees orders for their products
@@ -343,6 +350,10 @@ export class OrderService {
 
     if (status) {
       filter.status = status;
+    }
+
+    if (productId) {
+      filter.productId = productId;
     }
 
     const skip = (page - 1) * size;
@@ -420,6 +431,8 @@ export class OrderService {
     await publishOrderCancelled({
       orderId: order._id.toString(),
       productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
       reason: reason || 'Người mua hủy đơn hàng',
     });
 
@@ -438,6 +451,133 @@ export class OrderService {
       throw new ResourceNotFoundException('Order', orderId);
     }
     return order;
+  }
+
+  async getReviewEligibility(orderId, userId) {
+    const order = await Order.findById(orderId).lean();
+    if (!order) {
+      throw new ResourceNotFoundException('Order', orderId);
+    }
+
+    const eligible =
+      String(order.buyerId) === String(userId) &&
+      order.status === 'COMPLETED' &&
+      order.disputeStatus !== 'OPEN';
+
+    return {
+      eligible,
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      productId: order.productId,
+      status: order.status,
+      disputeStatus: order.disputeStatus || 'NONE',
+    };
+  }
+
+  async openDispute(orderId, userId, reason) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+
+    if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
+      throw new ForbiddenException('Bạn không có quyền mở tranh chấp cho đơn hàng này');
+    }
+
+    if (order.status !== 'COMPLETED' && order.paymentStatus !== 'PAID') {
+      throw new BadRequestException('Chỉ có thể mở tranh chấp cho đơn đã hoàn tất hoặc đã thanh toán');
+    }
+
+    if (order.disputeStatus === 'OPEN') {
+      throw new BadRequestException('Đơn hàng đã có tranh chấp đang xử lý');
+    }
+
+    order.disputeStatus = 'OPEN';
+    order.disputeReason = reason;
+    order.disputeOpenedBy = userId;
+    order.disputeOpenedAt = new Date();
+    await order.save();
+
+    await publishOrderDisputeOpened({
+      orderId: order._id.toString(),
+      productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      openedBy: userId,
+      reason,
+    });
+
+    return order.toObject();
+  }
+
+  async resolveDispute(orderId, adminId, { status, resolution }) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    if (order.disputeStatus !== 'OPEN') {
+      throw new BadRequestException('Đơn hàng không có tranh chấp đang mở');
+    }
+
+    order.disputeStatus = status === 'REJECTED' ? 'REJECTED' : 'RESOLVED';
+    order.disputeResolution = resolution || '';
+    order.disputeResolvedBy = adminId;
+    order.disputeResolvedAt = new Date();
+    await order.save();
+
+    return order.toObject();
+  }
+
+  async getAdminOrders({ page = 1, size = 20, status, paymentStatus, disputeStatus } = {}) {
+    const filter = {};
+    if (status && status !== 'ALL') filter.status = status;
+    if (paymentStatus && paymentStatus !== 'ALL') filter.paymentStatus = paymentStatus;
+    if (disputeStatus && disputeStatus !== 'ALL') filter.disputeStatus = disputeStatus;
+
+    const skip = (page - 1) * size;
+    const [orders, totalElements] = await Promise.all([
+      Order.find(filter).sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
+      Order.countDocuments(filter),
+    ]);
+
+    return {
+      content: orders,
+      page,
+      size,
+      totalElements,
+      totalPages: Math.ceil(totalElements / size),
+      last: page * size >= totalElements,
+    };
+  }
+
+  async getAdminOrderStats() {
+    const [total, completed, cancelled, paid, refunded, disputesOpen] = await Promise.all([
+      Order.countDocuments(),
+      Order.countDocuments({ status: 'COMPLETED' }),
+      Order.countDocuments({ status: 'CANCELLED' }),
+      Order.countDocuments({ paymentStatus: 'PAID' }),
+      Order.countDocuments({ paymentStatus: 'REFUNDED' }),
+      Order.countDocuments({ disputeStatus: 'OPEN' }),
+    ]);
+
+    const revenueAgg = await Order.aggregate([
+      { $match: { paymentStatus: { $in: ['PAID', 'REFUNDED'] } } },
+      { $group: { _id: '$paymentStatus', total: { $sum: '$price' }, count: { $sum: 1 } } },
+    ]);
+
+    const totals = revenueAgg.reduce((acc, item) => {
+      acc[item._id] = { amount: item.total, count: item.count };
+      return acc;
+    }, {});
+
+    return {
+      total,
+      completed,
+      cancelled,
+      paid,
+      refunded,
+      disputesOpen,
+      grossPaymentAmount: totals.PAID?.amount || 0,
+      refundedAmount: totals.REFUNDED?.amount || 0,
+      cancellationRate: total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0,
+    };
   }
 
   /**
@@ -474,6 +614,9 @@ export class OrderService {
       paymentStatus: plain.paymentStatus,
       paymentMethod: plain.paymentMethod,
       transactionId: plain.paymentTransactionId,
+      transferProofUrl: plain.transferProofUrl,
+      transferReportedAt: plain.transferReportedAt,
+      transferConfirmedAt: plain.transferConfirmedAt,
       createdAt: plain.createdAt,
       paidAt: plain.paidAt,
       refundedAt: plain.refundedAt,

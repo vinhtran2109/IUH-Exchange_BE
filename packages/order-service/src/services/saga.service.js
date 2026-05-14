@@ -4,6 +4,8 @@ const TOPICS = {
   ORDER_CREATED: 'order.created',
   ORDER_CANCELLED: 'order.cancelled',
   ORDER_COMPLETED: 'order.completed',
+  ORDER_DISPUTE_OPENED: 'order.dispute.opened',
+  ORDER_REFUNDED: 'order.refunded',
   PRODUCT_RESERVED: 'product.reserved',
   PRODUCT_RESERVE_FAILED: 'product.reserve.failed',
 };
@@ -87,6 +89,30 @@ export async function publishOrderCompleted(event) {
     );
   } catch (err) {
     logger.warn(`[Saga] Kafka unavailable, OrderCompletedEvent not published: ${err.message}`);
+  }
+}
+
+export async function publishOrderDisputeOpened(event) {
+  try {
+    await producer.send({
+      topic: TOPICS.ORDER_DISPUTE_OPENED,
+      messages: [{ key: event.orderId, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] OrderDisputeOpenedEvent published: orderId=${event.orderId}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, OrderDisputeOpenedEvent not published: ${err.message}`);
+  }
+}
+
+export async function publishOrderRefunded(event) {
+  try {
+    await producer.send({
+      topic: TOPICS.ORDER_REFUNDED,
+      messages: [{ key: event.orderId, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] OrderRefundedEvent published: orderId=${event.orderId}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, OrderRefundedEvent not published: ${err.message}`);
   }
 }
 

@@ -11,6 +11,12 @@ export interface User {
   email: string;
   studentId: string;
   avatarUrl?: string;
+  bankInfo?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountHolder?: string;
+    qrCodeUrl?: string;
+  };
   karmaPoint: number;
   role: string;
 }

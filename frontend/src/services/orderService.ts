@@ -5,6 +5,8 @@ export interface CreateOrderRequest {
   sellerId: string;
   price: number;
   buyerNote?: string;
+  handoverLocation?: string;
+  handoverTime?: string;
   idempotencyKey: string;
 }
 
@@ -51,6 +53,16 @@ export const orderService = {
     return response.data;
   },
 
+  reportBankTransfer: async (id: string, payload: { proofUrl?: string; note?: string } = {}) => {
+    const response = await api.post(`/orders/${id}/payment/bank-transfer/report`, payload);
+    return response.data;
+  },
+
+  confirmBankTransfer: async (id: string, payload: { note?: string } = {}) => {
+    const response = await api.post(`/orders/${id}/payment/bank-transfer/confirm`, payload);
+    return response.data;
+  },
+
   confirmPaymentCallback: async (id: string, payload: PaymentCallbackPayload) => {
     const response = await api.post(`/orders/${id}/payment/callback`, payload);
     return response.data;
@@ -63,6 +75,35 @@ export const orderService = {
 
   refundPayment: async (id: string) => {
     const response = await api.post(`/orders/${id}/payment/refund`, {});
+    return response.data;
+  },
+
+  openDispute: async (id: string, reason: string) => {
+    const response = await api.post(`/orders/${id}/disputes`, { reason });
+    return response.data;
+  },
+
+  getReceipt: async (id: string) => {
+    const response = await api.get(`/orders/${id}/receipt`);
+    return response.data;
+  },
+
+  getAdminOrders: async (page = 1, size = 50, filters: { status?: string; paymentStatus?: string; disputeStatus?: string } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== 'ALL') params.set(key, value);
+    });
+    const response = await api.get(`/orders/admin?${params.toString()}`);
+    return response.data;
+  },
+
+  getAdminStats: async () => {
+    const response = await api.get('/orders/admin/stats');
+    return response.data;
+  },
+
+  resolveDispute: async (id: string, status: 'RESOLVED' | 'REJECTED', resolution: string) => {
+    const response = await api.patch(`/orders/${id}/disputes/resolve`, { status, resolution });
     return response.data;
   },
 };

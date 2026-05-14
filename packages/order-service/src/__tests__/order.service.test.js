@@ -54,6 +54,7 @@ vi.mock('../services/saga.service.js', () => ({
   publishOrderCreated: (...args) => mockPublishOrderCreated(...args),
   publishOrderCancelled: (...args) => mockPublishOrderCancelled(...args),
   publishOrderCompleted: (...args) => mockPublishOrderCompleted(...args),
+  publishOrderDisputeOpened: vi.fn().mockResolvedValue(true),
 }));
 
 const { OrderService } = await import('../services/order.service.js');

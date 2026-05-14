@@ -65,6 +65,21 @@ export async function sendPasswordResetOtpEmail(toEmail, otpCode, userName) {
   }
 }
 
+export async function sendAdminLoginOtpEmail(toEmail, otpCode, userName) {
+  const html = buildOtpTemplate(userName, otpCode, 'Đăng nhập quản trị');
+  try {
+    await transporter.sendMail({
+      from: `"${APP_NAME}" <${SMTP_FROM}>`,
+      to: toEmail,
+      subject: `[${APP_NAME}] Mã đăng nhập quản trị`,
+      html,
+    });
+    logger.info(`[Email] Admin login OTP sent to: ${toEmail}`);
+  } catch (err) {
+    logger.error(`[Email] Failed to send admin login OTP to ${toEmail}: ${err.message}`);
+  }
+}
+
 function buildOtpTemplate(userName, otp, purpose) {
   const safeUserName = escapeHtml(userName);
   const safeOtp = escapeHtml(otp);

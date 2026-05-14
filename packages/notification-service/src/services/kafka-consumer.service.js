@@ -13,6 +13,8 @@ const TOPICS = [
   { topic: 'order.created', fromBeginning: false },
   { topic: 'order.completed', fromBeginning: false },
   { topic: 'order.cancelled', fromBeginning: false },
+  { topic: 'order.dispute.opened', fromBeginning: false },
+  { topic: 'order.refunded', fromBeginning: false },
   { topic: 'product.reserved', fromBeginning: false },
   { topic: 'product.approved', fromBeginning: false },
   { topic: 'product.rejected', fromBeginning: false },
@@ -180,6 +182,34 @@ const eventHandlers = {
           });
         }
       }
+    }
+  },
+
+  'order.dispute.opened': async (payload) => {
+    const { buyerId, sellerId, orderId, reason, openedBy } = payload;
+    const recipients = [buyerId, sellerId].filter(Boolean);
+    for (const recipientId of recipients) {
+      await sendNotification({
+        recipientId,
+        title: 'Tranh chấp đơn hàng',
+        message: `Đơn hàng ${orderId} vừa được mở tranh chấp${openedBy ? ` bởi ${openedBy}` : ''}${reason ? `: ${reason}` : ''}`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.refunded': async (payload) => {
+    const { buyerId, sellerId, orderId, amount } = payload;
+    const recipients = [buyerId, sellerId].filter(Boolean);
+    for (const recipientId of recipients) {
+      await sendNotification({
+        recipientId,
+        title: 'Hoàn tiền đơn hàng',
+        message: `Đơn hàng ${orderId} đã được hoàn tiền${amount ? ` ${Number(amount).toLocaleString('vi-VN')}đ` : ''}`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
     }
   },
 

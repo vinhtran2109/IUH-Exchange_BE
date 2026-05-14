@@ -11,6 +11,8 @@ const AdminLogin: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [adminOtp, setAdminOtp] = useState('');
+  const [requiresTwoFactor, setRequiresTwoFactor] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -28,13 +30,23 @@ const AdminLogin: React.FC = () => {
     setError('');
 
     try {
-      const response = await authService.adminLogin({ email, password });
+      const response = await authService.adminLogin({
+        email,
+        password,
+        adminOtp: requiresTwoFactor ? adminOtp : undefined,
+      });
       if (!response?.success) {
         setError(response?.message || 'Không thể đăng nhập. Vui lòng kiểm tra lại thông tin.');
         return;
       }
 
       const data = response.data;
+      if (data?.requiresTwoFactor) {
+        setRequiresTwoFactor(true);
+        setError('Mã OTP quản trị đã được gửi tới email của bạn.');
+        return;
+      }
+
       const loggedInUser = data.user || data;
       const role = data.role || loggedInUser?.role;
 
@@ -173,6 +185,24 @@ const AdminLogin: React.FC = () => {
                   />
                 </span>
               </label>
+
+              {requiresTwoFactor && (
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-semibold text-slate-300">Mã OTP quản trị</span>
+                  <span className="relative block">
+                    <ShieldCheck size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                    <input
+                      value={adminOtp}
+                      onChange={(event) => setAdminOtp(event.target.value)}
+                      required
+                      inputMode="numeric"
+                      maxLength={6}
+                      className="w-full rounded-lg border border-slate-200 bg-white py-3 pl-10 pr-4 text-sm text-slate-950 outline-none transition focus:border-teal-500 dark:border-white/10 dark:bg-slate-950/70 dark:text-white dark:focus:border-teal-300"
+                      placeholder="123456"
+                    />
+                  </span>
+                </label>
+              )}
 
               {error && (
                 <div className="flex items-start gap-2 rounded-lg border border-rose-400/30 bg-rose-400/10 p-3 text-sm text-rose-100">

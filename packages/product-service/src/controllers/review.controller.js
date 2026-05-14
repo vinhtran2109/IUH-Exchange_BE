@@ -1,5 +1,6 @@
 import { Review } from '../models/Review.js';
 import { Product } from '../models/Product.js';
+import crypto from 'crypto';
 import {
   ApiResponse,
   PageResponse,
@@ -8,7 +9,42 @@ import {
   ForbiddenException,
   parsePagination,
   logger,
+  config,
 } from '@iuh-exchange/common';
+
+const ORDER_SERVICE_URL = process.env.ORDER_SERVICE_URL || 'http://localhost:3003';
+
+function buildInternalHeaders(userId) {
+  const role = 'STUDENT';
+  const email = '';
+  const payload = `${userId}:${role}:${email}`;
+  const signature = crypto
+    .createHmac('sha256', config.gatewaySecret || config.jwt.secret)
+    .update(payload)
+    .digest('hex');
+
+  return {
+    'x-user-id': String(userId),
+    'x-user-role': role,
+    'x-user-email': email,
+    'x-gateway-signature': signature,
+  };
+}
+
+async function verifyCompletedOrder(orderId, buyerId, productId, sellerId) {
+  const response = await fetch(`${ORDER_SERVICE_URL}/api/v1/orders/${orderId}/review-eligibility`, {
+    headers: buildInternalHeaders(buyerId),
+  });
+  const body = await response.json();
+  const data = body?.data;
+
+  if (!data?.eligible) {
+    throw new ForbiddenException('Bạn chỉ có thể đánh giá sau khi đơn hàng đã hoàn tất');
+  }
+  if (String(data.productId) !== String(productId) || String(data.sellerId) !== String(sellerId)) {
+    throw new ForbiddenException('Đơn hàng không khớp với món đồ hoặc người bán này');
+  }
+}
 
 /**
  * POST /api/v1/products/:productId/reviews
@@ -36,6 +72,8 @@ export async function createReview(req, res) {
   if (existing) {
     throw new BadRequestException('You have already reviewed this order');
   }
+
+  await verifyCompletedOrder(orderId, buyerId, productId, product.sellerId);
 
   const review = await Review.create({
     productId,

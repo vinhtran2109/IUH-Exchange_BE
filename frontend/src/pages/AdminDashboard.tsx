@@ -11,6 +11,7 @@ import {
   Loader2,
   Mail,
   MapPin,
+  MessageSquareWarning,
   PackageCheck,
   RefreshCw,
   Search,
@@ -18,6 +19,7 @@ import {
   Server,
   Shield,
   ShieldCheck,
+  ShoppingBag,
   Trash2,
   TrendingUp,
   Users,
@@ -27,10 +29,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   adminService,
+  type AdminOrderData,
   type AuditLogData,
   type DlqEventData,
   type LostFoundAdminData,
   type ReportData,
+  type ReportedMessageData,
   type UserAdminData,
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
@@ -45,7 +49,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   CAN_APPROVE_POST: 'Duyệt bài',
 };
 
-type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'dlq' | 'analytics' | 'email' | 'audit';
+type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'orders' | 'chatReports' | 'dlq' | 'analytics' | 'email' | 'audit';
 type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECTED';
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
@@ -61,6 +65,8 @@ const ADMIN_TABS = [
   { id: 'email', label: 'Email compose', group: 'Hệ thống', icon: Mail },
   { id: 'dlq', label: 'DLQ', group: 'Hệ thống', icon: Server },
   { id: 'audit', label: 'Audit log', group: 'Há»‡ thá»‘ng', icon: ShieldCheck },
+  { id: 'orders', label: 'Don hang', group: 'Dashboard', icon: ShoppingBag },
+  { id: 'chatReports', label: 'Tin nhan', group: 'Dashboard', icon: MessageSquareWarning },
 ] as const;
 
 const formatDate = (value?: string) => {
@@ -186,6 +192,8 @@ const AdminDashboard: React.FC = () => {
   const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
   const [dlqEvents, setDlqEvents] = useState<DlqEventData[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogData[]>([]);
+  const [adminOrders, setAdminOrders] = useState<AdminOrderData[]>([]);
+  const [reportedMessages, setReportedMessages] = useState<ReportedMessageData[]>([]);
   const [dlqStats, setDlqStats] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<any>({ user: {}, product: {} });
 
@@ -260,6 +268,12 @@ const AdminDashboard: React.FC = () => {
         return;
       }
 
+      if (activeTab === 'orders') {
+        const res = await adminService.getAdminOrders(1, 100);
+        if (res.success) setAdminOrders(res.data?.content || []);
+        return;
+      }
+
       if (activeTab === 'reports') {
         const reportRes = await adminService.getReports(reportFilter, 1, 100, reportTargetType);
         setReports(reportRes.data?.content || []);
@@ -269,6 +283,12 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'lostFound') {
         const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, 100);
         setLostFoundItems(lostFoundRes.data?.content || []);
+        return;
+      }
+
+      if (activeTab === 'chatReports') {
+        const res = await adminService.getReportedMessages('PENDING', 1, 100);
+        if (res.success) setReportedMessages(res.data?.content || []);
         return;
       }
 
@@ -1129,6 +1149,127 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const renderAdminOrders = () => (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-black text-slate-900">Don hang va tranh chap</h2>
+        <p className="mt-1 text-sm text-slate-500">Theo doi giao dich, thanh toan, refund va dispute cua cho do cu.</p>
+      </div>
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="p-4">Order</th>
+              <th className="p-4">Buyer / Seller</th>
+              <th className="p-4">Tien</th>
+              <th className="p-4">Trang thai</th>
+              <th className="p-4">Dispute</th>
+              <th className="p-4">Hen giao</th>
+              <th className="p-4">Xu ly</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {adminOrders.map((order) => (
+              <tr key={order._id} className="hover:bg-slate-50/70">
+                <td className="p-4 font-mono text-xs text-slate-500">{order._id}</td>
+                <td className="p-4 text-slate-700">
+                  <div>{order.buyerId}</div>
+                  <div className="text-xs text-slate-400">{order.sellerId}</div>
+                </td>
+                <td className="p-4 font-black text-slate-900">{currency(order.price)}</td>
+                <td className="p-4">
+                  <div className="font-bold text-slate-700">{order.status}</div>
+                  <div className="text-xs text-slate-400">{order.paymentStatus}</div>
+                </td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${order.disputeStatus === 'OPEN' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {order.disputeStatus || 'NONE'}
+                  </span>
+                  {order.disputeReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.disputeReason}</div>}
+                </td>
+                <td className="p-4 text-slate-500">{order.handoverLocation || 'Chua co'}</td>
+                <td className="p-4">
+                  {order.disputeStatus === 'OPEN' && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={async () => {
+                          await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin da xu ly tranh chap');
+                          await fetchData();
+                        }}
+                        className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700"
+                      >
+                        Resolve
+                      </button>
+                      <button
+                        onClick={async () => {
+                          await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Khong du can cu');
+                          await fetchData();
+                        }}
+                        className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {adminOrders.length === 0 && (
+              <tr><td colSpan={7} className="p-10 text-center text-slate-400">Chua co don hang phu hop.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderReportedMessages = () => (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-black text-slate-900">Kiem duyet tin nhan</h2>
+        <p className="mt-1 text-sm text-slate-500">Xu ly cac tin nhan bi nguoi dung bao cao trong chat.</p>
+      </div>
+      <div className="grid gap-4">
+        {reportedMessages.map((message) => (
+          <div key={message._id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase text-slate-400">{message.senderId} {'->'} {message.receiverId}</div>
+                <p className="mt-2 text-sm font-medium text-slate-800">{message.content}</p>
+                <div className="mt-3 text-xs text-rose-600">
+                  {(message.reports || []).map((report) => report.reason).join(' | ') || 'Reported'}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    await adminService.resolveReportedMessage(message._id, 'REVIEWED');
+                    await fetchData();
+                  }}
+                  className="rounded-xl bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700"
+                >
+                  Reviewed
+                </button>
+                <button
+                  onClick={async () => {
+                    await adminService.resolveReportedMessage(message._id, 'DISMISSED');
+                    await fetchData();
+                  }}
+                  className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {reportedMessages.length === 0 && (
+          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Khong co tin nhan dang cho xu ly.</div>
+        )}
+      </div>
+    </div>
+  );
+
   const renderEmailCompose = () => (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
       <form onSubmit={handleSendEmail} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1400,8 +1541,12 @@ const AdminDashboard: React.FC = () => {
         renderUsers()
       ) : activeTab === 'products' ? (
         renderProducts()
+      ) : activeTab === 'orders' ? (
+        renderAdminOrders()
       ) : activeTab === 'reports' ? (
         renderReports()
+      ) : activeTab === 'chatReports' ? (
+        renderReportedMessages()
       ) : activeTab === 'lostFound' ? (
         renderLostFound()
       ) : activeTab === 'audit' ? (

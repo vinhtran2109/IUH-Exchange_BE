@@ -48,6 +48,32 @@ export interface AuditLogData {
   createdAt: string;
 }
 
+export interface AdminOrderData {
+  _id: string;
+  buyerId: string;
+  sellerId: string;
+  productId: string;
+  price: number;
+  status: string;
+  paymentStatus: string;
+  paymentMethod?: string;
+  disputeStatus?: string;
+  disputeReason?: string;
+  handoverLocation?: string;
+  createdAt: string;
+}
+
+export interface ReportedMessageData {
+  _id: string;
+  senderId: string;
+  receiverId: string;
+  conversationId: string;
+  content: string;
+  moderationStatus: string;
+  reports?: Array<{ reportedBy: string; reason: string; createdAt: string }>;
+  updatedAt: string;
+}
+
 export interface LostFoundAdminData {
   id: string;
   title: string;
@@ -165,6 +191,35 @@ export const adminService = {
 
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
+    return response.data;
+  },
+
+  getOrderStats: async () => {
+    const response = await api.get('/orders/admin/stats');
+    return response.data;
+  },
+
+  getAdminOrders: async (page = 1, size = 100, filters: { status?: string; paymentStatus?: string; disputeStatus?: string } = {}) => {
+    const params = new URLSearchParams({ page: String(Math.max(1, page)), size: String(size) });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== 'ALL') params.set(key, value);
+    });
+    const response = await api.get(`/orders/admin?${params.toString()}`);
+    return response.data;
+  },
+
+  resolveOrderDispute: async (orderId: string, status: 'RESOLVED' | 'REJECTED', resolution: string) => {
+    const response = await api.patch(`/orders/${orderId}/disputes/resolve`, { status, resolution });
+    return response.data;
+  },
+
+  getReportedMessages: async (status = 'PENDING', page = 1, size = 100) => {
+    const response = await api.get(`/chat/admin/reported-messages?status=${encodeURIComponent(status)}&page=${Math.max(1, page)}&size=${size}`);
+    return response.data;
+  },
+
+  resolveReportedMessage: async (messageId: string, status: 'REVIEWED' | 'DISMISSED') => {
+    const response = await api.patch(`/chat/admin/reported-messages/${messageId}/resolve`, { status });
     return response.data;
   },
 

@@ -238,3 +238,52 @@ export async function reportMessage(req, res, next) {
     next(err);
   }
 }
+
+export async function listReportedMessages(req, res, next) {
+  try {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'MODERATOR') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const { page, size, skip } = parsePagination(req.query);
+    const status = req.query.status || 'PENDING';
+    const filter = { reported: true };
+    if (status && status !== 'ALL') filter.moderationStatus = status;
+
+    const [messages, total] = await Promise.all([
+      ChatMessage.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(size).lean(),
+      ChatMessage.countDocuments(filter),
+    ]);
+
+    res.json(ApiResponse.ok(new PageResponse({
+      content: messages,
+      page,
+      size,
+      totalElements: total,
+      totalPages: Math.ceil(total / size),
+      last: page * size >= total,
+    })));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resolveReportedMessage(req, res, next) {
+  try {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'MODERATOR') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const { id } = req.params;
+    const status = req.body?.status === 'DISMISSED' ? 'DISMISSED' : 'REVIEWED';
+    const message = await ChatMessage.findById(id);
+    if (!message) throw new ResourceNotFoundException('ChatMessage', id);
+
+    message.moderationStatus = status;
+    await message.save();
+
+    res.json(ApiResponse.ok(message.toObject(), 'Reported message resolved'));
+  } catch (err) {
+    next(err);
+  }
+}
