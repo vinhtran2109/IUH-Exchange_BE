@@ -92,7 +92,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, orderId, onRev
           >
             <Star
               size={interactive ? 24 : 16}
-              className={i <= rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}
+              className={i <= count ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}
             />
           </button>
         ))}
