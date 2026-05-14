@@ -42,6 +42,15 @@ export async function createPayment(req, res) {
 
   order.paymentMethod = 'VNPAY_MOCK';
   order.paymentTransactionId = transactionId;
+  order.transactions = order.transactions || [];
+  order.transactions.push({
+    type: 'PAYMENT_CREATED',
+    transactionId,
+    amount: order.price,
+    method: 'VNPAY_MOCK',
+    status: 'PENDING',
+    note: 'Mock VNPay payment link created',
+  });
   await order.save();
 
   logger.info(`[Payment] Mock VNPay payment created: orderId=${orderId}, txnId=${transactionId}`);
@@ -78,6 +87,15 @@ export async function paymentCallback(req, res) {
   if (status === 'success') {
     order.paymentStatus = 'PAID';
     order.paidAt = new Date();
+    order.transactions = order.transactions || [];
+    order.transactions.push({
+      type: 'PAYMENT_CAPTURED',
+      transactionId,
+      amount: order.price,
+      method: order.paymentMethod,
+      status: 'SUCCESS',
+      note: 'Payment completed',
+    });
     await order.save();
 
     logger.info(`[Payment] Payment confirmed: orderId=${orderId}, txnId=${transactionId}`);
@@ -88,6 +106,16 @@ export async function paymentCallback(req, res) {
       paidAt: order.paidAt,
     }, 'Thanh toán thành công'));
   } else {
+    order.transactions = order.transactions || [];
+    order.transactions.push({
+      type: 'PAYMENT_FAILED',
+      transactionId,
+      amount: order.price,
+      method: order.paymentMethod,
+      status: 'FAILED',
+      note: `Payment callback status: ${status || 'unknown'}`,
+    });
+    await order.save();
     logger.warn(`[Payment] Payment failed: orderId=${orderId}, txnId=${transactionId}, status=${status}`);
     res.json(ApiResponse.ok({
       orderId,
@@ -128,6 +156,15 @@ export async function processRefund(req, res) {
 
   order.paymentStatus = 'REFUNDED';
   order.refundedAt = new Date();
+  order.transactions = order.transactions || [];
+  order.transactions.push({
+    type: 'REFUND_CREATED',
+    transactionId: order.paymentTransactionId,
+    amount: order.price,
+    method: order.paymentMethod,
+    status: 'REFUNDED',
+    note: 'Refund processed for cancelled order',
+  });
   await order.save();
 
   logger.info(`[Payment] Refund processed: orderId=${orderId}, amount=${order.price}`);
@@ -157,5 +194,6 @@ export async function getPaymentDetails(req, res) {
     amount: order.price,
     paidAt: order.paidAt,
     refundedAt: order.refundedAt,
+    transactions: order.transactions || [],
   }));
 }

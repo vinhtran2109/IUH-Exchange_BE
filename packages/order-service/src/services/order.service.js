@@ -26,6 +26,33 @@ const VALID_TRANSITIONS = {
   CANCELLED: new Set(),
 };
 
+function appendStatusHistory(order, nextStatus, {
+  changedBy = 'system',
+  actorRole = 'SYSTEM',
+  reason = '',
+  metadata = {},
+} = {}) {
+  order.statusHistory = order.statusHistory || [];
+  order.statusHistory.push({
+    from: order.status || null,
+    to: nextStatus,
+    changedBy,
+    actorRole,
+    reason,
+    metadata,
+  });
+  order.status = nextStatus;
+  if (nextStatus === 'COMPLETED') {
+    order.completedAt = new Date();
+  }
+}
+
+function buildReceiptNumber(order) {
+  const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const suffix = order._id.toString().slice(-6).toUpperCase();
+  return `IUH-${datePart}-${suffix}`;
+}
+
 /**
  * Order Service - Business logic for order management.
  * Implements Saga Choreography Pattern via Kafka.
@@ -100,6 +127,13 @@ export class OrderService {
           buyerNote: request.buyerNote || '',
           idempotencyKey: request.idempotencyKey,
           status: 'PENDING',
+          statusHistory: [{
+            from: null,
+            to: 'PENDING',
+            changedBy: buyerId,
+            actorRole: 'BUYER',
+            reason: 'Order created',
+          }],
         });
       } catch (dbErr) {
         // Bug #3 fix: Handle duplicate key error from race condition (TOCTOU)
@@ -156,7 +190,10 @@ export class OrderService {
       return;
     }
 
-    order.status = 'AWAITING_SELLER';
+    appendStatusHistory(order, 'AWAITING_SELLER', {
+      actorRole: 'SYSTEM',
+      reason: 'Product reserved successfully',
+    });
     await order.save();
     logger.info(`[SAGA Step 2] Order awaiting seller confirmation: orderId=${orderId}`);
   }
@@ -180,7 +217,10 @@ export class OrderService {
       return;
     }
 
-    order.status = 'CANCELLED';
+    appendStatusHistory(order, 'CANCELLED', {
+      actorRole: 'SYSTEM',
+      reason,
+    });
     await order.save();
     logger.info(`[SAGA Rollback] Order cancelled: orderId=${orderId}, reason=${reason}`);
 
@@ -224,7 +264,11 @@ export class OrderService {
 
     this._assertTransition(order.status, 'COMPLETED');
 
-    order.status = 'COMPLETED';
+    appendStatusHistory(order, 'COMPLETED', {
+      changedBy: sellerId,
+      actorRole: 'SELLER',
+      reason: 'Seller confirmed order',
+    });
     await order.save();
     logger.info(`[SELLER CONFIRM] Order completed: orderId=${orderId}, sellerId=${sellerId}`);
 
@@ -263,7 +307,11 @@ export class OrderService {
 
     this._assertTransition(order.status, 'CANCELLED');
 
-    order.status = 'CANCELLED';
+    appendStatusHistory(order, 'CANCELLED', {
+      changedBy: sellerId,
+      actorRole: 'SELLER',
+      reason,
+    });
     await order.save();
     logger.info(`[SELLER REJECT] Order cancelled: orderId=${orderId}, sellerId=${sellerId}, reason=${reason}`);
 
@@ -361,7 +409,11 @@ export class OrderService {
 
     this._assertTransition(order.status, 'CANCELLED');
 
-    order.status = 'CANCELLED';
+    appendStatusHistory(order, 'CANCELLED', {
+      changedBy: buyerId,
+      actorRole: 'BUYER',
+      reason: reason || 'Người mua hủy đơn hàng',
+    });
     await order.save();
     logger.info(`[BUYER CANCEL] Order cancelled: orderId=${orderId}, buyerId=${buyerId}, reason=${reason || 'N/A'}`);
 
@@ -386,6 +438,49 @@ export class OrderService {
       throw new ResourceNotFoundException('Order', orderId);
     }
     return order;
+  }
+
+  /**
+   * Build an order receipt with status timeline and transaction ledger.
+   *
+   * @param {string} orderId
+   * @param {string} userId
+   * @returns {object} Receipt data
+   */
+  async getReceipt(orderId, userId) {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new ResourceNotFoundException('Order', orderId);
+    }
+
+    if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
+      throw new ForbiddenException('Bạn không có quyền xem biên nhận đơn hàng này');
+    }
+
+    if (!order.receiptNumber && (order.paymentStatus !== 'UNPAID' || order.status === 'COMPLETED')) {
+      order.receiptNumber = buildReceiptNumber(order);
+      await order.save();
+    }
+
+    const plain = order.toObject();
+    return {
+      receiptNumber: plain.receiptNumber || null,
+      orderId: plain._id.toString(),
+      buyerId: plain.buyerId,
+      sellerId: plain.sellerId,
+      productId: plain.productId,
+      amount: plain.price,
+      orderStatus: plain.status,
+      paymentStatus: plain.paymentStatus,
+      paymentMethod: plain.paymentMethod,
+      transactionId: plain.paymentTransactionId,
+      createdAt: plain.createdAt,
+      paidAt: plain.paidAt,
+      refundedAt: plain.refundedAt,
+      completedAt: plain.completedAt,
+      statusHistory: plain.statusHistory || [],
+      transactions: plain.transactions || [],
+    };
   }
 
   /**

@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: frontend
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ws-gateway
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: ws-gateway
+  ports:
+    - port: 3007
+      targetPort: 3007
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: user-service
+  ports:
+    - port: 3001
+      targetPort: 3001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: product-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: product-service
+  ports:
+    - port: 3002
+      targetPort: 3002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: order-service
+  ports:
+    - port: 3003
+      targetPort: 3003
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: notification-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: notification-service
+  ports:
+    - port: 3004
+      targetPort: 3004
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: chat-service
+  ports:
+    - port: 3005
+      targetPort: 3005
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lost-found-service
+  namespace: iuh-exchange
+spec:
+  selector:
+    app: lost-found-service
+  ports:
+    - port: 3006
+      targetPort: 3006

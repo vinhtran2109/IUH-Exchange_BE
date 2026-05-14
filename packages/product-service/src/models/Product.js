@@ -8,6 +8,7 @@ const productSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     imageUrls: [{ type: String }],
     category: { type: String, required: true, trim: true, index: true },
+    location: { type: String, trim: true, default: '', index: true },
     condition: {
       type: String,
       enum: ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'],
@@ -26,5 +27,6 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ status: 1, createdAt: -1 });
 productSchema.index({ sellerId: 1, createdAt: -1 });
 productSchema.index({ category: 1, status: 1, createdAt: -1 });
+productSchema.index({ location: 1, status: 1, createdAt: -1 });
 
 export const Product = mongoose.model('Product', productSchema);

@@ -83,6 +83,19 @@ export function getOnlineUsers() {
   return Array.from(userSessions.keys());
 }
 
+function broadcastPresence(userId, isOnline) {
+  broadcastToTopic('/topic/presence', 'MESSAGE', {
+    'destination': '/topic/presence',
+    'content-type': 'application/json',
+    'message-id': `presence-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+  }, JSON.stringify({
+    type: isOnline ? 'PRESENCE_ONLINE' : 'PRESENCE_OFFLINE',
+    userId,
+    onlineUsers: getOnlineUsers(),
+    at: new Date().toISOString(),
+  }));
+}
+
 function broadcastToTopic(destination, command, headers, body, excludeConnId) {
   for (const [connId, data] of sessions.entries()) {
     if (connId === excludeConnId) continue;
@@ -195,7 +208,10 @@ export function initSocketService(httpServer) {
         const conns = userSessions.get(data.userId);
         if (conns) {
           conns.delete(conn.id);
-          if (conns.size === 0) userSessions.delete(data.userId);
+          if (conns.size === 0) {
+            userSessions.delete(data.userId);
+            broadcastPresence(data.userId, false);
+          }
         }
         logger.info(`WS disconnected: ${data.userId}`);
       }
@@ -213,7 +229,10 @@ export function initSocketService(httpServer) {
           const conns = userSessions.get(data.userId);
           if (conns) {
             conns.delete(connId);
-            if (conns.size === 0) userSessions.delete(data.userId);
+            if (conns.size === 0) {
+              userSessions.delete(data.userId);
+              broadcastPresence(data.userId, false);
+            }
           }
         }
         sessions.delete(connId);
@@ -252,6 +271,7 @@ function handleConnect(conn, frame, sessionData) {
     sessionData.userEmail = decoded.email || '';
     sessionData.authenticated = true;
 
+    const wasOffline = !userSessions.has(userId) || userSessions.get(userId).size === 0;
     if (!userSessions.has(userId)) userSessions.set(userId, new Set());
     userSessions.get(userId).add(conn.id);
 
@@ -262,6 +282,9 @@ function handleConnect(conn, frame, sessionData) {
     });
 
     logger.info(`WS connected: ${userId}`);
+    if (wasOffline) {
+      broadcastPresence(userId, true);
+    }
   } catch (err) {
     logger.warn('CONNECT auth failed', { error: err.message });
     sendFrame(conn, 'ERROR', { 'message': 'Authentication failed' }, 'Invalid or expired token');
@@ -285,6 +308,19 @@ function handleSubscribe(conn, frame, sessionData) {
 
   sessionData.subscriptions.set(subId, { id: subId, destination });
   logger.debug(`User ${sessionData.userId} subscribed to ${destination}`);
+
+  if (destination === '/topic/presence') {
+    sendFrame(conn, 'MESSAGE', {
+      'destination': destination,
+      'subscription': subId,
+      'content-type': 'application/json',
+      'message-id': `presence-snapshot-${Date.now()}`,
+    }, JSON.stringify({
+      type: 'PRESENCE_SNAPSHOT',
+      onlineUsers: getOnlineUsers(),
+      at: new Date().toISOString(),
+    }));
+  }
 }
 
 function handleUnsubscribe(conn, frame, sessionData) {

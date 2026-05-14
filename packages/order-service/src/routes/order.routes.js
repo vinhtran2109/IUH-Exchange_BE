@@ -44,6 +44,15 @@ export function createOrderRoutes(orderService) {
   });
 
   /**
+   * GET /api/v1/orders/:id/receipt
+   * Get receipt data, status timeline, and transaction ledger.
+   * MUST be before /:id to avoid conflict.
+   */
+  router.get('/:id/receipt', (req, res, next) => {
+    controller.getReceipt(req, res).catch(next);
+  });
+
+  /**
    * GET /api/v1/orders/:id
    * Get a single order by ID.
    */

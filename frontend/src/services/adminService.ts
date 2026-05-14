@@ -34,6 +34,20 @@ export interface DlqEventData {
   createdAt: string;
 }
 
+export interface AuditLogData {
+  _id: string;
+  userId?: string | null;
+  action: string;
+  resource: string;
+  resourceId?: string | null;
+  method: string;
+  path: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  statusCode?: number | null;
+  createdAt: string;
+}
+
 export interface LostFoundAdminData {
   id: string;
   title: string;
@@ -151,6 +165,16 @@ export const adminService = {
 
   getProductStats: async () => {
     const response = await api.get('/products/admin/stats');
+    return response.data;
+  },
+
+  getAuditLogs: async (page = 1, size = 50, filters: { action?: string; userId?: string; resource?: string; method?: string } = {}) => {
+    const validPage = Math.max(1, page);
+    const params = new URLSearchParams({ page: String(validPage), size: String(size) });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const response = await api.get(`/users/admin/audit-logs?${params.toString()}`);
     return response.data;
   },
 

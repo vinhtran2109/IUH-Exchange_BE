@@ -10,6 +10,7 @@ import {
 import {
   listProducts,
   searchProductsHandler,
+  suggestProductsHandler,
   getMyProducts,
   getProductById,
   createProduct,
@@ -48,6 +49,7 @@ router.delete('/admin/:id', authenticate, adminOnly, asyncHandler(deleteProductA
 router.get('/admin/stats', authenticate, adminOnly, asyncHandler(getProductStats));
 
 router.get('/search', validateQuery(searchSchema), asyncHandler(searchProductsHandler));
+router.get('/suggestions', asyncHandler(suggestProductsHandler));
 router.get('/', validateQuery(paginationSchema), asyncHandler(listProducts));
 
 router.get('/me', authenticate, validateQuery(paginationSchema), asyncHandler(getMyProducts));

@@ -14,6 +14,22 @@ const chatMessageSchema = new mongoose.Schema(
     fileUrl: { type: String, default: null },
     fileName: { type: String, default: null },
     isRead: { type: Boolean, default: false },
+    reported: { type: Boolean, default: false, index: true },
+    moderationStatus: {
+      type: String,
+      enum: ['NONE', 'PENDING', 'REVIEWED', 'DISMISSED'],
+      default: 'NONE',
+    },
+    reports: {
+      type: [
+        {
+          reportedBy: { type: String, required: true },
+          reason: { type: String, required: true },
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

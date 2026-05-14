@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: iuh-exchange-config
+  namespace: iuh-exchange
+data:
+  NODE_ENV: production
+  MONGODB_URI: mongodb://mongodb:27017/iuh_exchange
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  KAFKA_BROKERS: kafka:9092
+  ELASTICSEARCH_NODE: http://elasticsearch:9200
+  USER_SERVICE_URL: http://user-service:3001
+  PRODUCT_SERVICE_URL: http://product-service:3002
+  ORDER_SERVICE_URL: http://order-service:3003
+  NOTIFICATION_SERVICE_URL: http://notification-service:3004
+  CHAT_SERVICE_URL: http://chat-service:3005
+  LOST_FOUND_SERVICE_URL: http://lost-found-service:3006
+  WS_GATEWAY_URL: http://ws-gateway:3007

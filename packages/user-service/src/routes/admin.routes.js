@@ -22,6 +22,7 @@ router.use(authenticate, requireAdmin);
 
 router.get('/all', asyncHandler(adminCtrl.listUsers));
 router.get('/users', asyncHandler(adminCtrl.listUsers));
+router.get('/audit-logs', asyncHandler(adminCtrl.listAuditLogs));
 
 router.post('/:id/ban', asyncHandler(adminCtrl.banUser));
 router.post('/:id/unban', asyncHandler(adminCtrl.unbanUser));

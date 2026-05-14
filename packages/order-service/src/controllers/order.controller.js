@@ -100,6 +100,20 @@ export class OrderController {
   }
 
   /**
+   * GET /api/v1/orders/:id/receipt
+   * Get receipt data, status timeline, and transaction ledger.
+   */
+  async getReceipt(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) {
+      throw new BadRequestException('Missing X-User-Id header');
+    }
+
+    const receipt = await this.orderService.getReceipt(req.params.id, userId);
+    return res.json(ApiResponse.ok(receipt));
+  }
+
+  /**
    * POST /api/v1/orders/:id/confirm
    * Seller confirms an order (completes the transaction).
    */
