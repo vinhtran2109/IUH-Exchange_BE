@@ -53,6 +53,16 @@ export const orderService = {
     return response.data;
   },
 
+  reportBankTransfer: async (id: string, payload: { proofUrl?: string; note?: string } = {}) => {
+    const response = await api.post(`/orders/${id}/payment/bank-transfer/report`, payload);
+    return response.data;
+  },
+
+  confirmBankTransfer: async (id: string, payload: { note?: string } = {}) => {
+    const response = await api.post(`/orders/${id}/payment/bank-transfer/confirm`, payload);
+    return response.data;
+  },
+
   confirmPaymentCallback: async (id: string, payload: PaymentCallbackPayload) => {
     const response = await api.post(`/orders/${id}/payment/callback`, payload);
     return response.data;

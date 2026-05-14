@@ -21,19 +21,19 @@ const transactionSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ['PAYMENT_CREATED', 'PAYMENT_CAPTURED', 'PAYMENT_FAILED', 'REFUND_CREATED'],
+      enum: ['PAYMENT_CREATED', 'PAYMENT_CAPTURED', 'PAYMENT_FAILED', 'REFUND_CREATED', 'TRANSFER_REPORTED', 'TRANSFER_CONFIRMED'],
       required: true,
     },
     transactionId: { type: String, default: null },
     amount: { type: Number, required: true, min: 0 },
     method: {
       type: String,
-      enum: ['VNPAY_MOCK', 'CASH', 'NONE'],
+      enum: ['VNPAY_MOCK', 'BANK_TRANSFER', 'CASH', 'NONE'],
       default: 'NONE',
     },
     status: {
       type: String,
-      enum: ['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED'],
+      enum: ['PENDING', 'REPORTED', 'SUCCESS', 'FAILED', 'REFUNDED'],
       default: 'PENDING',
     },
     note: { type: String, default: '' },
@@ -81,10 +81,14 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['VNPAY_MOCK', 'CASH', 'NONE'],
+      enum: ['VNPAY_MOCK', 'BANK_TRANSFER', 'CASH', 'NONE'],
       default: 'NONE',
     },
     paymentTransactionId: { type: String, default: null },
+    transferProofUrl: { type: String, default: '' },
+    transferReportedAt: { type: Date, default: null },
+    transferConfirmedAt: { type: Date, default: null },
+    transferConfirmedBy: { type: String, default: null },
     paymentProviderStatus: { type: String, default: 'MOCK_PENDING' },
     paymentWebhookVerified: { type: Boolean, default: false },
     reconciliationStatus: {

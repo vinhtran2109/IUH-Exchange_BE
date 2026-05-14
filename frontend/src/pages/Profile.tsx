@@ -34,6 +34,10 @@ const Profile: React.FC = () => {
 
   const [name, setName] = useState(user?.name || '');
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
+  const [bankName, setBankName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [accountHolder, setAccountHolder] = useState('');
+  const [qrCodeUrl, setQrCodeUrl] = useState('');
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -68,6 +72,10 @@ const Profile: React.FC = () => {
         setProfile(currentProfile);
         setName(currentProfile.name || '');
         setAvatarUrl(currentProfile.avatarUrl || '');
+        setBankName((currentProfile as any).bankInfo?.bankName || '');
+        setAccountNumber((currentProfile as any).bankInfo?.accountNumber || '');
+        setAccountHolder((currentProfile as any).bankInfo?.accountHolder || '');
+        setQrCodeUrl((currentProfile as any).bankInfo?.qrCodeUrl || '');
         updateUser(currentProfile);
       }
     } catch (error) {
@@ -174,10 +182,16 @@ const Profile: React.FC = () => {
     setLoading(true);
     try {
       const trimmedName = name.trim();
-      const payload: Record<string, string> = {};
+      const payload: Record<string, unknown> = {};
 
       if (trimmedName) payload.name = trimmedName;
       if (avatarUrl && /^https?:\/\//.test(avatarUrl)) payload.avatarUrl = avatarUrl;
+      payload.bankInfo = {
+        bankName: bankName.trim(),
+        accountNumber: accountNumber.trim(),
+        accountHolder: accountHolder.trim(),
+        qrCodeUrl: qrCodeUrl.trim(),
+      };
 
       if (Object.keys(payload).length === 0) {
         setMessage({ type: 'error', text: 'Vui lòng nhập tên hợp lệ hoặc chọn ảnh đại diện.' });
@@ -189,10 +203,14 @@ const Profile: React.FC = () => {
         const updated = res.data.data;
         setName(updated?.name || trimmedName);
         setAvatarUrl(updated?.avatarUrl || avatarUrl);
+        setBankName(updated?.bankInfo?.bankName || bankName);
+        setAccountNumber(updated?.bankInfo?.accountNumber || accountNumber);
+        setAccountHolder(updated?.bankInfo?.accountHolder || accountHolder);
+        setQrCodeUrl(updated?.bankInfo?.qrCodeUrl || qrCodeUrl);
         setProfile((prev) =>
-          prev ? { ...prev, name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl } : prev
+          prev ? { ...prev, name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl, bankInfo: updated?.bankInfo } as any : prev
         );
-        updateUser({ name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl });
+        updateUser({ name: updated?.name || trimmedName, avatarUrl: updated?.avatarUrl || avatarUrl, bankInfo: updated?.bankInfo });
         setMessage({ type: 'success', text: 'Cập nhật thông tin thành công!' });
       }
     } catch {
@@ -333,6 +351,28 @@ const Profile: React.FC = () => {
                       disabled
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Thông tin nhận chuyển khoản</h3>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Ngân hàng</label>
+                      <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: Vietcombank" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Số tài khoản</label>
+                      <input value={accountNumber} onChange={(e) => setAccountNumber(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: 0123456789" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Tên chủ tài khoản</label>
+                      <input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="VD: NGUYEN VAN A" />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-slate-500">Link QR chuyển khoản</label>
+                      <input value={qrCodeUrl} onChange={(e) => setQrCodeUrl(e.target.value)} className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-slate-400 focus:outline-none" placeholder="https://..." />
+                    </div>
                   </div>
                 </div>
 

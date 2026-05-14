@@ -24,7 +24,7 @@ import api from '../services/api';
 import ReviewSection from '../components/ReviewSection';
 import { wishlistService } from '../services/wishlistService';
 
-type PaymentChoice = 'VNPAY_MOCK' | 'CASH';
+type PaymentChoice = 'BANK_TRANSFER' | 'CASH';
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -40,9 +40,10 @@ const ProductDetail: React.FC = () => {
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [buyerNote, setBuyerNote] = useState('');
   const [handoverLocation, setHandoverLocation] = useState('');
+  const [sellerProfile, setSellerProfile] = useState<any>(null);
   const [sellerTrust, setSellerTrust] = useState<any>(null);
   const [followingSeller, setFollowingSeller] = useState(false);
-  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('VNPAY_MOCK');
+  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('BANK_TRANSFER');
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -66,6 +67,11 @@ const ProductDetail: React.FC = () => {
 
   useEffect(() => {
     if (!product?.sellerId) return;
+    api.get(`/users/${product.sellerId}`)
+      .then((res) => {
+        if (res.data?.success) setSellerProfile(res.data.data);
+      })
+      .catch(() => {});
     productService.getSellerTrust(product.sellerId)
       .then((res) => {
         if (res.success) setSellerTrust(res.data);
@@ -199,17 +205,13 @@ const ProductDetail: React.FC = () => {
       setPurchaseOpen(false);
       setBuyerNote('');
       setHandoverLocation('');
-
-      if (paymentChoice === 'VNPAY_MOCK') {
-        const paymentResponse = await orderService.createPayment(orderId);
-        const paymentUrl = paymentResponse.data?.paymentUrl;
-        if (!paymentUrl) throw new Error('Không tạo được liên kết thanh toán');
-        window.location.href = paymentUrl;
-        return;
-      }
-
       navigate(`/orders/${orderId}`, {
-        state: { flashMessage: 'Đã tạo yêu cầu mua thành công. Bạn có thể theo dõi tiến độ đơn hàng tại đây.' },
+        state: {
+          flashMessage:
+            paymentChoice === 'BANK_TRANSFER'
+              ? 'Da tao don. Hay chuyen khoan cho nguoi ban, sau do bam Toi da chuyen khoan trong chi tiet don.'
+              : 'Da tao yeu cau mua thanh cong. Ban co the theo doi tien do don hang tai day.',
+        },
       });
     } catch (error: any) {
       setPurchaseMessage(error.response?.data?.message || error.message || 'Có lỗi xảy ra khi tạo đơn hàng.');
@@ -394,6 +396,7 @@ const ProductDetail: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
           <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Xác nhận mua sản phẩm</h2>
                 <p className="mt-1 text-sm text-slate-500">Tạo yêu cầu mua và chọn bước thanh toán tiếp theo.</p>
@@ -412,6 +415,26 @@ const ProductDetail: React.FC = () => {
                 </div>
               </div>
 
+              {paymentChoice === 'BANK_TRANSFER' && (
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                  <div className="mb-3 text-sm font-bold text-emerald-800">Thông tin chuyển khoản người bán</div>
+                  {sellerProfile?.bankInfo?.accountNumber ? (
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+                      <div className="space-y-2 text-sm text-slate-700">
+                        <div><span className="font-semibold">Ngân hàng:</span> {sellerProfile.bankInfo.bankName || 'Chưa cập nhật'}</div>
+                        <div><span className="font-semibold">Số tài khoản:</span> {sellerProfile.bankInfo.accountNumber}</div>
+                        <div><span className="font-semibold">Chủ tài khoản:</span> {sellerProfile.bankInfo.accountHolder || sellerLabel}</div>
+                        <div><span className="font-semibold">Nội dung:</span> IUH {product.id.slice(-6).toUpperCase()}</div>
+                      </div>
+                      {sellerProfile.bankInfo.qrCodeUrl && (
+                        <img src={sellerProfile.bankInfo.qrCodeUrl} alt="QR chuyển khoản" className="h-28 w-28 rounded-lg border border-white bg-white object-cover" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-amber-700">Người bán chưa cập nhật thông tin ngân hàng. Bạn có thể chọn thanh toán khi gặp hoặc chat để hỏi thông tin.</div>
+                  )}
+                </div>
+              )}
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Lời nhắn cho người bán</label>
                 <textarea
@@ -441,14 +464,14 @@ const ProductDetail: React.FC = () => {
                 <div className="space-y-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentChoice('VNPAY_MOCK')}
+                    onClick={() => setPaymentChoice('BANK_TRANSFER')}
                     className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${
-                      paymentChoice === 'VNPAY_MOCK' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                      paymentChoice === 'BANK_TRANSFER' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-medium">Thanh toán online</div>
-                    <div className={`mt-1 text-xs ${paymentChoice === 'VNPAY_MOCK' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      Tạo đơn xong sẽ chuyển sang bước thanh toán mock VNPay.
+                    <div className="font-medium">Chuyen khoan truc tiep cho nguoi ban</div>
+                    <div className={`mt-1 text-xs ${paymentChoice === 'BANK_TRANSFER' ? 'text-slate-200' : 'text-slate-500'}`}>
+                      He thong hien thong tin ngan hang/QR cua nguoi ban, ban tu chuyen khoan va nguoi ban xac nhan da nhan tien.
                     </div>
                   </button>
                   <button
@@ -499,7 +522,7 @@ const ProductDetail: React.FC = () => {
                 disabled={ordering}
                 className="flex-1 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:opacity-50"
               >
-                {ordering ? 'Đang tạo đơn...' : paymentChoice === 'VNPAY_MOCK' ? 'Tạo đơn và thanh toán' : 'Tạo đơn hàng'}
+                {ordering ? 'Đang tạo đơn...' : 'Tạo đơn hàng'}
               </button>
             </div>
           </div>

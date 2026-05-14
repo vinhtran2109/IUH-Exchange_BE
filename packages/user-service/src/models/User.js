@@ -12,6 +12,12 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, trim: true },
   studentId: { type: String, default: '' },
   avatarUrl: { type: String, default: '' },
+  bankInfo: {
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    accountHolder: { type: String, default: '' },
+    qrCodeUrl: { type: String, default: '' },
+  },
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   karmaPoint: { type: Number, default: 100 },

@@ -18,6 +18,7 @@ function mapToProfile(user) {
     name: user.name,
     studentId: user.studentId,
     avatarUrl: user.avatarUrl,
+    bankInfo: user.bankInfo || {},
     isVerified: user.isVerified,
     isActive: user.isActive,
     karmaPoint: user.karmaPoint,
@@ -46,7 +47,7 @@ export async function getUserProfile(req, res) {
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
-  const user = await User.findById(req.params.id).select('name email studentId avatarUrl karmaPoint role isVerified createdAt');
+  const user = await User.findById(req.params.id).select('name email studentId avatarUrl karmaPoint role isVerified bankInfo createdAt');
   if (!user) throw new ResourceNotFoundException('User', req.params.id);
 
   const response = ApiResponse.ok(mapToProfile(user));
@@ -59,13 +60,21 @@ export async function getUserProfile(req, res) {
  */
 export async function updateProfile(req, res) {
   const userId = req.user.sub;
-  const { name, avatarUrl } = req.body;
+  const { name, avatarUrl, bankInfo } = req.body;
 
   const user = await User.findById(userId);
   if (!user) throw new ResourceNotFoundException('User', userId);
 
   if (name !== undefined) user.name = name;
   if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+  if (bankInfo !== undefined) {
+    user.bankInfo = {
+      bankName: bankInfo.bankName || '',
+      accountNumber: bankInfo.accountNumber || '',
+      accountHolder: bankInfo.accountHolder || '',
+      qrCodeUrl: bankInfo.qrCodeUrl || '',
+    };
+  }
 
   await user.save();
 
