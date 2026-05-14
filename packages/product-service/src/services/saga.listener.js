@@ -49,7 +49,7 @@ export async function initSagaListener() {
 }
 
 async function handleOrderCreated(payload) {
-  const { orderId, productId } = payload;
+  const { orderId, productId, buyerId } = payload;
   logger.info(`[SAGA] OrderCreated: orderId=${orderId}, productId=${productId}`);
 
   const product = await Product.findById(productId);
@@ -59,9 +59,9 @@ async function handleOrderCreated(payload) {
     return;
   }
 
-  if (product.status === 'PENDING') {
+  if ((product.status === 'RESERVED' || product.status === 'PENDING') && product.reservedOrderId === orderId) {
     logger.info(`[SAGA] Product already reserved: ${productId}, skipping`);
-    await publishProductEvent('product.reserved', { id: orderId, orderId, productId });
+    await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: product.sellerId, buyerId });
     return;
   }
 
@@ -71,11 +71,24 @@ async function handleOrderCreated(payload) {
     return;
   }
 
-  product.status = 'PENDING';
-  await product.save();
+  const reserved = await Product.findOneAndUpdate(
+    { _id: productId, status: 'AVAILABLE' },
+    {
+      status: 'RESERVED',
+      reservedOrderId: orderId,
+      reservedBy: buyerId || null,
+      reservedAt: new Date(),
+    },
+    { new: true }
+  );
+
+  if (!reserved) {
+    await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product was reserved by another order' });
+    return;
+  }
   logger.info(`[SAGA] Product reserved: ${productId}`);
 
-  await publishProductEvent('product.reserved', { id: orderId, orderId, productId });
+  await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: reserved.sellerId, buyerId });
 }
 
 async function handleOrderCompleted(payload) {
@@ -92,6 +105,9 @@ async function handleOrderCompleted(payload) {
       return;
     }
     product.status = 'SOLD';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
     await product.save();
     logger.info(`[SAGA] Product marked as SOLD: ${productId}`);
   }
@@ -105,8 +121,11 @@ async function handleOrderCancelled(payload) {
   }
 
   const product = await Product.findById(productId);
-  if (product && product.status === 'PENDING') {
+  if (product && (product.status === 'RESERVED' || product.status === 'PENDING') && (!product.reservedOrderId || product.reservedOrderId === payload.orderId)) {
     product.status = 'AVAILABLE';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
     await product.save();
     logger.info(`[SAGA] Product released: ${productId}, reason=${reason}`);
   }

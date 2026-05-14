@@ -113,7 +113,17 @@ export async function updateUserPermissions(req, res) {
   const { id } = req.params;
   const { permissions } = req.body;
 
-  const validPermissions = ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT', 'CAN_BAN', 'CAN_APPROVE_POST'];
+  const validPermissions = [
+    'CAN_POST',
+    'CAN_CHAT',
+    'CAN_REPORT',
+    'CAN_BAN',
+    'CAN_APPROVE_POST',
+    'CAN_VIEW_AUDIT',
+    'CAN_MANAGE_ORDERS',
+    'CAN_RESOLVE_DISPUTES',
+    'CAN_MANAGE_SYSTEM',
+  ];
   const invalid = permissions.filter((p) => !validPermissions.includes(p));
   if (invalid.length > 0) {
     throw new BadRequestException(`Permission không hợp lệ: ${invalid.join(', ')}`);

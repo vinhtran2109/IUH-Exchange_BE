@@ -33,7 +33,7 @@ export class OrderController {
       throw new BadRequestException('Missing Idempotency-Key header');
     }
 
-    const { productId, sellerId, price, buyerNote } = req.body;
+    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime } = req.body;
 
     if (!productId || !sellerId || price === undefined) {
       throw new BadRequestException('productId, sellerId, and price are required');
@@ -48,6 +48,8 @@ export class OrderController {
       sellerId,
       price,
       buyerNote,
+      handoverLocation,
+      handoverTime,
       idempotencyKey,
     });
 
@@ -70,8 +72,9 @@ export class OrderController {
     const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
     const status = req.query.status || undefined;
     const role = req.query.role || 'buyer';
+    const productId = req.query.productId || undefined;
 
-    const result = await this.orderService.getOrders(userId, { page, size, status, role });
+    const result = await this.orderService.getOrders(userId, { page, size, status, role, productId });
 
     return res.json(ApiResponse.ok(result));
   }
@@ -111,6 +114,56 @@ export class OrderController {
 
     const receipt = await this.orderService.getReceipt(req.params.id, userId);
     return res.json(ApiResponse.ok(receipt));
+  }
+
+  async getReviewEligibility(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const result = await this.orderService.getReviewEligibility(req.params.id, userId);
+    return res.json(ApiResponse.ok(result));
+  }
+
+  async openDispute(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 10) throw new BadRequestException('Dispute reason must be at least 10 characters');
+    const order = await this.orderService.openDispute(req.params.id, userId, reason);
+    return res.status(201).json(ApiResponse.created(order, 'Dispute opened'));
+  }
+
+  async getAdminOrders(req, res) {
+    if (req.headers['x-user-role'] !== 'ADMIN' && req.user?.role !== 'ADMIN') {
+      throw new BadRequestException('Admin access required');
+    }
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
+    const result = await this.orderService.getAdminOrders({
+      page,
+      size,
+      status: req.query.status,
+      paymentStatus: req.query.paymentStatus,
+      disputeStatus: req.query.disputeStatus,
+    });
+    return res.json(ApiResponse.ok(result));
+  }
+
+  async getAdminOrderStats(req, res) {
+    if (req.headers['x-user-role'] !== 'ADMIN' && req.user?.role !== 'ADMIN') {
+      throw new BadRequestException('Admin access required');
+    }
+    const result = await this.orderService.getAdminOrderStats();
+    return res.json(ApiResponse.ok(result));
+  }
+
+  async resolveDispute(req, res) {
+    const role = req.headers['x-user-role'] || req.user?.role;
+    const adminId = req.headers['x-user-id'] || req.user?.sub;
+    if (role !== 'ADMIN') throw new BadRequestException('Admin access required');
+    const status = req.body?.status === 'REJECTED' ? 'REJECTED' : 'RESOLVED';
+    const resolution = String(req.body?.resolution || '').trim();
+    const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution });
+    return res.json(ApiResponse.ok(order, 'Dispute resolved'));
   }
 
   /**

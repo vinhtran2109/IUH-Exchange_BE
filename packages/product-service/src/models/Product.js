@@ -16,10 +16,13 @@ const productSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING_APPROVAL', 'AVAILABLE', 'PENDING', 'SOLD', 'HIDDEN', 'REJECTED'],
+      enum: ['PENDING_APPROVAL', 'AVAILABLE', 'RESERVED', 'PENDING', 'SOLD', 'HIDDEN', 'REJECTED'],
       default: 'PENDING_APPROVAL',
       index: true,
     },
+    reservedOrderId: { type: String, default: null, index: true },
+    reservedBy: { type: String, default: null },
+    reservedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

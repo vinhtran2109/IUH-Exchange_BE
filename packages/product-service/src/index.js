@@ -3,6 +3,7 @@ import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common
 import productRoutes from './routes/product.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import wishlistRoutes from './routes/wishlist.routes.js';
+import trustRoutes from './routes/trust.routes.js';
 import { initKafkaProducer } from './services/kafka.service.js';
 import { ensureIndex } from './services/elasticsearch.service.js';
 import { initSagaListener } from './services/saga.listener.js';
@@ -34,6 +35,7 @@ app.get('/health', async (req, res) => {
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/products', reviewRoutes);
 app.use('/api/v1/products', wishlistRoutes);
+app.use('/api/v1/products', trustRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);

@@ -22,13 +22,14 @@ import api from '../services/api';
 import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import { orderService } from '../services/orderService';
+import { wishlistService } from '../services/wishlistService';
 import type { User as ProfileUser } from '../types/api';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
 
   const [name, setName] = useState(user?.name || '');
@@ -40,6 +41,8 @@ const Profile: React.FC = () => {
 
   const [myProducts, setMyProducts] = useState<Product[]>([]);
   const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<any[]>([]);
+  const [viewHistory, setViewHistory] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -52,6 +55,8 @@ const Profile: React.FC = () => {
     fetchProfile();
     fetchMyProducts();
     fetchMyOrders();
+    fetchWishlist();
+    fetchHistory();
   }, []);
 
   const fetchProfile = async () => {
@@ -93,6 +98,24 @@ const Profile: React.FC = () => {
       console.error(error);
     } finally {
       setOrdersLoading(false);
+    }
+  };
+
+  const fetchWishlist = async () => {
+    try {
+      const res = await wishlistService.getMyWishlist(1, 50);
+      if (res.success) setWishlistItems(res.data?.content ?? []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const fetchHistory = async () => {
+    try {
+      const res = await productService.getViewHistory(1, 50);
+      if (res.success) setViewHistory(res.data?.content ?? []);
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -214,6 +237,8 @@ const Profile: React.FC = () => {
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
             { id: 'products', label: 'Món đồ đang bán', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
+            { id: 'wishlist', label: 'Đã lưu', icon: Flag },
+            { id: 'history', label: 'Đã xem', icon: Clock },
             { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
             { id: 'password', label: 'Bảo mật', icon: ShieldCheck },
           ].map((tab) => (
@@ -432,6 +457,40 @@ const Profile: React.FC = () => {
                 )}
 
                 {!ordersLoading && buyerOrders.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Bạn chưa có đơn mua nào.</div>}
+              </div>
+            )}
+
+            {(activeTab === 'wishlist' || activeTab === 'history') && (
+              <div className="space-y-3">
+                <h3 className="mb-4 text-base font-semibold text-slate-800">
+                  {activeTab === 'wishlist' ? 'Món đồ đã lưu' : 'Món đồ đã xem'}
+                </h3>
+                {(activeTab === 'wishlist' ? wishlistItems : viewHistory).map((item: any) => {
+                  const product = item.product;
+                  if (!product) return null;
+                  return (
+                    <button
+                      key={item.id || item.productId}
+                      type="button"
+                      onClick={() => navigate(`/products/${product.id || product._id}`)}
+                      className="flex w-full items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left hover:bg-white"
+                    >
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                        <img src={product.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={product.title} className="h-full w-full object-cover" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-slate-800">{product.title}</div>
+                        <div className="text-sm font-bold text-slate-900">{Number(product.price || 0).toLocaleString()}đ</div>
+                        <div className="text-xs text-slate-400">{product.location || product.category || 'IUH'}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+                {(activeTab === 'wishlist' ? wishlistItems : viewHistory).length === 0 && (
+                  <div className="py-16 text-center text-sm text-slate-400">
+                    {activeTab === 'wishlist' ? 'Bạn chưa lưu món đồ nào.' : 'Bạn chưa có lịch sử xem.'}
+                  </div>
+                )}
               </div>
             )}
 

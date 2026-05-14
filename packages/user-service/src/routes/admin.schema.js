@@ -13,7 +13,17 @@ export const updateRoleSchema = z.object({
 });
 
 export const updatePermissionsSchema = z.object({
-  permissions: z.array(z.enum(['CAN_POST', 'CAN_CHAT', 'CAN_REPORT', 'CAN_BAN', 'CAN_APPROVE_POST'])).min(1),
+  permissions: z.array(z.enum([
+    'CAN_POST',
+    'CAN_CHAT',
+    'CAN_REPORT',
+    'CAN_BAN',
+    'CAN_APPROVE_POST',
+    'CAN_VIEW_AUDIT',
+    'CAN_MANAGE_ORDERS',
+    'CAN_RESOLVE_DISPUTES',
+    'CAN_MANAGE_SYSTEM',
+  ])).min(1),
 });
 
 export const adjustKarmaSchema = z.object({

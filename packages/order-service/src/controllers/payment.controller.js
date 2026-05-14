@@ -7,6 +7,7 @@ import {
   ForbiddenException,
   logger,
 } from '@iuh-exchange/common';
+import { publishOrderRefunded } from '../services/saga.service.js';
 
 /**
  * POST /api/v1/orders/:id/payment/create
@@ -42,6 +43,8 @@ export async function createPayment(req, res) {
 
   order.paymentMethod = 'VNPAY_MOCK';
   order.paymentTransactionId = transactionId;
+  order.paymentProviderStatus = 'MOCK_PAYMENT_CREATED';
+  order.reconciliationStatus = 'PENDING';
   order.transactions = order.transactions || [];
   order.transactions.push({
     type: 'PAYMENT_CREATED',
@@ -86,8 +89,13 @@ export async function paymentCallback(req, res) {
 
   if (status === 'success') {
     order.paymentStatus = 'PAID';
+    order.paymentProviderStatus = 'MOCK_PAID';
+    order.paymentWebhookVerified = true;
+    order.reconciliationStatus = 'MATCHED';
     order.paidAt = new Date();
     order.transactions = order.transactions || [];
+    order.paymentProviderStatus = `MOCK_${String(status || 'failed').toUpperCase()}`;
+    order.reconciliationStatus = 'MISMATCHED';
     order.transactions.push({
       type: 'PAYMENT_CAPTURED',
       transactionId,
@@ -155,6 +163,8 @@ export async function processRefund(req, res) {
   }
 
   order.paymentStatus = 'REFUNDED';
+  order.paymentProviderStatus = 'MOCK_REFUNDED';
+  order.reconciliationStatus = 'MATCHED';
   order.refundedAt = new Date();
   order.transactions = order.transactions || [];
   order.transactions.push({
@@ -168,6 +178,14 @@ export async function processRefund(req, res) {
   await order.save();
 
   logger.info(`[Payment] Refund processed: orderId=${orderId}, amount=${order.price}`);
+
+  await publishOrderRefunded({
+    orderId,
+    buyerId: order.buyerId,
+    sellerId: order.sellerId,
+    productId: order.productId,
+    amount: order.price,
+  });
 
   res.json(ApiResponse.ok({
     orderId,
@@ -194,6 +212,9 @@ export async function getPaymentDetails(req, res) {
     amount: order.price,
     paidAt: order.paidAt,
     refundedAt: order.refundedAt,
+    paymentProviderStatus: order.paymentProviderStatus,
+    paymentWebhookVerified: order.paymentWebhookVerified,
+    reconciliationStatus: order.reconciliationStatus,
     transactions: order.transactions || [],
   }));
 }

@@ -43,6 +43,14 @@ export function createOrderRoutes(orderService) {
     controller.getMyOrders(req, res).catch(next);
   });
 
+  router.get('/admin/stats', (req, res, next) => {
+    controller.getAdminOrderStats(req, res).catch(next);
+  });
+
+  router.get('/admin', (req, res, next) => {
+    controller.getAdminOrders(req, res).catch(next);
+  });
+
   /**
    * GET /api/v1/orders/:id/receipt
    * Get receipt data, status timeline, and transaction ledger.
@@ -50,6 +58,10 @@ export function createOrderRoutes(orderService) {
    */
   router.get('/:id/receipt', (req, res, next) => {
     controller.getReceipt(req, res).catch(next);
+  });
+
+  router.get('/:id/review-eligibility', (req, res, next) => {
+    controller.getReviewEligibility(req, res).catch(next);
   });
 
   /**
@@ -84,6 +96,14 @@ export function createOrderRoutes(orderService) {
    */
   router.patch('/:id/cancel', (req, res, next) => {
     controller.cancelOrder(req, res).catch(next);
+  });
+
+  router.post('/:id/disputes', (req, res, next) => {
+    controller.openDispute(req, res).catch(next);
+  });
+
+  router.patch('/:id/disputes/resolve', (req, res, next) => {
+    controller.resolveDispute(req, res).catch(next);
   });
 
   return router;

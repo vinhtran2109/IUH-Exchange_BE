@@ -39,6 +39,9 @@ const ProductDetail: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [buyerNote, setBuyerNote] = useState('');
+  const [handoverLocation, setHandoverLocation] = useState('');
+  const [sellerTrust, setSellerTrust] = useState<any>(null);
+  const [followingSeller, setFollowingSeller] = useState(false);
   const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('VNPAY_MOCK');
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
 
@@ -50,6 +53,7 @@ const ProductDetail: React.FC = () => {
         if (response.success) {
           setProduct(response.data);
           setSelectedImage(0);
+          if (user) void productService.recordView(id).catch(() => {});
         }
       } catch (error) {
         console.error('Failed to fetch product:', error);
@@ -59,6 +63,22 @@ const ProductDetail: React.FC = () => {
     };
     fetchProduct();
   }, [id]);
+
+  useEffect(() => {
+    if (!product?.sellerId) return;
+    productService.getSellerTrust(product.sellerId)
+      .then((res) => {
+        if (res.success) setSellerTrust(res.data);
+      })
+      .catch(() => {});
+    if (user && user.id !== product.sellerId) {
+      productService.checkSellerFollow(product.sellerId)
+        .then((res) => {
+          if (res.success) setFollowingSeller(res.data.following);
+        })
+        .catch(() => {});
+    }
+  }, [product?.sellerId, user]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -160,6 +180,7 @@ const ProductDetail: React.FC = () => {
         sellerId: product.sellerId || '',
         price: product.price,
         buyerNote: buyerNote.trim(),
+        handoverLocation: handoverLocation.trim(),
         idempotencyKey: window.crypto.randomUUID(),
       };
 
@@ -177,6 +198,7 @@ const ProductDetail: React.FC = () => {
 
       setPurchaseOpen(false);
       setBuyerNote('');
+      setHandoverLocation('');
 
       if (paymentChoice === 'VNPAY_MOCK') {
         const paymentResponse = await orderService.createPayment(orderId);
@@ -288,6 +310,33 @@ const ProductDetail: React.FC = () => {
               </div>
             </div>
 
+            {sellerTrust && (
+              <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-bold uppercase text-emerald-700">Uy tin nguoi ban</div>
+                    <div className="mt-1 text-sm font-black text-slate-900">{sellerTrust.badge} - {sellerTrust.trustScore}/100</div>
+                  </div>
+                  {user && user.id !== product.sellerId && (
+                    <button
+                      onClick={async () => {
+                        const res = await productService.toggleSellerFollow(product.sellerId);
+                        if (res.success) setFollowingSeller(res.data.following);
+                      }}
+                      className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-700 shadow-sm"
+                    >
+                      {followingSeller ? 'Dang theo doi' : 'Theo doi'}
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.avgRating || 0}</div><div className="text-slate-400">Rating</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.soldCount || 0}</div><div className="text-slate-400">Da ban</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.followerCount || 0}</div><div className="text-slate-400">Theo doi</div></div>
+                </div>
+              </div>
+            )}
+
             <div className="mb-6">
               <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
                 <Package size={16} className="text-slate-400" /> Mô tả
@@ -370,6 +419,16 @@ const ProductDetail: React.FC = () => {
                   onChange={(e) => setBuyerNote(e.target.value)}
                   rows={4}
                   placeholder="Ví dụ: Mình muốn nhận hàng vào chiều mai ở khu A."
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Diem hen giao dich</label>
+                <input
+                  value={handoverLocation}
+                  onChange={(e) => setHandoverLocation(e.target.value)}
+                  placeholder="Vi du: Sanh A, Thu vien IUH, cong Nguyen Van Bao"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400"
                 />
               </div>
