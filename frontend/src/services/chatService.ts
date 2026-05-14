@@ -4,14 +4,25 @@ import api from './api';
 
 export interface ChatMessage {
   id?: string;
-  senderId: string;
-  recipientId: string;
+  _id?: string;
+  type?: string;
+  senderId?: string;
+  recipientId?: string;
   receiverId?: string;
-  content: string;
+  content?: string;
   timestamp?: string;
   isRead?: boolean;
   messageType?: string;
   fileUrl?: string;
+  conversationId?: string;
+  userId?: string;
+}
+
+export interface PresenceEvent {
+  type: 'PRESENCE_SNAPSHOT' | 'PRESENCE_ONLINE' | 'PRESENCE_OFFLINE';
+  userId?: string;
+  onlineUsers: string[];
+  at: string;
 }
 
 let stompClient: Stomp.Client | null = null;
@@ -169,6 +180,14 @@ export const chatService = {
     return false;
   },
 
+  sendTyping: (conversationId: string, isTyping: boolean) => {
+    if (stompClient && stompClient.connected) {
+      stompClient.send('/app/typing', {}, JSON.stringify({ conversationId, isTyping }));
+      return true;
+    }
+    return false;
+  },
+
   getChatUploadUrl: async (filename: string, contentType: string) => {
     const response = await api.post('/chat/upload-url', { filename, contentType });
     return response.data;
@@ -197,6 +216,28 @@ export const chatService = {
     };
   },
 
+  subscribePresence: (callback: (event: PresenceEvent) => void) => {
+    if (!stompClient || !stompClient.connected) {
+      return () => {};
+    }
+
+    const subscription = stompClient.subscribe('/topic/presence', (payload) => {
+      try {
+        callback(JSON.parse(payload.body));
+      } catch (error) {
+        console.error('Error parsing presence event:', error);
+      }
+    });
+
+    return () => {
+      try {
+        subscription.unsubscribe();
+      } catch (_error) {
+        // ignore unsubscribe cleanup errors
+      }
+    };
+  },
+
   getHistory: async (senderId: string, recipientId: string) => {
     const conversationId = [senderId, recipientId].sort().join(':');
     const response = await api.get(`/chat/conversations/${conversationId}`);
@@ -212,6 +253,11 @@ export const chatService = {
     let url = `/chat/search?q=${encodeURIComponent(query)}`;
     if (conversationId) url += `&conversationId=${encodeURIComponent(conversationId)}`;
     const response = await api.get(url);
+    return response.data;
+  },
+
+  reportMessage: async (messageId: string, reason: string) => {
+    const response = await api.post(`/chat/messages/${messageId}/report`, { reason });
     return response.data;
   },
 };

@@ -17,6 +17,7 @@ export const createProductSchema = z.object({
   category: z
     .string({ required_error: 'Category is required' })
     .min(1, 'Category is required'),
+  location: z.string().max(160, 'Location must be at most 160 characters').optional().default(''),
   condition: z.enum(CONDITIONS, {
     errorMap: () => ({ message: `Condition must be one of: ${CONDITIONS.join(', ')}` }),
   }),
@@ -39,6 +40,7 @@ export const paginationSchema = z.object({
   size: z.coerce.number().int().min(1).max(100).default(20),
   sort: z.string().optional(),
   category: z.string().optional(),
+  location: z.string().optional(),
 });
 
 export const adminProductListSchema = paginationSchema.extend({
@@ -49,6 +51,12 @@ export const searchSchema = z.object({
   keyword: z.string().min(1, 'Search keyword is required'),
   page: z.coerce.number().int().min(0).default(1),
   size: z.coerce.number().int().min(1).max(100).default(20),
+  minPrice: z.coerce.number().optional(),
+  maxPrice: z.coerce.number().optional(),
+  category: z.string().optional(),
+  condition: z.enum(CONDITIONS).optional(),
+  location: z.string().optional(),
+  sort: z.enum(['price_asc', 'price_desc', 'date_asc', 'date_desc']).optional(),
 });
 
 export const resolveSchema = z.object({

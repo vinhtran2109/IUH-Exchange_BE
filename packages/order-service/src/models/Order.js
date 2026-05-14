@@ -1,5 +1,47 @@
 import mongoose from 'mongoose';
 
+const statusHistorySchema = new mongoose.Schema(
+  {
+    from: { type: String, default: null },
+    to: { type: String, required: true },
+    changedBy: { type: String, default: 'system' },
+    actorRole: {
+      type: String,
+      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
+      default: 'SYSTEM',
+    },
+    reason: { type: String, default: '' },
+    metadata: { type: Object, default: {} },
+    changedAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const transactionSchema = new mongoose.Schema(
+  {
+    type: {
+      type: String,
+      enum: ['PAYMENT_CREATED', 'PAYMENT_CAPTURED', 'PAYMENT_FAILED', 'REFUND_CREATED'],
+      required: true,
+    },
+    transactionId: { type: String, default: null },
+    amount: { type: Number, required: true, min: 0 },
+    method: {
+      type: String,
+      enum: ['VNPAY_MOCK', 'CASH', 'NONE'],
+      default: 'NONE',
+    },
+    status: {
+      type: String,
+      enum: ['PENDING', 'SUCCESS', 'FAILED', 'REFUNDED'],
+      default: 'PENDING',
+    },
+    note: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     buyerId: { type: String, required: true, index: true },
@@ -31,6 +73,10 @@ const orderSchema = new mongoose.Schema(
     paymentTransactionId: { type: String, default: null },
     paidAt: { type: Date, default: null },
     refundedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+    receiptNumber: { type: String, unique: true, sparse: true, index: true },
+    statusHistory: { type: [statusHistorySchema], default: [] },
+    transactions: { type: [transactionSchema], default: [] },
   },
   { timestamps: true }
 );

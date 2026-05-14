@@ -30,6 +30,13 @@ export const authService = {
     return response.data;
   },
 
+  adminLogin: async (data: LoginRequest) => {
+    const response = await api.post("/auth/login", data, {
+      headers: { "X-Admin-Portal": "true" },
+    });
+    return response.data;
+  },
+
   logout: async () => {
     const response = await api.post("/auth/logout");
     return response.data;

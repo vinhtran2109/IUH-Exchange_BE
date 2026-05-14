@@ -28,7 +28,7 @@ const AdminLogin: React.FC = () => {
     setError('');
 
     try {
-      const response = await authService.login({ email, password });
+      const response = await authService.adminLogin({ email, password });
       if (!response?.success) {
         setError(response?.message || 'Không thể đăng nhập. Vui lòng kiểm tra lại thông tin.');
         return;

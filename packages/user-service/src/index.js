@@ -4,6 +4,7 @@ import {
   logger,
   connectMongo,
   errorHandler,
+  auditLog,
 } from '@iuh-exchange/common';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -15,6 +16,7 @@ const MONGODB_URI = process.env.USER_SERVICE_MONGO_URI || process.env.MONGODB_UR
 
 // ── Middleware ──
 app.use(express.json());
+app.use(auditLog());
 
 // ── Health ──
 app.get('/health', async (req, res) => {

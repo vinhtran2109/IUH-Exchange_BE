@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   adminService,
+  type AuditLogData,
   type DlqEventData,
   type LostFoundAdminData,
   type ReportData,
@@ -44,7 +45,7 @@ const PERMISSION_LABELS: Record<string, string> = {
   CAN_APPROVE_POST: 'Duyệt bài',
 };
 
-type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'dlq' | 'analytics' | 'email';
+type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'dlq' | 'analytics' | 'email' | 'audit';
 type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECTED';
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
@@ -59,6 +60,7 @@ const ADMIN_TABS = [
   { id: 'lostFound', label: 'Đồ thất lạc', group: 'Kiểm duyệt', icon: MapPin },
   { id: 'email', label: 'Email compose', group: 'Hệ thống', icon: Mail },
   { id: 'dlq', label: 'DLQ', group: 'Hệ thống', icon: Server },
+  { id: 'audit', label: 'Audit log', group: 'Há»‡ thá»‘ng', icon: ShieldCheck },
 ] as const;
 
 const formatDate = (value?: string) => {
@@ -183,6 +185,7 @@ const AdminDashboard: React.FC = () => {
   const [reports, setReports] = useState<ReportData[]>([]);
   const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
   const [dlqEvents, setDlqEvents] = useState<DlqEventData[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogData[]>([]);
   const [dlqStats, setDlqStats] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<any>({ user: {}, product: {} });
 
@@ -266,6 +269,12 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'lostFound') {
         const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, 100);
         setLostFoundItems(lostFoundRes.data?.content || []);
+        return;
+      }
+
+      if (activeTab === 'audit') {
+        const res = await adminService.getAuditLogs(1, 100);
+        if (res.success) setAuditLogs(res.data?.content || []);
         return;
       }
 
@@ -1062,6 +1071,64 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const renderAuditLogs = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Audit log</h2>
+          <p className="mt-1 text-sm text-slate-500">Theo doi cac thao tac nhay cam, dang nhap va thay doi du lieu quan tri.</p>
+        </div>
+        <button
+          onClick={() => fetchData()}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+        >
+          <RefreshCw size={16} />
+          Lam moi
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="p-4">Thoi gian</th>
+              <th className="p-4">Action</th>
+              <th className="p-4">Resource</th>
+              <th className="p-4">Method</th>
+              <th className="p-4">Status</th>
+              <th className="p-4">User</th>
+              <th className="p-4">Path</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {auditLogs.map((log) => (
+              <tr key={log._id} className="hover:bg-slate-50/70">
+                <td className="p-4 font-medium text-slate-700">{formatDate(log.createdAt)}</td>
+                <td className="p-4">
+                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{log.action}</span>
+                </td>
+                <td className="p-4 text-slate-700">{log.resource}{log.resourceId ? ` / ${log.resourceId}` : ''}</td>
+                <td className="p-4 font-black text-slate-700">{log.method}</td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${(log.statusCode || 0) >= 400 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {log.statusCode || 'N/A'}
+                  </span>
+                </td>
+                <td className="p-4 text-slate-500">{log.userId || 'system'}</td>
+                <td className="max-w-[280px] truncate p-4 text-slate-500" title={log.path}>{log.path}</td>
+              </tr>
+            ))}
+            {auditLogs.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-10 text-center text-slate-400">Chua co audit log phu hop.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   const renderEmailCompose = () => (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
       <form onSubmit={handleSendEmail} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -1337,6 +1404,8 @@ const AdminDashboard: React.FC = () => {
         renderReports()
       ) : activeTab === 'lostFound' ? (
         renderLostFound()
+      ) : activeTab === 'audit' ? (
+        renderAuditLogs()
       ) : activeTab === 'email' ? (
         renderEmailCompose()
       ) : (

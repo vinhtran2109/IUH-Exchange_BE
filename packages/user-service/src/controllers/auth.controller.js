@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ResourceNotFoundException,
   UnauthorizedException,
+  ForbiddenException,
   ApiResponse,
   hashPassword,
   comparePassword,
@@ -174,6 +175,11 @@ export async function login(req, res) {
     await user.save();
     const remaining = MAX_ATTEMPTS - user.failedLoginAttempts;
     throw new UnauthorizedException(`Email hoặc mật khẩu không đúng. Còn ${remaining} lần thử.`);
+  }
+
+  if (user.role === 'ADMIN' && req.headers['x-admin-portal'] !== 'true') {
+    logger.warn(`[Auth] Blocked ADMIN login outside admin portal: ${email}`);
+    throw new ForbiddenException('Admin accounts must sign in through the admin portal');
   }
 
   // Reset failed login attempts on successful login

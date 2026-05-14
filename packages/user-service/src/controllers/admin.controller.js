@@ -10,6 +10,7 @@ import {
   parsePagination,
   logger,
   hashPassword,
+  AuditLog,
 } from '@iuh-exchange/common';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
@@ -277,6 +278,38 @@ export async function getUserDetail(req, res) {
     ...mapToProfile(user),
     recentKarmaHistory: karmaHistory,
   }));
+}
+
+/**
+ * GET /api/v1/users/admin/audit-logs
+ * Search audit log entries for admin operations and security review.
+ */
+export async function listAuditLogs(req, res) {
+  const { page, size, skip } = parsePagination(req.query);
+  const { action, userId, resource, method, statusCode } = req.query;
+  const filter = {};
+
+  if (action) filter.action = action;
+  if (userId) filter.userId = userId;
+  if (resource) filter.resource = resource;
+  if (method) filter.method = String(method).toUpperCase();
+  if (statusCode) filter.statusCode = Number(statusCode);
+
+  const [logs, total] = await Promise.all([
+    AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
+    AuditLog.countDocuments(filter),
+  ]);
+
+  const pageResponse = new PageResponse({
+    content: logs,
+    page,
+    size,
+    totalElements: total,
+    totalPages: Math.ceil(total / size),
+    last: page * size >= total,
+  });
+
+  res.json(ApiResponse.ok(pageResponse));
 }
 
 /**

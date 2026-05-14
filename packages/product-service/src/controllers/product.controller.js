@@ -2,7 +2,7 @@ import { Product } from '../models/Product.js';
 import { containsProfanity } from '../services/profanity-filter.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
 import { publishProductEvent, TOPICS } from '../services/kafka.service.js';
-import { searchProducts } from '../services/elasticsearch.service.js';
+import { searchProducts, suggestProducts } from '../services/elasticsearch.service.js';
 import {
   ApiResponse,
   PageResponse,
@@ -23,6 +23,7 @@ function toResponse(product) {
     price: product.price,
     imageUrls: product.imageUrls || [],
     category: product.category,
+    location: product.location || '',
     condition: product.condition,
     status: product.status,
     sellerId: product.sellerId,
@@ -52,16 +53,18 @@ export async function listProducts(req, res) {
   const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const sort = req.query.sort;
   const category = req.query.category;
+  const location = req.query.location;
   const skip = (page - 1) * size;
 
   // Build cache key from query params
-  const cacheKey = `products:list:${page}:${size}:${sort || 'default'}:${category || 'all'}`;
+  const cacheKey = `products:list:${page}:${size}:${sort || 'default'}:${category || 'all'}:${location || 'all'}`;
   
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
   const filter = { status: 'AVAILABLE' };
   if (category) filter.category = category;
+  if (location) filter.location = { $regex: location, $options: 'i' };
 
   const [products, total] = await Promise.all([
     Product.find(filter).sort(buildSortOption(sort)).skip(skip).limit(size).lean(),
@@ -96,6 +99,7 @@ export async function searchProductsHandler(req, res) {
   if (req.query.maxPrice) filters.maxPrice = parseFloat(req.query.maxPrice);
   if (req.query.category) filters.category = req.query.category;
   if (req.query.condition) filters.condition = req.query.condition;
+  if (req.query.location) filters.location = req.query.location;
   if (req.query.sort) filters.sort = req.query.sort;
 
   const result = await searchProducts(keyword, page, size, filters);
@@ -110,6 +114,17 @@ export async function searchProductsHandler(req, res) {
   });
 
   res.json(ApiResponse.ok(pageResponse, 'Search results'));
+}
+
+/**
+ * GET /api/v1/products/suggestions?keyword=xxx
+ * Autocomplete search suggestions.
+ */
+export async function suggestProductsHandler(req, res) {
+  const keyword = String(req.query.keyword || '').trim();
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit || '8', 10)));
+  const suggestions = await suggestProducts(keyword, limit);
+  res.json(ApiResponse.ok(suggestions, 'Search suggestions'));
 }
 
 /**
@@ -162,7 +177,7 @@ export async function getProductById(req, res) {
  */
 export async function createProduct(req, res) {
   const sellerId = req.user.sub;
-  const { title, description, price, category, condition, imageUrls } = req.body;
+  const { title, description, price, category, location, condition, imageUrls } = req.body;
 
   // Profanity filter
   if (containsProfanity(title) || containsProfanity(description)) {
@@ -175,6 +190,7 @@ export async function createProduct(req, res) {
     description,
     price,
     category,
+    location: location || '',
     condition,
     imageUrls: imageUrls || [],
     status: 'PENDING_APPROVAL',
@@ -201,7 +217,7 @@ export async function updateProduct(req, res) {
     throw new ForbiddenException("You don't have permission to update this product");
   }
 
-  const { title, description, price, imageUrls } = req.body;
+  const { title, description, price, category, condition, location, imageUrls } = req.body;
 
   // Profanity filter on updated text
   if (title && containsProfanity(title)) {
@@ -214,6 +230,9 @@ export async function updateProduct(req, res) {
   if (title !== undefined) product.title = title;
   if (description !== undefined) product.description = description;
   if (price !== undefined) product.price = price;
+  if (category !== undefined) product.category = category;
+  if (condition !== undefined) product.condition = condition;
+  if (location !== undefined) product.location = location;
   if (imageUrls !== undefined) product.imageUrls = imageUrls;
 
   const saved = await product.save();
@@ -225,7 +244,10 @@ export async function updateProduct(req, res) {
     description: saved.description,
     price: saved.price,
     category: saved.category,
+    location: saved.location || '',
+    condition: saved.condition,
     status: saved.status,
+    createdAt: saved.createdAt,
   });
 
   // Invalidate cache
@@ -389,7 +411,10 @@ export async function resolveProduct(req, res) {
       description: saved.description,
       price: saved.price,
       category: saved.category,
+      location: saved.location || '',
+      condition: saved.condition,
       status: saved.status,
+      createdAt: saved.createdAt,
     });
 
     // Notify seller: product approved
