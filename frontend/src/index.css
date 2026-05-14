@@ -24,6 +24,7 @@
   body {
     @apply bg-[var(--background)] text-[var(--foreground)] antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    transition: background-color 160ms ease, color 160ms ease;
   }
 
   ::selection {
@@ -32,6 +33,73 @@
 
   .dark ::selection {
     @apply bg-blue-900 text-blue-100;
+  }
+}
+
+@layer utilities {
+  .dark .bg-white {
+    background-color: #1e293b;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-100 {
+    background-color: #0f172a;
+  }
+
+  .dark .bg-slate-900,
+  .dark .bg-slate-950 {
+    background-color: #020617;
+  }
+
+  .dark .text-slate-950,
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700 {
+    color: #f8fafc;
+  }
+
+  .dark .text-slate-600,
+  .dark .text-slate-500 {
+    color: #cbd5e1;
+  }
+
+  .dark .text-slate-400 {
+    color: #94a3b8;
+  }
+
+  .dark .border-slate-50,
+  .dark .border-slate-100,
+  .dark .border-slate-200 {
+    border-color: #334155;
+  }
+
+  .dark .divide-slate-100,
+  .dark .divide-slate-200 {
+    border-color: #334155;
+  }
+
+  .dark .shadow-sm,
+  .dark .shadow-lg,
+  .dark .shadow-xl,
+  .dark .shadow-2xl {
+    --tw-shadow-color: rgb(0 0 0 / 0.35);
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    color: #f8fafc;
+    background-color: #0f172a;
+    border-color: #334155;
+  }
+
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #64748b;
+  }
+
+  .dark table tr:hover {
+    background-color: #0f172a;
   }
 }
 

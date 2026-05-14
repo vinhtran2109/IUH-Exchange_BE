@@ -155,6 +155,7 @@ export const SimpleLineChart: React.FC<SimpleLineChartProps> = ({
           const y = h - padding - (d.value / maxValue) * (h - 2 * padding);
           return (
             <g key={i}>
+              <title>{`${d.label}: ${valuePrefix}${d.value.toLocaleString()}${valueSuffix}`}</title>
               <circle cx={x} cy={y} r="4" fill="white" stroke={color} strokeWidth="2" />
               <text x={x} y={h - 4} textAnchor="middle" className="text-[8px] fill-slate-400 font-bold">{d.label}</text>
             </g>

@@ -172,4 +172,9 @@ export const adminService = {
     const response = await api.delete(`/notifications/dlq/${eventId}`);
     return response.data;
   },
+
+  sendComposedEmail: async (payload: { to: string; subject: string; body: string }) => {
+    const response = await api.post('/notifications/admin/email/compose', payload);
+    return response.data;
+  },
 };

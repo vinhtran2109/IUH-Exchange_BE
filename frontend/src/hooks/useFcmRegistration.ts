@@ -79,7 +79,7 @@ export function showBrowserNotification(title: string, body: string, url?: strin
     icon: '/icons/icon-192.png',
     badge: '/icons/icon-192.png',
     vibrate: [200, 100, 200],
-  });
+  } as NotificationOptions & { vibrate?: number[] });
 
   notification.onclick = () => {
     window.focus();
