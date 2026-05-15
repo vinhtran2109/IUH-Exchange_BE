@@ -42,6 +42,58 @@ const transactionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const meetingProposalSchema = new mongoose.Schema(
+  {
+    location: { type: String, required: true, trim: true, maxlength: 300 },
+    time: { type: Date, required: true },
+    note: { type: String, default: '', maxlength: 1000 },
+    proposedBy: { type: String, required: true },
+    status: {
+      type: String,
+      enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COUNTERED', 'CANCELLED'],
+      default: 'PENDING',
+    },
+    respondedBy: { type: String, default: null },
+    respondedAt: { type: Date, default: null },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const disputeEvidenceSchema = new mongoose.Schema(
+  {
+    submittedBy: { type: String, required: true },
+    type: {
+      type: String,
+      enum: ['IMAGE', 'CHAT_SCREENSHOT', 'RECEIPT', 'OTHER'],
+      default: 'OTHER',
+    },
+    url: { type: String, required: true },
+    note: { type: String, default: '', maxlength: 1000 },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const disputeTimelineSchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum: ['OPENED', 'EVIDENCE_ADDED', 'ADMIN_NOTE', 'RESOLVED', 'REJECTED'],
+      required: true,
+    },
+    actorId: { type: String, required: true },
+    actorRole: {
+      type: String,
+      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
+      default: 'SYSTEM',
+    },
+    note: { type: String, default: '', maxlength: 2000 },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     buyerId: { type: String, required: true, index: true },
@@ -60,6 +112,15 @@ const orderSchema = new mongoose.Schema(
     buyerNote: { type: String, default: '' },
     handoverLocation: { type: String, default: '' },
     handoverTime: { type: Date, default: null },
+    handoverStatus: {
+      type: String,
+      enum: ['NOT_SCHEDULED', 'PROPOSED', 'SCHEDULED', 'BUYER_CONFIRMED', 'SELLER_CONFIRMED', 'HANDED_OVER', 'CANCELLED'],
+      default: 'NOT_SCHEDULED',
+      index: true,
+    },
+    meetingProposals: { type: [meetingProposalSchema], default: [] },
+    buyerHandoverConfirmedAt: { type: Date, default: null },
+    sellerHandoverConfirmedAt: { type: Date, default: null },
     disputeStatus: {
       type: String,
       enum: ['NONE', 'OPEN', 'RESOLVED', 'REJECTED'],
@@ -72,6 +133,8 @@ const orderSchema = new mongoose.Schema(
     disputeResolvedBy: { type: String, default: null },
     disputeResolvedAt: { type: Date, default: null },
     disputeResolution: { type: String, default: '' },
+    disputeEvidence: { type: [disputeEvidenceSchema], default: [] },
+    disputeTimeline: { type: [disputeTimelineSchema], default: [] },
     idempotencyKey: { type: String, unique: true, sparse: true, index: true },
     paymentStatus: {
       type: String,

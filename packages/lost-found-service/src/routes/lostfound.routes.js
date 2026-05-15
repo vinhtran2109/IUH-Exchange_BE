@@ -9,6 +9,7 @@ import {
   deleteItem,
   deleteItemAsAdmin,
   claimItem,
+  reviewClaim,
   getUploadUrl,
 } from '../controllers/lostfound.controller.js';
 
@@ -41,5 +42,6 @@ router.get('/:id', optionalAuth, getItemById);
 router.put('/:id', authenticate, updateItem);
 router.delete('/:id', authenticate, deleteItem);
 router.post('/:id/claim', authenticate, claimItem);
+router.patch('/:id/claims/:claimId', authenticate, reviewClaim);
 
 export default router;

@@ -8,6 +8,7 @@ const TOPICS = {
   ORDER_REFUNDED: 'order.refunded',
   PRODUCT_RESERVED: 'product.reserved',
   PRODUCT_RESERVE_FAILED: 'product.reserve.failed',
+  PRODUCT_RESERVE_EXPIRED: 'product.reserve.expired',
 };
 
 const CONSUMER_GROUP = 'order-service-group';
@@ -126,6 +127,7 @@ export async function startSagaConsumer(orderService) {
   const consumer = await createConsumer(CONSUMER_GROUP, [
     { topic: TOPICS.PRODUCT_RESERVED },
     { topic: TOPICS.PRODUCT_RESERVE_FAILED },
+    { topic: TOPICS.PRODUCT_RESERVE_EXPIRED },
   ], 'order-service-consumer');
 
   await consumer.run({
@@ -153,6 +155,13 @@ export async function startSagaConsumer(orderService) {
             `[Saga] ProductReserveFailedEvent received: orderId=${orderId}, reason=${reason}`
           );
           await orderService.cancelOrder(orderId, reason || 'Sản phẩm không còn khả dụng');
+          break;
+        }
+
+        case TOPICS.PRODUCT_RESERVE_EXPIRED: {
+          const { orderId, reason } = payload;
+          logger.warn(`[Saga] ProductReserveExpiredEvent received: orderId=${orderId}`);
+          await orderService.cancelOrder(orderId, reason || 'Thời gian giữ chỗ đã hết hạn');
           break;
         }
 

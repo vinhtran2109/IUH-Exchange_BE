@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const CONDITIONS = ['NEW', 'LIKE_NEW', 'GOOD', 'FAIR', 'POOR'];
+const LISTING_TYPES = ['SELL', 'GIVE_AWAY', 'TRADE'];
 
 export const createProductSchema = z.object({
   title: z
@@ -14,6 +15,9 @@ export const createProductSchema = z.object({
   price: z
     .number({ required_error: 'Price is required' })
     .min(0, 'Price cannot be negative'),
+  listingType: z.enum(LISTING_TYPES).optional().default('SELL'),
+  tradeWanted: z.string().max(500, 'Trade wanted text must be at most 500 characters').optional().default(''),
+  allowOffers: z.boolean().optional().default(true),
   category: z
     .string({ required_error: 'Category is required' })
     .min(1, 'Category is required'),

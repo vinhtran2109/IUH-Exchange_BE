@@ -24,6 +24,7 @@ function mapToProfile(user) {
     email: user.email,
     name: user.name,
     studentId: user.studentId,
+    studentVerification: user.studentVerification || { status: 'UNSUBMITTED' },
     avatarUrl: user.avatarUrl,
     isVerified: user.isVerified,
     isActive: user.isActive,
@@ -288,6 +289,44 @@ export async function getUserDetail(req, res) {
     ...mapToProfile(user),
     recentKarmaHistory: karmaHistory,
   }));
+}
+
+export async function reviewStudentVerification(req, res) {
+  const { id } = req.params;
+  const action = String(req.body?.action || '').toUpperCase();
+  const adminNote = String(req.body?.adminNote || '').trim();
+
+  if (!['APPROVE', 'REJECT'].includes(action)) {
+    throw new BadRequestException('action must be APPROVE or REJECT');
+  }
+
+  const user = await User.findById(id);
+  if (!user) throw new ResourceNotFoundException('User', id);
+  if (user.studentVerification?.status !== 'PENDING') {
+    throw new BadRequestException('Người dùng không có yêu cầu xác minh MSSV đang chờ');
+  }
+
+  if (action === 'APPROVE') {
+    const studentId = user.studentVerification.submittedStudentId;
+    const duplicate = await User.findOne({
+      _id: { $ne: id },
+      studentId,
+      isDeleted: { $ne: true },
+    }).lean();
+    if (duplicate) throw new BadRequestException('MSSV này đã được xác minh cho tài khoản khác');
+    user.studentId = studentId;
+    user.studentVerification.status = 'VERIFIED';
+  } else {
+    user.studentVerification.status = 'REJECTED';
+  }
+
+  user.studentVerification.adminNote = adminNote;
+  user.studentVerification.reviewedAt = new Date();
+  user.studentVerification.reviewedBy = req.user?.sub || null;
+  await user.save();
+
+  logger.info(`[Admin] Student verification ${action.toLowerCase()}: user=${user.email}`);
+  res.json(ApiResponse.ok(mapToProfile(user), 'Đã cập nhật xác minh MSSV'));
 }
 
 /**

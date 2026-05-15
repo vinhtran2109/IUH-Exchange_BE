@@ -21,12 +21,16 @@ function toResponse(product) {
     title: product.title,
     description: product.description,
     price: product.price,
+    listingType: product.listingType || 'SELL',
+    tradeWanted: product.tradeWanted || '',
+    allowOffers: product.allowOffers !== false,
     imageUrls: product.imageUrls || [],
     category: product.category,
     location: product.location || '',
     condition: product.condition,
     status: product.status,
     sellerId: product.sellerId,
+    reservationExpiresAt: product.reservationExpiresAt,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -177,7 +181,7 @@ export async function getProductById(req, res) {
  */
 export async function createProduct(req, res) {
   const sellerId = req.user.sub;
-  const { title, description, price, category, location, condition, imageUrls } = req.body;
+  const { title, description, price, category, location, condition, imageUrls, listingType, tradeWanted, allowOffers } = req.body;
 
   // Profanity filter
   if (containsProfanity(title) || containsProfanity(description)) {
@@ -189,6 +193,9 @@ export async function createProduct(req, res) {
     title,
     description,
     price,
+    listingType: listingType || 'SELL',
+    tradeWanted: tradeWanted || '',
+    allowOffers: allowOffers !== false,
     category,
     location: location || '',
     condition,
@@ -217,7 +224,7 @@ export async function updateProduct(req, res) {
     throw new ForbiddenException("You don't have permission to update this product");
   }
 
-  const { title, description, price, category, condition, location, imageUrls } = req.body;
+  const { title, description, price, category, condition, location, imageUrls, listingType, tradeWanted, allowOffers } = req.body;
 
   // Profanity filter on updated text
   if (title && containsProfanity(title)) {
@@ -230,6 +237,9 @@ export async function updateProduct(req, res) {
   if (title !== undefined) product.title = title;
   if (description !== undefined) product.description = description;
   if (price !== undefined) product.price = price;
+  if (listingType !== undefined) product.listingType = listingType;
+  if (tradeWanted !== undefined) product.tradeWanted = tradeWanted;
+  if (allowOffers !== undefined) product.allowOffers = allowOffers;
   if (category !== undefined) product.category = category;
   if (condition !== undefined) product.condition = condition;
   if (location !== undefined) product.location = location;

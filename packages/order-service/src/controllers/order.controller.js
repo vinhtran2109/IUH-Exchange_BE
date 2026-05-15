@@ -132,6 +132,54 @@ export class OrderController {
     return res.status(201).json(ApiResponse.created(order, 'Dispute opened'));
   }
 
+  async addDisputeEvidence(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const url = String(req.body?.url || '').trim();
+    if (!url) throw new BadRequestException('Evidence url is required');
+    const order = await this.orderService.addDisputeEvidence(req.params.id, userId, {
+      type: req.body?.type || 'OTHER',
+      url,
+      note: String(req.body?.note || '').trim(),
+    });
+    return res.status(201).json(ApiResponse.created(order, 'Evidence added'));
+  }
+
+  async proposeHandover(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const location = String(req.body?.location || '').trim();
+    const time = req.body?.time ? new Date(req.body.time) : null;
+    if (!location || !time || Number.isNaN(time.getTime())) {
+      throw new BadRequestException('Valid location and time are required');
+    }
+    const order = await this.orderService.proposeHandover(req.params.id, userId, {
+      location,
+      time,
+      note: String(req.body?.note || '').trim(),
+    });
+    return res.status(201).json(ApiResponse.created(order, 'Handover proposed'));
+  }
+
+  async respondHandover(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const action = String(req.body?.action || '').toUpperCase();
+    if (!['ACCEPT', 'REJECT'].includes(action)) throw new BadRequestException('action must be ACCEPT or REJECT');
+    const order = await this.orderService.respondHandover(req.params.id, userId, {
+      proposalId: req.params.proposalId,
+      action,
+    });
+    return res.json(ApiResponse.ok(order, 'Handover proposal updated'));
+  }
+
+  async confirmHandover(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const order = await this.orderService.confirmHandover(req.params.id, userId);
+    return res.json(ApiResponse.ok(order, 'Handover confirmed'));
+  }
+
   async getAdminOrders(req, res) {
     if (req.headers['x-user-role'] !== 'ADMIN' && req.user?.role !== 'ADMIN') {
       throw new BadRequestException('Admin access required');

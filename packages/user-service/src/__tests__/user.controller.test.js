@@ -19,6 +19,7 @@ const mockUser = {
 
 const mockUserModel = {
   findById: vi.fn(),
+  findOne: vi.fn(),
 };
 
 vi.mock('../models/User.js', () => ({ User: mockUserModel }));
@@ -57,6 +58,7 @@ function mockReqRes(body = {}, params = {}, user = { sub: 'user123' }) {
 describe('user.controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUserModel.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
   });
 
   describe('getMyProfile', () => {
@@ -108,6 +110,32 @@ describe('user.controller', () => {
       await userController.updateProfile(req, res);
 
       expect(res.json).toHaveBeenCalled();
+    });
+  });
+
+  describe('requestStudentVerification', () => {
+    it('should submit a pending MSSV verification request', async () => {
+      const user = {
+        ...mockUser,
+        studentVerification: { status: 'UNSUBMITTED' },
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockUserModel.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue(null) });
+      mockUserModel.findById.mockResolvedValue(user);
+
+      const { req, res } = mockReqRes({ studentId: '210123456', evidenceUrl: 'https://example.com/card.jpg' });
+      await userController.requestStudentVerification(req, res);
+
+      expect(user.studentVerification.status).toBe('PENDING');
+      expect(user.studentVerification.submittedStudentId).toBe('210123456');
+      expect(res.status).toHaveBeenCalledWith(202);
+    });
+
+    it('should reject duplicate verified MSSV', async () => {
+      mockUserModel.findOne.mockReturnValue({ lean: vi.fn().mockResolvedValue({ _id: 'other' }) });
+
+      const { req, res } = mockReqRes({ studentId: '210123456' });
+      await expect(userController.requestStudentVerification(req, res)).rejects.toThrow('MSSV này');
     });
   });
 

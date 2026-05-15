@@ -102,8 +102,24 @@ export function createOrderRoutes(orderService) {
     controller.openDispute(req, res).catch(next);
   });
 
+  router.post('/:id/disputes/evidence', (req, res, next) => {
+    controller.addDisputeEvidence(req, res).catch(next);
+  });
+
   router.patch('/:id/disputes/resolve', (req, res, next) => {
     controller.resolveDispute(req, res).catch(next);
+  });
+
+  router.post('/:id/handover/proposals', (req, res, next) => {
+    controller.proposeHandover(req, res).catch(next);
+  });
+
+  router.patch('/:id/handover/proposals/:proposalId', (req, res, next) => {
+    controller.respondHandover(req, res).catch(next);
+  });
+
+  router.patch('/:id/handover/confirm', (req, res, next) => {
+    controller.confirmHandover(req, res).catch(next);
   });
 
   return router;

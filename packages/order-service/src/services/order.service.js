@@ -27,6 +27,12 @@ const VALID_TRANSITIONS = {
   CANCELLED: new Set(),
 };
 
+function actorRoleFor(order, userId) {
+  if (String(order.buyerId) === String(userId)) return 'BUYER';
+  if (String(order.sellerId) === String(userId)) return 'SELLER';
+  return 'SYSTEM';
+}
+
 function appendStatusHistory(order, nextStatus, {
   changedBy = 'system',
   actorRole = 'SYSTEM',
@@ -128,6 +134,13 @@ export class OrderService {
           buyerNote: request.buyerNote || '',
           handoverLocation: request.handoverLocation || '',
           handoverTime: request.handoverTime || null,
+          handoverStatus: request.handoverLocation && request.handoverTime ? 'PROPOSED' : 'NOT_SCHEDULED',
+          meetingProposals: request.handoverLocation && request.handoverTime ? [{
+            location: request.handoverLocation,
+            time: request.handoverTime,
+            note: request.buyerNote || '',
+            proposedBy: buyerId,
+          }] : [],
           idempotencyKey: request.idempotencyKey,
           status: 'PENDING',
           statusHistory: [{
@@ -495,6 +508,13 @@ export class OrderService {
     order.disputeReason = reason;
     order.disputeOpenedBy = userId;
     order.disputeOpenedAt = new Date();
+    order.disputeTimeline = order.disputeTimeline || [];
+    order.disputeTimeline.push({
+      action: 'OPENED',
+      actorId: userId,
+      actorRole: actorRoleFor(order, userId),
+      note: reason,
+    });
     await order.save();
 
     await publishOrderDisputeOpened({
@@ -509,6 +529,109 @@ export class OrderService {
     return order.toObject();
   }
 
+  async addDisputeEvidence(orderId, userId, { type = 'OTHER', url, note = '' }) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
+      throw new ForbiddenException('Bạn không có quyền bổ sung bằng chứng cho đơn hàng này');
+    }
+    if (order.disputeStatus !== 'OPEN') {
+      throw new BadRequestException('Chỉ có thể bổ sung bằng chứng khi tranh chấp đang mở');
+    }
+    if (!url) throw new BadRequestException('Evidence url is required');
+
+    order.disputeEvidence = order.disputeEvidence || [];
+    order.disputeEvidence.push({ submittedBy: userId, type, url, note });
+    order.disputeTimeline = order.disputeTimeline || [];
+    order.disputeTimeline.push({
+      action: 'EVIDENCE_ADDED',
+      actorId: userId,
+      actorRole: actorRoleFor(order, userId),
+      note,
+    });
+    await order.save();
+    return order.toObject();
+  }
+
+  async proposeHandover(orderId, userId, { location, time, note = '' }) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
+      throw new ForbiddenException('Bạn không có quyền đề xuất lịch hẹn cho đơn này');
+    }
+    if (!['PENDING', 'AWAITING_SELLER'].includes(order.status)) {
+      throw new BadRequestException('Chỉ có thể hẹn giao khi đơn đang xử lý');
+    }
+    if (!location || !time) throw new BadRequestException('location and time are required');
+
+    for (const proposal of order.meetingProposals || []) {
+      if (proposal.status === 'PENDING') {
+        proposal.status = 'COUNTERED';
+        proposal.respondedBy = userId;
+        proposal.respondedAt = new Date();
+      }
+    }
+
+    order.meetingProposals = order.meetingProposals || [];
+    order.meetingProposals.push({ location, time, note, proposedBy: userId });
+    order.handoverLocation = location;
+    order.handoverTime = time;
+    order.handoverStatus = 'PROPOSED';
+    await order.save();
+    return order.toObject();
+  }
+
+  async respondHandover(orderId, userId, { proposalId, action }) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
+      throw new ForbiddenException('Bạn không có quyền phản hồi lịch hẹn cho đơn này');
+    }
+
+    const proposal = (order.meetingProposals || []).id?.(proposalId)
+      || (order.meetingProposals || []).find((item) => String(item._id) === String(proposalId));
+    if (!proposal) throw new ResourceNotFoundException('MeetingProposal', proposalId);
+    if (String(proposal.proposedBy) === String(userId)) {
+      throw new BadRequestException('Người đề xuất không thể tự chấp nhận lịch hẹn');
+    }
+    if (proposal.status !== 'PENDING') throw new BadRequestException(`Meeting proposal is already ${proposal.status.toLowerCase()}`);
+
+    proposal.status = action === 'ACCEPT' ? 'ACCEPTED' : 'REJECTED';
+    proposal.respondedBy = userId;
+    proposal.respondedAt = new Date();
+    order.handoverStatus = action === 'ACCEPT' ? 'SCHEDULED' : 'NOT_SCHEDULED';
+    if (action === 'ACCEPT') {
+      order.handoverLocation = proposal.location;
+      order.handoverTime = proposal.time;
+    }
+    await order.save();
+    return order.toObject();
+  }
+
+  async confirmHandover(orderId, userId) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    const role = actorRoleFor(order, userId);
+    if (role === 'SYSTEM') throw new ForbiddenException('Bạn không có quyền xác nhận giao nhận cho đơn này');
+    if (!['AWAITING_SELLER', 'COMPLETED'].includes(order.status)) {
+      throw new BadRequestException('Chỉ có thể xác nhận giao nhận khi đơn đã được giữ chỗ hoặc hoàn tất');
+    }
+
+    if (role === 'BUYER') {
+      order.buyerHandoverConfirmedAt = new Date();
+    } else {
+      order.sellerHandoverConfirmedAt = new Date();
+    }
+
+    if (order.buyerHandoverConfirmedAt && order.sellerHandoverConfirmedAt) {
+      order.handoverStatus = 'HANDED_OVER';
+    } else {
+      order.handoverStatus = role === 'BUYER' ? 'BUYER_CONFIRMED' : 'SELLER_CONFIRMED';
+    }
+    await order.save();
+    return order.toObject();
+  }
+
   async resolveDispute(orderId, adminId, { status, resolution }) {
     const order = await Order.findById(orderId);
     if (!order) throw new ResourceNotFoundException('Order', orderId);
@@ -520,6 +643,13 @@ export class OrderService {
     order.disputeResolution = resolution || '';
     order.disputeResolvedBy = adminId;
     order.disputeResolvedAt = new Date();
+    order.disputeTimeline = order.disputeTimeline || [];
+    order.disputeTimeline.push({
+      action: order.disputeStatus,
+      actorId: adminId,
+      actorRole: 'ADMIN',
+      note: resolution || '',
+    });
     await order.save();
 
     return order.toObject();
