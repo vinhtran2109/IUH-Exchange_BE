@@ -6,6 +6,10 @@ const TOPICS = {
   ORDER_COMPLETED: 'order.completed',
   ORDER_DISPUTE_OPENED: 'order.dispute.opened',
   ORDER_REFUNDED: 'order.refunded',
+  ORDER_HANDOVER_PROPOSED: 'order.handover.proposed',
+  ORDER_HANDOVER_RESPONDED: 'order.handover.responded',
+  ORDER_HANDOVER_CONFIRMED: 'order.handover.confirmed',
+  ORDER_DISPUTE_EVIDENCE_ADDED: 'order.dispute.evidence_added',
   PRODUCT_RESERVED: 'product.reserved',
   PRODUCT_RESERVE_FAILED: 'product.reserve.failed',
   PRODUCT_RESERVE_EXPIRED: 'product.reserve.expired',
@@ -90,6 +94,18 @@ export async function publishOrderCompleted(event) {
     );
   } catch (err) {
     logger.warn(`[Saga] Kafka unavailable, OrderCompletedEvent not published: ${err.message}`);
+  }
+}
+
+export async function publishOrderEvent(topic, event) {
+  try {
+    await producer.send({
+      topic,
+      messages: [{ key: event.orderId || event.id, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] ${topic} published: orderId=${event.orderId || event.id}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, ${topic} not published: ${err.message}`);
   }
 }
 

@@ -25,7 +25,10 @@ const CreateProduct: React.FC = () => {
     price: '',
     description: '',
     category: 'ELECTRONICS',
-    condition: 'NEW'
+    condition: 'NEW',
+    listingType: 'SELL',
+    tradeWanted: '',
+    allowOffers: true
   });
   const [imageItems, setImageItems] = useState<ImageItem[]>([]);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -46,7 +49,10 @@ const CreateProduct: React.FC = () => {
           price: String(product.price ?? ''),
           description: product.description || '',
           category: product.category || 'ELECTRONICS',
-          condition: product.condition || 'NEW'
+          condition: product.condition || 'NEW',
+          listingType: product.listingType || 'SELL',
+          tradeWanted: product.tradeWanted || '',
+          allowOffers: product.allowOffers !== false
         });
         setImageItems(
           (product.imageUrls || []).map((url: string, index: number) => ({
@@ -158,7 +164,10 @@ const CreateProduct: React.FC = () => {
         price: parseFloat(formData.price),
         category: formData.category,
         condition: formData.condition,
-        imageUrls
+        imageUrls,
+        listingType: formData.listingType as any,
+        tradeWanted: formData.tradeWanted,
+        allowOffers: formData.allowOffers
       };
 
       const response = isEditMode && id
@@ -272,6 +281,28 @@ const CreateProduct: React.FC = () => {
                   <option value="POOR">Cũ</option>
                 </select>
               </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1.5 block">Kiểu giao dịch</label>
+                  <select name="listingType" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:border-slate-400 focus:outline-none text-sm" value={formData.listingType} onChange={handleChange}>
+                    <option value="SELL">Bán</option>
+                    <option value="GIVE_AWAY">Cho tặng</option>
+                    <option value="TRADE">Đổi đồ</option>
+                  </select>
+                </div>
+                <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-700">
+                  <input type="checkbox" checked={formData.allowOffers} onChange={(e) => setFormData((current) => ({ ...current, allowOffers: e.target.checked }))} />
+                  Nhận trả giá/đề xuất đổi
+                </label>
+              </div>
+
+              {formData.listingType === 'TRADE' && (
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1.5 block">Muốn đổi lấy</label>
+                  <input name="tradeWanted" placeholder="Ví dụ: giáo trình KTPM, chuột không dây..." className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:border-slate-400 focus:outline-none text-sm" value={formData.tradeWanted} onChange={handleChange} />
+                </div>
+              )}
 
               <div>
                 <label className="text-xs font-medium text-slate-500 mb-1.5 block">Mô tả</label>

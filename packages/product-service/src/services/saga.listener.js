@@ -144,6 +144,8 @@ export async function releaseExpiredReservations(now = new Date()) {
 
   for (const product of expiredProducts) {
     const orderId = product.reservedOrderId;
+    const buyerId = product.reservedBy;
+    const sellerId = product.sellerId;
     product.status = 'AVAILABLE';
     product.reservedOrderId = null;
     product.reservedBy = null;
@@ -156,6 +158,8 @@ export async function releaseExpiredReservations(now = new Date()) {
         id: orderId,
         orderId,
         productId: product._id.toString(),
+        buyerId,
+        sellerId,
         reason: 'Reservation expired',
       });
     }

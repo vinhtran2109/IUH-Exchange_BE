@@ -10,6 +10,7 @@ import {
 } from '@iuh-exchange/common';
 import { LostFoundItem } from '../models/LostFound.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
+import { publishLostFoundEvent } from '../services/kafka.service.js';
 
 // ── Validation Schemas ──
 
@@ -294,6 +295,15 @@ export async function claimItem(req, res, next) {
       status: 'PENDING',
     });
     await item.save();
+    const claim = item.claims[item.claims.length - 1];
+    await publishLostFoundEvent('lostfound.claim.created', {
+      id: claim._id?.toString(),
+      claimId: claim._id?.toString(),
+      itemId: item._id.toString(),
+      ownerId: item.userId.toString(),
+      claimantId: req.user.sub,
+      title: item.title,
+    });
 
     logger.info(`LostFoundItem claimed: ${item._id} by user ${req.user.sub}`);
     res.status(201).json(ApiResponse.created(mapItem(item), 'Claim submitted for owner verification'));
@@ -333,6 +343,15 @@ export async function reviewClaim(req, res, next) {
     }
 
     await item.save();
+    await publishLostFoundEvent('lostfound.claim.resolved', {
+      id: claim._id?.toString(),
+      claimId: claim._id?.toString(),
+      itemId: item._id.toString(),
+      ownerId: item.userId.toString(),
+      claimantId: claim.claimantId.toString(),
+      status: claim.status,
+      title: item.title,
+    });
     res.json(ApiResponse.ok(mapItem(item), 'Claim reviewed'));
   } catch (err) {
     next(err);

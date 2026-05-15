@@ -12,6 +12,7 @@ import {
   hashPassword,
   AuditLog,
 } from '@iuh-exchange/common';
+import { publishUserEvent } from '../services/kafka.service.js';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
 function escapeRegex(str) {
@@ -324,6 +325,13 @@ export async function reviewStudentVerification(req, res) {
   user.studentVerification.reviewedAt = new Date();
   user.studentVerification.reviewedBy = req.user?.sub || null;
   await user.save();
+  await publishUserEvent('user.student_verification.reviewed', {
+    id,
+    userId: id,
+    status: user.studentVerification.status,
+    studentId: user.studentId || user.studentVerification.submittedStudentId,
+    adminNote,
+  });
 
   logger.info(`[Admin] Student verification ${action.toLowerCase()}: user=${user.email}`);
   res.json(ApiResponse.ok(mapToProfile(user), 'Đã cập nhật xác minh MSSV'));
