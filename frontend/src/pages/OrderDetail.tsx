@@ -21,6 +21,7 @@ import { productService } from '../services/productService';
 
 type OrderStatusKey = 'PENDING' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED';
 type PaymentStatusKey = 'UNPAID' | 'PAID' | 'REFUNDED';
+type PaymentDisplayStatusKey = PaymentStatusKey | 'REPORTED';
 
 const OrderDetail: React.FC = () => {
   const { user } = useAuthStore() as any;
@@ -256,6 +257,9 @@ const OrderDetail: React.FC = () => {
   const isBankTransfer = payment?.paymentMethod === 'BANK_TRANSFER' || order?.paymentMethod === 'BANK_TRANSFER';
   const transferReported = !!payment?.transferReportedAt;
   const transferConfirmed = !!payment?.transferConfirmedAt;
+  const paymentDisplayStatus = (
+    paymentStatus === 'UNPAID' && isBankTransfer && transferReported ? 'REPORTED' : paymentStatus
+  ) as PaymentDisplayStatusKey;
 
   const statusLabel: Record<OrderStatusKey, string> = {
     PENDING: 'Đang tạo yêu cầu mua',
@@ -271,13 +275,13 @@ const OrderDetail: React.FC = () => {
     CANCELLED: 'bg-red-50 text-red-700 border-red-200',
   };
 
-  const paymentLabel: Record<PaymentStatusKey, string> = {
+  const paymentLabel: Partial<Record<PaymentDisplayStatusKey, string>> = {
     UNPAID: 'Chưa thanh toán',
     PAID: 'Đã thanh toán',
     REFUNDED: 'Đã hoàn tiền',
   };
 
-  const paymentTone: Record<PaymentStatusKey, string> = {
+  const paymentTone: Partial<Record<PaymentDisplayStatusKey, string>> = {
     UNPAID: 'bg-amber-50 text-amber-700 border-amber-200',
     PAID: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     REFUNDED: 'bg-slate-100 text-slate-700 border-slate-200',
@@ -291,16 +295,16 @@ const OrderDetail: React.FC = () => {
         done: true,
       },
       {
-        title: paymentStatus === 'PAID' ? 'Da thanh toan' : transferReported ? 'Da bao chuyen khoan' : 'Cho thanh toan',
+        title: paymentDisplayStatus === 'PAID' ? 'Da thanh toan' : paymentDisplayStatus === 'REPORTED' ? 'Da bao chuyen khoan' : 'Cho thanh toan',
         subtitle:
-          paymentStatus === 'PAID'
+          paymentDisplayStatus === 'PAID'
             ? payment?.paidAt
               ? new Date(payment.paidAt).toLocaleString()
               : 'Da ghi nhan thanh toan'
             : transferReported && payment?.transferReportedAt
               ? `Buyer reported transfer at ${new Date(payment.transferReportedAt).toLocaleString()}`
               : 'Nguoi mua chuyen khoan truc tiep cho nguoi ban roi bao da chuyen.',
-        done: paymentStatus === 'PAID' || transferReported,
+        done: paymentDisplayStatus === 'PAID' || paymentDisplayStatus === 'REPORTED',
       },
       {
         title:
@@ -319,7 +323,7 @@ const OrderDetail: React.FC = () => {
         danger: currentStatus === 'CANCELLED',
       },
     ],
-    [currentStatus, order?.createdAt, payment?.paidAt, payment?.transferReportedAt, paymentStatus, transferReported]
+    [currentStatus, order?.createdAt, payment?.paidAt, payment?.transferReportedAt, paymentDisplayStatus, transferReported]
   );
 
   const nextStep = useMemo(() => {
@@ -329,10 +333,10 @@ const OrderDetail: React.FC = () => {
     if (currentStatus === 'COMPLETED') {
       return { title: 'Giao dịch hoàn tất', body: 'Bạn có thể xem biên nhận, đánh giá người bán/người mua hoặc mở tranh chấp nếu cần.' };
     }
-    if (isBuyer && isBankTransfer && paymentStatus !== 'PAID' && !transferReported) {
+    if (isBuyer && isBankTransfer && paymentDisplayStatus === 'UNPAID') {
       return { title: 'Bước tiếp theo: chuyển khoản', body: 'Chuyển khoản trực tiếp cho người bán, rồi bấm “Tôi đã chuyển khoản” để người bán xác nhận.' };
     }
-    if (isSeller && isBankTransfer && transferReported && paymentStatus !== 'PAID') {
+    if (isSeller && isBankTransfer && paymentDisplayStatus === 'REPORTED') {
       return { title: 'Bước tiếp theo: xác nhận tiền', body: 'Kiểm tra tài khoản ngân hàng. Nếu đã nhận tiền, bấm “Đã nhận tiền”.' };
     }
     if (!order?.handoverLocation && !order?.meetingProposals?.length) {
@@ -342,7 +346,7 @@ const OrderDetail: React.FC = () => {
       return { title: 'Bước tiếp theo: hoàn tất giao dịch', body: 'Sau khi đã giao hàng và điều kiện thanh toán đã ổn, người bán xác nhận hoàn tất đơn.' };
     }
     return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi lịch hẹn, thanh toán và thông báo từ người bán tại trang này.' };
-  }, [currentStatus, isBankTransfer, isBuyer, isSeller, order?.handoverLocation, order?.meetingProposals?.length, paymentStatus, transferReported]);
+  }, [currentStatus, isBankTransfer, isBuyer, isSeller, order?.handoverLocation, order?.meetingProposals?.length, paymentDisplayStatus]);
 
   if (loading) {
     return (
@@ -413,18 +417,18 @@ const OrderDetail: React.FC = () => {
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Thanh toán</div>
-              <div className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${paymentTone[paymentStatus]}`}>
-                {paymentLabel[paymentStatus]}
+              <div className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${paymentDisplayStatus === 'REPORTED' ? 'bg-blue-50 text-blue-700 border-blue-200' : paymentTone[paymentDisplayStatus] || paymentTone.UNPAID}`}>
+                {paymentDisplayStatus === 'REPORTED' ? 'Da bao chuyen khoan' : paymentLabel[paymentDisplayStatus]}
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Phương thức</div>
               <div className="text-sm font-semibold text-slate-800">
-                {payment?.paymentMethod === 'BANK_TRANSFER'
+                {(payment?.paymentMethod || order?.paymentMethod) === 'BANK_TRANSFER'
                   ? 'Chuyen khoan truc tiep'
-                  : payment?.paymentMethod === 'VNPAY_MOCK'
+                  : (payment?.paymentMethod || order?.paymentMethod) === 'VNPAY_MOCK'
                   ? 'Thanh toán online'
-                  : payment?.paymentMethod === 'CASH'
+                  : (payment?.paymentMethod || order?.paymentMethod) === 'CASH'
                     ? 'Thanh toán trực tiếp'
                     : 'Chưa chọn'}
               </div>
@@ -603,14 +607,14 @@ const OrderDetail: React.FC = () => {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {isBuyer && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && paymentStatus !== 'PAID' && (
+                  {isBuyer && isBankTransfer && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && paymentDisplayStatus === 'UNPAID' && (
                     <button
                       onClick={handleReportTransfer}
-                      disabled={acting || transferReported}
+                      disabled={acting}
                       className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                     >
                       {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                      {transferReported ? 'Da bao chuyen khoan' : 'Toi da chuyen khoan'}
+                      Toi da chuyen khoan
                     </button>
                   )}
 
@@ -626,7 +630,7 @@ const OrderDetail: React.FC = () => {
 
                   {isSeller && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && (
                     <>
-                      {isBankTransfer && transferReported && paymentStatus !== 'PAID' && (
+                      {isBankTransfer && paymentDisplayStatus === 'REPORTED' && (
                         <button
                           onClick={handleConfirmTransfer}
                           disabled={acting}
