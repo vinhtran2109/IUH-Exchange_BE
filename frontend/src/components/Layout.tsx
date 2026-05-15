@@ -11,7 +11,7 @@ import {
 
 import ChatManager from './ChatManager';
 import { chatService } from '../services/chatService';
-import { notificationService } from '../services/notificationService';
+import { normalizeNotification, notificationService } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
 import { authService } from '../services/authService';
 
@@ -35,10 +35,16 @@ const Layout: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    chatService.connect();
     fetchNotifs();
 
     const removeNotifListener = chatService.addNotificationListener((notif: Notification) => {
-      setNotifications(prev => [notif, ...prev]);
+      const normalized = normalizeNotification(notif);
+      setNotifications(prev => {
+        const notificationId = normalized.id;
+        if (notificationId && prev.some(n => n.id === notificationId)) return prev;
+        return [normalized, ...prev];
+      });
     });
 
     const interval = setInterval(fetchNotifs, 120000);
@@ -66,6 +72,7 @@ const Layout: React.FC = () => {
   }, []);
 
   const handleMarkRead = async (id: string) => {
+    if (!id) return;
     try {
       await notificationService.markAsRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
@@ -171,12 +178,11 @@ const Layout: React.FC = () => {
                               <div 
                                 key={n.id} 
                                 onClick={() => {
+                                  if (n.id) handleMarkRead(n.id);
                                   if (n.targetId && n.type && n.type.includes('ORDER')) {
                                     navigate(`/orders/${n.targetId}`);
                                   } else if (n.targetId && n.type === 'PRODUCT') {
                                     navigate(`/products/${n.targetId}`);
-                                  } else {
-                                    handleMarkRead(n.id);
                                   }
                                   setShowNotifications(false);
                                 }}

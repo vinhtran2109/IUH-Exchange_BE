@@ -27,6 +27,7 @@ export interface PresenceEvent {
 
 let stompClient: Stomp.Client | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let isConnecting = false;
 
 const inferredSocketUrl =
   typeof window !== 'undefined'
@@ -37,6 +38,7 @@ const socketUrl = import.meta.env.VITE_WS_URL || inferredSocketUrl;
 let listeners: Array<(msg: ChatMessage) => void> = [];
 let notificationListeners: Array<(notif: any) => void> = [];
 let openChatListeners: Array<(recipientId: string, recipientName: string) => void> = [];
+let connectedListeners: Array<() => void> = [];
 
 const clearReconnectTimer = () => {
   if (reconnectTimer) {
@@ -57,6 +59,16 @@ export const chatService = {
     notificationListeners.push(callback);
     return () => {
       notificationListeners = notificationListeners.filter((l) => l !== callback);
+    };
+  },
+
+  addConnectedListener: (callback: () => void) => {
+    connectedListeners.push(callback);
+    if (stompClient?.connected) {
+      callback();
+    }
+    return () => {
+      connectedListeners = connectedListeners.filter((l) => l !== callback);
     };
   },
 
@@ -82,11 +94,7 @@ export const chatService = {
       return;
     }
 
-    if (stompClient && stompClient.connected) {
-      stompClient.disconnect(() => {
-        console.log('[WebSocket] Old connection closed. Establishing fresh real-time link...');
-        chatService._initNewConnection();
-      });
+    if (stompClient?.connected || isConnecting) {
       return;
     }
 
@@ -95,9 +103,10 @@ export const chatService = {
 
   _initNewConnection: () => {
     const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) return;
+    if (!accessToken || isConnecting) return;
 
     clearReconnectTimer();
+    isConnecting = true;
 
     const connectionUrl = `${socketUrl}?token=${encodeURIComponent(accessToken)}`;
     const socket = new SockJS(connectionUrl);
@@ -105,6 +114,7 @@ export const chatService = {
     stompClient.debug = () => {};
 
     stompClient.connect({ Authorization: `Bearer ${accessToken}` }, (frame) => {
+      isConnecting = false;
       console.log('[WebSocket] Real-time link established.', frame);
 
       if (!stompClient?.connected) return;
@@ -136,7 +146,10 @@ export const chatService = {
           console.error('Error parsing public message:', e);
         }
       });
+
+      connectedListeners.forEach((callback) => callback());
     }, (error) => {
+      isConnecting = false;
       console.error('WebSocket sync error:', error);
       if (!localStorage.getItem('accessToken')) {
         chatService.disconnect();
@@ -152,6 +165,7 @@ export const chatService = {
 
   disconnect: () => {
     clearReconnectTimer();
+    isConnecting = false;
     if (stompClient && stompClient.connected) {
       try {
         stompClient.disconnect(() => {
@@ -194,47 +208,85 @@ export const chatService = {
   },
 
   subscribeToConversation: (conversationId: string, callback: (msg: ChatMessage) => void) => {
-    if (!stompClient || !stompClient.connected || !conversationId) {
+    if (!conversationId) {
       return () => {};
     }
 
-    const subscription = stompClient.subscribe(`/topic/chat/${conversationId}`, (payload) => {
+    let active = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let subscribedClient: Stomp.Client | null = null;
+
+    const subscribe = () => {
+      if (!active || !stompClient?.connected) return;
+      if (subscription && subscribedClient === stompClient) return;
       try {
-        const message: ChatMessage = JSON.parse(payload.body);
-        callback(message);
-      } catch (error) {
-        console.error('Error parsing conversation message:', error);
+        subscription?.unsubscribe();
+      } catch (_error) {
+        // ignore stale subscription cleanup errors
       }
-    });
+      subscription = stompClient.subscribe(`/topic/chat/${conversationId}`, (payload) => {
+        try {
+          const message: ChatMessage = JSON.parse(payload.body);
+          callback(message);
+        } catch (error) {
+          console.error('Error parsing conversation message:', error);
+        }
+      });
+      subscribedClient = stompClient;
+    };
+
+    const removeConnectedListener = chatService.addConnectedListener(subscribe);
+    subscribe();
 
     return () => {
+      active = false;
+      removeConnectedListener();
       try {
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
       } catch (_error) {
         // ignore unsubscribe cleanup errors
       }
+      subscription = null;
+      subscribedClient = null;
     };
   },
 
   subscribePresence: (callback: (event: PresenceEvent) => void) => {
-    if (!stompClient || !stompClient.connected) {
-      return () => {};
-    }
+    let active = true;
+    let subscription: { unsubscribe: () => void } | null = null;
+    let subscribedClient: Stomp.Client | null = null;
 
-    const subscription = stompClient.subscribe('/topic/presence', (payload) => {
+    const subscribe = () => {
+      if (!active || !stompClient?.connected) return;
+      if (subscription && subscribedClient === stompClient) return;
       try {
-        callback(JSON.parse(payload.body));
-      } catch (error) {
-        console.error('Error parsing presence event:', error);
+        subscription?.unsubscribe();
+      } catch (_error) {
+        // ignore stale subscription cleanup errors
       }
-    });
+      subscription = stompClient.subscribe('/topic/presence', (payload) => {
+        try {
+          callback(JSON.parse(payload.body));
+        } catch (error) {
+          console.error('Error parsing presence event:', error);
+        }
+      });
+      subscribedClient = stompClient;
+    };
+
+    const removeConnectedListener = chatService.addConnectedListener(subscribe);
+    subscribe();
 
     return () => {
+      active = false;
+      removeConnectedListener();
       try {
-        subscription.unsubscribe();
+        subscription?.unsubscribe();
       } catch (_error) {
         // ignore unsubscribe cleanup errors
       }
+      subscription = null;
+      subscribedClient = null;
     };
   },
 
