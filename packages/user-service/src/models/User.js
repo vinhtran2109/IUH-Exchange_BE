@@ -11,6 +11,20 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   name: { type: String, required: true, trim: true },
   studentId: { type: String, default: '' },
+  studentVerification: {
+    status: {
+      type: String,
+      enum: ['UNSUBMITTED', 'PENDING', 'VERIFIED', 'REJECTED'],
+      default: 'UNSUBMITTED',
+      index: true,
+    },
+    submittedStudentId: { type: String, default: '' },
+    evidenceUrl: { type: String, default: '' },
+    adminNote: { type: String, default: '' },
+    submittedAt: { type: Date, default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: null },
+  },
   avatarUrl: { type: String, default: '' },
   bankInfo: {
     bankName: { type: String, default: '' },
@@ -48,5 +62,9 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.index({ email: 1 });
+userSchema.index(
+  { studentId: 1 },
+  { unique: true, partialFilterExpression: { studentId: { $type: 'string', $gt: '' } } }
+);
 
 export const User = mongoose.model('User', userSchema);

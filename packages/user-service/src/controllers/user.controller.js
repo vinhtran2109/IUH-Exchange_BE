@@ -17,6 +17,7 @@ function mapToProfile(user) {
     email: user.email,
     name: user.name,
     studentId: user.studentId,
+    studentVerification: user.studentVerification || { status: 'UNSUBMITTED' },
     avatarUrl: user.avatarUrl,
     bankInfo: user.bankInfo || {},
     isVerified: user.isVerified,
@@ -84,6 +85,40 @@ export async function updateProfile(req, res) {
   await cache.del(`users:profile:${userId}`);
 
   res.json(ApiResponse.ok(mapToProfile(user), 'Cập nhật hồ sơ thành công'));
+}
+
+export async function requestStudentVerification(req, res) {
+  const userId = req.user.sub;
+  const submittedStudentId = String(req.body?.studentId || '').trim().toUpperCase();
+  const evidenceUrl = String(req.body?.evidenceUrl || '').trim();
+
+  if (!/^\d{6,12}$/.test(submittedStudentId)) {
+    throw new BadRequestException('MSSV phải gồm 6-12 chữ số');
+  }
+
+  const duplicate = await User.findOne({
+    _id: { $ne: userId },
+    studentId: submittedStudentId,
+    isDeleted: { $ne: true },
+  }).lean();
+  if (duplicate) throw new BadRequestException('MSSV này đã được xác minh cho tài khoản khác');
+
+  const user = await User.findById(userId);
+  if (!user) throw new ResourceNotFoundException('User', userId);
+
+  user.studentVerification = {
+    status: 'PENDING',
+    submittedStudentId,
+    evidenceUrl,
+    adminNote: '',
+    submittedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+  };
+  await user.save();
+  await cache.del(`users:profile:${userId}`);
+
+  res.status(202).json(ApiResponse.ok(mapToProfile(user), 'Đã gửi yêu cầu xác minh MSSV'));
 }
 
 /**

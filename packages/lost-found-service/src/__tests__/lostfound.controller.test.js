@@ -218,9 +218,10 @@ describe('lostfound.controller', () => {
         status: 'OPEN',
       });
 
-      const { req, res, next } = mockReqRes({}, { id: 'lf123' }, {}, { sub: 'claimer123' });
+      const { req, res, next } = mockReqRes({ answer: 'Bên trong có thẻ sinh viên tên An' }, { id: 'lf123' }, {}, { sub: 'claimer123' });
       await lfController.claimItem(req, res, next);
 
+      expect(res.status).toHaveBeenCalledWith(201);
       expect(res.json).toHaveBeenCalled();
     });
 
@@ -248,6 +249,34 @@ describe('lostfound.controller', () => {
       await lfController.claimItem(req, res, next);
 
       expect(next).toHaveBeenCalled();
+    });
+
+    it('should let owner approve a pending claim', async () => {
+      const claim = {
+        _id: { toString: () => 'claim123' },
+        claimantId: { toString: () => 'claimer123' },
+        status: 'PENDING',
+        answer: 'Bên trong có thẻ sinh viên',
+      };
+      const claims = [claim];
+      claims.id = vi.fn().mockReturnValue(claim);
+      mockLFModel.findById.mockResolvedValue({
+        ...mockLostFoundItem,
+        userId: { toString: () => 'owner123' },
+        claims,
+        save: vi.fn().mockResolvedValue(true),
+      });
+
+      const { req, res, next } = mockReqRes(
+        { action: 'APPROVE', ownerNote: 'Đúng mô tả' },
+        { id: 'lf123', claimId: 'claim123' },
+        {},
+        { sub: 'owner123' }
+      );
+      await lfController.reviewClaim(req, res, next);
+
+      expect(claim.status).toBe('APPROVED');
+      expect(res.json).toHaveBeenCalled();
     });
   });
 });

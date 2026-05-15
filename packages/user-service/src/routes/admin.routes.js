@@ -31,6 +31,7 @@ router.patch('/:id/toggle-ban', asyncHandler(adminCtrl.toggleBanUser));
 router.put('/:id/role', validate(updateRoleSchema), asyncHandler(adminCtrl.updateUserRole));
 router.put('/:id/permissions', validate(updatePermissionsSchema), asyncHandler(adminCtrl.updateUserPermissions));
 router.put('/:id/karma', validate(adjustKarmaSchema), asyncHandler(adminCtrl.adjustKarma));
+router.patch('/:id/student-verification', asyncHandler(adminCtrl.reviewStudentVerification));
 
 router.get('/stats', asyncHandler(adminCtrl.getUserStats));
 router.get('/:id/karma-history', asyncHandler(getUserKarmaHistory));

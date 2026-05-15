@@ -393,4 +393,69 @@ describe('order.service', () => {
       expect(order.save).not.toHaveBeenCalled();
     });
   });
+
+  describe('handover scheduling', () => {
+    it('should create a handover proposal', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        meetingProposals: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.proposeHandover('order123', 'buyer123', {
+        location: 'Thư viện IUH',
+        time: new Date(Date.now() + 3600000),
+        note: 'Gặp ở tầng 1',
+      });
+
+      expect(order.handoverStatus).toBe('PROPOSED');
+      expect(order.meetingProposals).toHaveLength(1);
+      expect(order.save).toHaveBeenCalled();
+    });
+
+    it('should mark handover as handed over after both sides confirm', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        buyerHandoverConfirmedAt: new Date(),
+        sellerHandoverConfirmedAt: null,
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.confirmHandover('order123', 'seller123');
+
+      expect(order.handoverStatus).toBe('HANDED_OVER');
+      expect(order.sellerHandoverConfirmedAt).toBeTruthy();
+    });
+  });
+
+  describe('dispute evidence', () => {
+    it('should append evidence and dispute timeline entries', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'COMPLETED',
+        disputeStatus: 'OPEN',
+        disputeEvidence: [],
+        disputeTimeline: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.addDisputeEvidence('order123', 'buyer123', {
+        type: 'IMAGE',
+        url: 'https://example.com/evidence.jpg',
+        note: 'Hàng bị trầy',
+      });
+
+      expect(order.disputeEvidence).toHaveLength(1);
+      expect(order.disputeTimeline[0].action).toBe('EVIDENCE_ADDED');
+      expect(order.save).toHaveBeenCalled();
+    });
+  });
 });

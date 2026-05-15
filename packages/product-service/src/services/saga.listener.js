@@ -2,6 +2,8 @@ import { createConsumer, logger } from '@iuh-exchange/common';
 import { Product } from '../models/Product.js';
 import { publishProductEvent } from './kafka.service.js';
 
+const RESERVATION_TTL_MINUTES = Number(process.env.PRODUCT_RESERVATION_TTL_MINUTES || 30);
+
 /**
  * Saga listener: handles order lifecycle events that affect product status.
  *
@@ -78,6 +80,7 @@ async function handleOrderCreated(payload) {
       reservedOrderId: orderId,
       reservedBy: buyerId || null,
       reservedAt: new Date(),
+      reservationExpiresAt: new Date(Date.now() + RESERVATION_TTL_MINUTES * 60 * 1000),
     },
     { new: true }
   );
@@ -108,6 +111,7 @@ async function handleOrderCompleted(payload) {
     product.reservedOrderId = null;
     product.reservedBy = null;
     product.reservedAt = null;
+    product.reservationExpiresAt = null;
     await product.save();
     logger.info(`[SAGA] Product marked as SOLD: ${productId}`);
   }
@@ -126,7 +130,36 @@ async function handleOrderCancelled(payload) {
     product.reservedOrderId = null;
     product.reservedBy = null;
     product.reservedAt = null;
+    product.reservationExpiresAt = null;
     await product.save();
     logger.info(`[SAGA] Product released: ${productId}, reason=${reason}`);
   }
+}
+
+export async function releaseExpiredReservations(now = new Date()) {
+  const expiredProducts = await Product.find({
+    status: 'RESERVED',
+    reservationExpiresAt: { $lte: now },
+  });
+
+  for (const product of expiredProducts) {
+    const orderId = product.reservedOrderId;
+    product.status = 'AVAILABLE';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
+    product.reservationExpiresAt = null;
+    await product.save();
+
+    if (orderId) {
+      await publishProductEvent('product.reserve.expired', {
+        id: orderId,
+        orderId,
+        productId: product._id.toString(),
+        reason: 'Reservation expired',
+      });
+    }
+  }
+
+  return expiredProducts.length;
 }
