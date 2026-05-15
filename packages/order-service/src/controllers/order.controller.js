@@ -33,13 +33,13 @@ export class OrderController {
       throw new BadRequestException('Missing Idempotency-Key header');
     }
 
-    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime } = req.body;
+    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, offerId } = req.body;
 
-    if (!productId || !sellerId || price === undefined) {
+    if (!offerId && (!productId || !sellerId || price === undefined)) {
       throw new BadRequestException('productId, sellerId, and price are required');
     }
 
-    if (typeof price !== 'number' || price <= 0) {
+    if (!offerId && (typeof price !== 'number' || price <= 0)) {
       throw new BadRequestException('price must be a positive number');
     }
 
@@ -47,6 +47,7 @@ export class OrderController {
       productId,
       sellerId,
       price,
+      offerId,
       buyerNote,
       handoverLocation,
       handoverTime,

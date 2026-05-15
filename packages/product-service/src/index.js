@@ -33,11 +33,11 @@ app.get('/health', async (req, res) => {
 });
 
 // ── Routes ──
+app.use('/api/v1/products', offerRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/products', reviewRoutes);
 app.use('/api/v1/products', wishlistRoutes);
 app.use('/api/v1/products', trustRoutes);
-app.use('/api/v1/products', offerRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);

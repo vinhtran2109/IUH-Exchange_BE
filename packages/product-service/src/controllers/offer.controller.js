@@ -8,6 +8,7 @@ import {
 } from '@iuh-exchange/common';
 import { Offer } from '../models/Offer.js';
 import { Product } from '../models/Product.js';
+import { publishProductEvent } from '../services/kafka.service.js';
 
 const DEFAULT_OFFER_TTL_HOURS = 48;
 
@@ -69,6 +70,16 @@ export async function createOffer(req, res) {
     tradeItemDescription,
     message: String(req.body?.message || '').trim(),
     expiresAt: buildExpiresAt(req.body?.expiresInHours),
+  });
+
+  await publishProductEvent('offer.created', {
+    id: offer._id.toString(),
+    offerId: offer._id.toString(),
+    productId,
+    buyerId,
+    sellerId: product.sellerId,
+    type,
+    amount: offer.amount,
   });
 
   res.status(201).json(ApiResponse.created(mapOffer(offer)));
@@ -156,6 +167,18 @@ export async function resolveOffer(req, res) {
     );
   }
 
+  await publishProductEvent('offer.resolved', {
+    id: offer._id.toString(),
+    offerId: offer._id.toString(),
+    productId: offer.productId,
+    buyerId: offer.buyerId,
+    sellerId: offer.sellerId,
+    status: offer.status,
+    type: offer.type,
+    amount: offer.amount,
+    counterAmount: offer.counterAmount,
+  });
+
   res.json(ApiResponse.ok(mapOffer(offer), 'Offer resolved'));
 }
 
@@ -171,4 +194,28 @@ export async function withdrawOffer(req, res) {
   offer.resolvedBy = userId;
   await offer.save();
   res.json(ApiResponse.ok(mapOffer(offer), 'Offer withdrawn'));
+}
+
+export async function getOfferCheckout(req, res) {
+  const buyerId = req.user.sub;
+  const { offerId } = req.params;
+  const offer = await Offer.findById(offerId).lean();
+  if (!offer) throw new ResourceNotFoundException('Offer', offerId);
+  if (String(offer.buyerId) !== String(buyerId)) throw new ForbiddenException('Offer does not belong to this buyer');
+  if (offer.status !== 'ACCEPTED') throw new BadRequestException('Only accepted offers can be converted into orders');
+
+  const product = await Product.findById(offer.productId).lean();
+  if (!product) throw new ResourceNotFoundException('Product', offer.productId);
+  if (product.status !== 'AVAILABLE') throw new BadRequestException('Product is no longer available');
+
+  res.json(ApiResponse.ok({
+    offerId: offer._id.toString(),
+    productId: offer.productId,
+    sellerId: offer.sellerId,
+    buyerId: offer.buyerId,
+    price: offer.type === 'PRICE' ? offer.amount : 0,
+    listingType: offer.type === 'TRADE' ? 'TRADE' : (product.listingType || 'SELL'),
+    tradeItemTitle: offer.tradeItemTitle || '',
+    tradeItemDescription: offer.tradeItemDescription || '',
+  }));
 }

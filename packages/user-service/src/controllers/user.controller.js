@@ -10,6 +10,7 @@ import {
   hashPassword,
 } from '@iuh-exchange/common';
 import { getAvatarUploadUrl } from '../services/s3.service.js';
+import { publishUserEvent } from '../services/kafka.service.js';
 
 function mapToProfile(user) {
   return {
@@ -117,6 +118,11 @@ export async function requestStudentVerification(req, res) {
   };
   await user.save();
   await cache.del(`users:profile:${userId}`);
+  await publishUserEvent('user.student_verification.requested', {
+    id: userId,
+    userId,
+    studentId: submittedStudentId,
+  });
 
   res.status(202).json(ApiResponse.ok(mapToProfile(user), 'Đã gửi yêu cầu xác minh MSSV'));
 }

@@ -99,7 +99,15 @@ const orderSchema = new mongoose.Schema(
     buyerId: { type: String, required: true, index: true },
     sellerId: { type: String, required: true, index: true },
     productId: { type: String, required: true },
+    offerId: { type: String, default: null, index: true },
     price: { type: Number, required: true, min: 0 },
+    listingType: {
+      type: String,
+      enum: ['SELL', 'GIVE_AWAY', 'TRADE'],
+      default: 'SELL',
+    },
+    tradeItemTitle: { type: String, default: '' },
+    tradeItemDescription: { type: String, default: '' },
     status: {
       type: String,
       // NOTE: PENDING here means "buyer placed an order, awaiting product reservation"

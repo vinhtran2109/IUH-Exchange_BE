@@ -34,6 +34,12 @@ const OrderDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [flashMessage, setFlashMessage] = useState<string | null>((location.state as any)?.flashMessage || null);
+  const [handoverLocation, setHandoverLocation] = useState('');
+  const [handoverTime, setHandoverTime] = useState('');
+  const [handoverNote, setHandoverNote] = useState('');
+  const [disputeReason, setDisputeReason] = useState('');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [evidenceNote, setEvidenceNote] = useState('');
 
   const fetchDetail = async (silent = false) => {
     if (!id) return;
@@ -152,6 +158,91 @@ const OrderDetail: React.FC = () => {
       }
     } catch (error: any) {
       alert(error?.response?.data?.message || 'Khong the xac nhan nhan tien luc nay.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleProposeHandover = async () => {
+    if (!order || !handoverLocation || !handoverTime) return;
+    try {
+      setActing(true);
+      const res = await orderService.proposeHandover(order.id || order._id, {
+        location: handoverLocation,
+        time: new Date(handoverTime).toISOString(),
+        note: handoverNote,
+      });
+      if (res.success) {
+        setHandoverLocation('');
+        setHandoverTime('');
+        setHandoverNote('');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể đề xuất lịch hẹn.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleRespondHandover = async (proposalId: string, action: 'ACCEPT' | 'REJECT') => {
+    if (!order) return;
+    try {
+      setActing(true);
+      const res = await orderService.respondHandover(order.id || order._id, proposalId, action);
+      if (res.success) await fetchDetail(true);
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể phản hồi lịch hẹn.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleConfirmHandover = async () => {
+    if (!order) return;
+    try {
+      setActing(true);
+      const res = await orderService.confirmHandover(order.id || order._id);
+      if (res.success) await fetchDetail(true);
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể xác nhận giao nhận.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleOpenDispute = async () => {
+    if (!order || disputeReason.trim().length < 10) return;
+    try {
+      setActing(true);
+      const res = await orderService.openDispute(order.id || order._id, disputeReason.trim());
+      if (res.success) {
+        setDisputeReason('');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể mở tranh chấp.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleAddEvidence = async () => {
+    if (!order || !evidenceUrl.trim()) return;
+    try {
+      setActing(true);
+      const res = await orderService.addDisputeEvidence(order.id || order._id, {
+        type: 'OTHER',
+        url: evidenceUrl.trim(),
+        note: evidenceNote.trim(),
+      });
+      if (res.success) {
+        setEvidenceUrl('');
+        setEvidenceNote('');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể thêm bằng chứng.');
     } finally {
       setActing(false);
     }
@@ -420,6 +511,58 @@ const OrderDetail: React.FC = () => {
               </div>
             </section>
           </div>
+
+          {(isBuyer || isSeller) && currentStatus !== 'CANCELLED' && (
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Lịch hẹn giao nhận</h3>
+              <div className="mb-3 grid gap-2 md:grid-cols-3">
+                <input value={handoverLocation} onChange={(e) => setHandoverLocation(e.target.value)} placeholder="Địa điểm trong trường" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input value={handoverTime} onChange={(e) => setHandoverTime(e.target.value)} type="datetime-local" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input value={handoverNote} onChange={(e) => setHandoverNote(e.target.value)} placeholder="Ghi chú" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              </div>
+              <div className="mb-4 flex flex-wrap gap-2">
+                <button onClick={handleProposeHandover} disabled={acting || !handoverLocation || !handoverTime} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đề xuất lịch hẹn</button>
+                <button onClick={handleConfirmHandover} disabled={acting} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50">Tôi đã giao/nhận</button>
+              </div>
+              {(order.meetingProposals || []).slice(-3).map((proposal: any) => (
+                <div key={proposal._id} className="mb-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                  <div className="font-bold text-slate-800">{proposal.location} - {new Date(proposal.time).toLocaleString()}</div>
+                  <div className="mt-1 text-xs text-slate-500">Trạng thái: {proposal.status}</div>
+                  {proposal.note && <div className="mt-1 text-xs text-slate-500">{proposal.note}</div>}
+                  {proposal.status === 'PENDING' && proposal.proposedBy !== user?.id && (
+                    <div className="mt-2 flex gap-2">
+                      <button onClick={() => handleRespondHandover(proposal._id, 'ACCEPT')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Chấp nhận</button>
+                      <button onClick={() => handleRespondHandover(proposal._id, 'REJECT')} className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">Từ chối</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+
+          {(isBuyer || isSeller) && (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="mb-3 text-sm font-semibold text-slate-800">Tranh chấp & bằng chứng</h3>
+              {order.disputeStatus === 'OPEN' ? (
+                <>
+                  <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">Tranh chấp đang mở: {order.disputeReason}</div>
+                  <div className="mb-3 grid gap-2 md:grid-cols-2">
+                    <input value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} placeholder="URL bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    <input value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  </div>
+                  <button onClick={handleAddEvidence} disabled={acting || !evidenceUrl} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Thêm bằng chứng</button>
+                  {(order.disputeEvidence || []).map((item: any) => (
+                    <a key={item._id} href={item.url} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 hover:text-slate-900">{item.note || item.type}: {item.url}</a>
+                  ))}
+                </>
+              ) : (
+                <>
+                  <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={2} placeholder="Lý do tranh chấp, tối thiểu 10 ký tự" className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  <button onClick={handleOpenDispute} disabled={acting || disputeReason.trim().length < 10} className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">Mở tranh chấp</button>
+                </>
+              )}
+            </section>
+          )}
 
           {(isBuyer || isSeller) && (
             <section className="border-t border-slate-100 pt-4">

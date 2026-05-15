@@ -12,9 +12,12 @@ import {
   publishOrderCancelled,
   publishOrderCompleted,
   publishOrderDisputeOpened,
+  publishOrderEvent,
 } from './saga.service.js';
+import crypto from 'crypto';
 
 const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
 
 /**
  * Valid status transitions for an order.
@@ -31,6 +34,30 @@ function actorRoleFor(order, userId) {
   if (String(order.buyerId) === String(userId)) return 'BUYER';
   if (String(order.sellerId) === String(userId)) return 'SELLER';
   return 'SYSTEM';
+}
+
+function buildGatewayHeaders(userId) {
+  const role = 'STUDENT';
+  const email = '';
+  const secret = process.env.GATEWAY_SECRET || process.env.JWT_SECRET || 'dev-secret';
+  const signature = crypto.createHmac('sha256', secret).update(`${userId}:${role}:${email}`).digest('hex');
+  return {
+    'x-user-id': String(userId),
+    'x-user-role': role,
+    'x-user-email': email,
+    'x-gateway-signature': signature,
+  };
+}
+
+async function getAcceptedOfferCheckout(offerId, buyerId) {
+  const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/offers/${offerId}/checkout`, {
+    headers: buildGatewayHeaders(buyerId),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body?.success) {
+    throw new BadRequestException(body?.message || body?.error || 'Cannot create order from this offer');
+  }
+  return body.data;
 }
 
 function appendStatusHistory(order, nextStatus, {
@@ -117,6 +144,18 @@ export class OrderService {
     }
 
     try {
+      if (request.offerId) {
+        const checkout = await getAcceptedOfferCheckout(request.offerId, buyerId);
+        request.productId = checkout.productId;
+        request.sellerId = checkout.sellerId;
+        request.price = checkout.price;
+        request.tradeMetadata = {
+          listingType: checkout.listingType,
+          tradeItemTitle: checkout.tradeItemTitle,
+          tradeItemDescription: checkout.tradeItemDescription,
+        };
+      }
+
       // Step 2: Validate buyer cannot buy from themselves
       if (buyerId === request.sellerId) {
         await redis.del(redisKey);
@@ -130,7 +169,11 @@ export class OrderService {
           buyerId,
           sellerId: request.sellerId,
           productId: request.productId,
+          offerId: request.offerId || null,
           price: request.price,
+          listingType: request.tradeMetadata?.listingType || 'SELL',
+          tradeItemTitle: request.tradeMetadata?.tradeItemTitle || '',
+          tradeItemDescription: request.tradeMetadata?.tradeItemDescription || '',
           buyerNote: request.buyerNote || '',
           handoverLocation: request.handoverLocation || '',
           handoverTime: request.handoverTime || null,
@@ -172,6 +215,7 @@ export class OrderService {
         buyerId: order.buyerId,
         sellerId: order.sellerId,
         price: order.price,
+        offerId: order.offerId,
       });
 
       // Step 5: Update Redis with actual orderId for future lookups
@@ -550,6 +594,13 @@ export class OrderService {
       note,
     });
     await order.save();
+    await publishOrderEvent('order.dispute.evidence_added', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      submittedBy: userId,
+      type,
+    });
     return order.toObject();
   }
 
@@ -578,6 +629,14 @@ export class OrderService {
     order.handoverTime = time;
     order.handoverStatus = 'PROPOSED';
     await order.save();
+    await publishOrderEvent('order.handover.proposed', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      proposedBy: userId,
+      location,
+      time,
+    });
     return order.toObject();
   }
 
@@ -605,6 +664,14 @@ export class OrderService {
       order.handoverTime = proposal.time;
     }
     await order.save();
+    await publishOrderEvent('order.handover.responded', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      respondedBy: userId,
+      action,
+      handoverStatus: order.handoverStatus,
+    });
     return order.toObject();
   }
 
@@ -629,6 +696,13 @@ export class OrderService {
       order.handoverStatus = role === 'BUYER' ? 'BUYER_CONFIRMED' : 'SELLER_CONFIRMED';
     }
     await order.save();
+    await publishOrderEvent('order.handover.confirmed', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      confirmedBy: userId,
+      handoverStatus: order.handoverStatus,
+    });
     return order.toObject();
   }
 

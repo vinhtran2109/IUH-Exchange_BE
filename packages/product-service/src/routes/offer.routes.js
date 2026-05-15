@@ -1,15 +1,18 @@
 import { Router } from 'express';
-import { authenticate } from '@iuh-exchange/common';
+import { authenticate, verifyGatewaySignature } from '@iuh-exchange/common';
 import {
   createOffer,
   listProductOffers,
   listMyOffers,
   resolveOffer,
   withdrawOffer,
+  getOfferCheckout,
 } from '../controllers/offer.controller.js';
 
 const router = Router();
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
+router.get('/offers/:offerId/checkout', verifyGatewaySignature, asyncHandler(getOfferCheckout));
 
 router.use(authenticate);
 

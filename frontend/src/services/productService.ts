@@ -11,6 +11,9 @@ export interface Product {
   sellerId: string;
   status: string;
   location?: string;
+  listingType?: 'SELL' | 'GIVE_AWAY' | 'TRADE';
+  tradeWanted?: string;
+  allowOffers?: boolean;
   createdAt: string;
 }
 
@@ -22,6 +25,17 @@ export interface ProductPayload {
   condition: string;
   imageUrls: string[];
   location?: string;
+  listingType?: 'SELL' | 'GIVE_AWAY' | 'TRADE';
+  tradeWanted?: string;
+  allowOffers?: boolean;
+}
+
+export interface OfferPayload {
+  type: 'PRICE' | 'TRADE';
+  amount?: number;
+  tradeItemTitle?: string;
+  tradeItemDescription?: string;
+  message?: string;
 }
 
 export const productService = {
@@ -90,6 +104,26 @@ export const productService = {
 
   checkSellerFollow: async (sellerId: string) => {
     const response = await api.get(`/products/sellers/${sellerId}/follow/check`);
+    return response.data;
+  },
+
+  createOffer: async (productId: string, data: OfferPayload) => {
+    const response = await api.post(`/products/${productId}/offers`, data);
+    return response.data;
+  },
+
+  listProductOffers: async (productId: string) => {
+    const response = await api.get(`/products/${productId}/offers?page=1&size=50`);
+    return response.data;
+  },
+
+  listMyOffers: async () => {
+    const response = await api.get('/products/offers/me?page=1&size=50');
+    return response.data;
+  },
+
+  resolveOffer: async (offerId: string, action: 'ACCEPT' | 'REJECT' | 'COUNTER', payload: { counterAmount?: number; counterMessage?: string } = {}) => {
+    const response = await api.patch(`/products/offers/${offerId}/resolve`, { action, ...payload });
     return response.data;
   },
 };

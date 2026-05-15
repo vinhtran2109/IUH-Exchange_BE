@@ -49,3 +49,20 @@ export async function publishKarmaPenalty(userId, reason) {
     logger.error(`Failed to publish karma penalty for user ${userId}: ${err.message}`);
   }
 }
+
+export async function publishLostFoundEvent(topic, event) {
+  if (!producer) {
+    logger.warn(`Kafka producer unavailable, skipping ${topic}`);
+    return;
+  }
+
+  try {
+    await producer.send({
+      topic,
+      messages: [{ key: event.id || event.itemId || event.claimId, value: JSON.stringify(event) }],
+    });
+    logger.info(`Lost-found event published: ${topic}`);
+  } catch (err) {
+    logger.error(`Failed to publish ${topic}: ${err.message}`);
+  }
+}

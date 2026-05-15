@@ -8,6 +8,7 @@ export interface CreateOrderRequest {
   handoverLocation?: string;
   handoverTime?: string;
   idempotencyKey: string;
+  offerId?: string;
 }
 
 export interface PaymentCallbackPayload {
@@ -80,6 +81,26 @@ export const orderService = {
 
   openDispute: async (id: string, reason: string) => {
     const response = await api.post(`/orders/${id}/disputes`, { reason });
+    return response.data;
+  },
+
+  addDisputeEvidence: async (id: string, payload: { type?: 'IMAGE' | 'CHAT_SCREENSHOT' | 'RECEIPT' | 'OTHER'; url: string; note?: string }) => {
+    const response = await api.post(`/orders/${id}/disputes/evidence`, payload);
+    return response.data;
+  },
+
+  proposeHandover: async (id: string, payload: { location: string; time: string; note?: string }) => {
+    const response = await api.post(`/orders/${id}/handover/proposals`, payload);
+    return response.data;
+  },
+
+  respondHandover: async (id: string, proposalId: string, action: 'ACCEPT' | 'REJECT') => {
+    const response = await api.patch(`/orders/${id}/handover/proposals/${proposalId}`, { action });
+    return response.data;
+  },
+
+  confirmHandover: async (id: string) => {
+    const response = await api.patch(`/orders/${id}/handover/confirm`);
     return response.data;
   },
 

@@ -36,6 +36,7 @@ const mockRedis = {
 const mockPublishOrderCreated = vi.fn().mockResolvedValue(true);
 const mockPublishOrderCancelled = vi.fn().mockResolvedValue(true);
 const mockPublishOrderCompleted = vi.fn().mockResolvedValue(true);
+const mockPublishOrderEvent = vi.fn().mockResolvedValue(true);
 
 vi.mock('../models/Order.js', () => ({
   Order: mockOrderModel,
@@ -55,6 +56,7 @@ vi.mock('../services/saga.service.js', () => ({
   publishOrderCancelled: (...args) => mockPublishOrderCancelled(...args),
   publishOrderCompleted: (...args) => mockPublishOrderCompleted(...args),
   publishOrderDisputeOpened: vi.fn().mockResolvedValue(true),
+  publishOrderEvent: (...args) => mockPublishOrderEvent(...args),
 }));
 
 const { OrderService } = await import('../services/order.service.js');
@@ -151,6 +153,46 @@ describe('order.service', () => {
 
       expect(result).toBeDefined();
       expect(mockOrderModel.findOne).toHaveBeenCalled();
+    });
+
+    it('should validate accepted offer before creating order from offer', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            offerId: 'offer123',
+            productId: 'prod123',
+            sellerId: 'seller123',
+            buyerId: 'buyer123',
+            price: 42000,
+            listingType: 'SELL',
+          },
+        }),
+      });
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+      mockOrderModel.create.mockResolvedValue({
+        ...mockOrder,
+        offerId: 'offer123',
+        price: 42000,
+        toObject: () => ({ ...mockOrder, offerId: 'offer123', price: 42000 }),
+      });
+
+      const result = await orderService.createOrder('buyer123', {
+        offerId: 'offer123',
+        idempotencyKey: 'idem-offer-001',
+      });
+
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/offers/offer123/checkout'), expect.any(Object));
+      expect(mockOrderModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        offerId: 'offer123',
+        productId: 'prod123',
+        sellerId: 'seller123',
+        price: 42000,
+      }));
+      expect(result.offerId).toBe('offer123');
+      fetchSpy.mockRestore();
     });
   });
 

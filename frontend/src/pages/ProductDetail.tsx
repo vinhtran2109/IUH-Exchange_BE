@@ -45,6 +45,13 @@ const ProductDetail: React.FC = () => {
   const [followingSeller, setFollowingSeller] = useState(false);
   const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('BANK_TRANSFER');
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
+  const [offers, setOffers] = useState<any[]>([]);
+  const [offerType, setOfferType] = useState<'PRICE' | 'TRADE'>('PRICE');
+  const [offerAmount, setOfferAmount] = useState('');
+  const [tradeItemTitle, setTradeItemTitle] = useState('');
+  const [tradeItemDescription, setTradeItemDescription] = useState('');
+  const [offerMessage, setOfferMessage] = useState('');
+  const [offerBusy, setOfferBusy] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -101,6 +108,25 @@ const ProductDetail: React.FC = () => {
     };
     checkOrder();
   }, [id, user]);
+
+  const loadOffers = async () => {
+    if (!id || !user || !product) return;
+    try {
+      const res = user.id === product.sellerId
+        ? await productService.listProductOffers(id)
+        : await productService.listMyOffers();
+      if (res.success) {
+        const content = res.data?.content || res.data || [];
+        setOffers(user.id === product.sellerId ? content : content.filter((offer: any) => offer.productId === id));
+      }
+    } catch {
+      // ignore optional offer panel errors
+    }
+  };
+
+  useEffect(() => {
+    void loadOffers();
+  }, [id, user?.id, product?.sellerId]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -220,6 +246,61 @@ const ProductDetail: React.FC = () => {
     }
   };
 
+  const handleCreateOffer = async () => {
+    if (!product || !user) return;
+    try {
+      setOfferBusy(true);
+      const payload = offerType === 'PRICE'
+        ? { type: 'PRICE' as const, amount: Number(offerAmount), message: offerMessage.trim() }
+        : { type: 'TRADE' as const, tradeItemTitle: tradeItemTitle.trim(), tradeItemDescription: tradeItemDescription.trim(), message: offerMessage.trim() };
+      const res = await productService.createOffer(product.id, payload);
+      if (res.success) {
+        setOfferAmount('');
+        setTradeItemTitle('');
+        setTradeItemDescription('');
+        setOfferMessage('');
+        await loadOffers();
+      }
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Không thể gửi đề xuất lúc này.');
+    } finally {
+      setOfferBusy(false);
+    }
+  };
+
+  const handleResolveOffer = async (offerId: string, action: 'ACCEPT' | 'REJECT') => {
+    try {
+      setOfferBusy(true);
+      const res = await productService.resolveOffer(offerId, action);
+      if (res.success) await loadOffers();
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Không thể xử lý đề xuất.');
+    } finally {
+      setOfferBusy(false);
+    }
+  };
+
+  const handleOrderFromOffer = async (offer: any) => {
+    if (!product) return;
+    try {
+      setOfferBusy(true);
+      const orderResponse = await orderService.createOrder({
+        productId: product.id,
+        sellerId: product.sellerId,
+        price: offer.type === 'PRICE' ? Number(offer.amount) : 0,
+        offerId: offer.id || offer._id,
+        buyerNote: offer.message || '',
+        idempotencyKey: window.crypto.randomUUID(),
+      });
+      const orderId = orderResponse.data?.id || orderResponse.data?._id;
+      navigate(`/orders/${orderId}`);
+    } catch (error: any) {
+      alert(error.response?.data?.message || 'Không thể tạo đơn từ đề xuất.');
+    } finally {
+      setOfferBusy(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
@@ -300,6 +381,61 @@ const ProductDetail: React.FC = () => {
                 {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(product.price)}
               </div>
             </div>
+
+            {product.listingType && product.listingType !== 'SELL' && (
+              <div className="mb-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+                <div className="font-bold">{product.listingType === 'TRADE' ? 'Bài đăng đổi đồ' : 'Bài đăng cho tặng'}</div>
+                {product.tradeWanted && <div className="mt-1">Muốn đổi lấy: {product.tradeWanted}</div>}
+              </div>
+            )}
+
+            {user && user.id !== product.sellerId && product.allowOffers !== false && (
+              <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 text-sm font-bold text-slate-900">Trả giá / đề xuất đổi</div>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setOfferType('PRICE')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${offerType === 'PRICE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>Trả giá</button>
+                  <button type="button" onClick={() => setOfferType('TRADE')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${offerType === 'TRADE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>Đổi đồ</button>
+                </div>
+                {offerType === 'PRICE' ? (
+                  <input value={offerAmount} onChange={(e) => setOfferAmount(e.target.value)} type="number" placeholder="Giá đề xuất" className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                ) : (
+                  <>
+                    <input value={tradeItemTitle} onChange={(e) => setTradeItemTitle(e.target.value)} placeholder="Món bạn muốn đổi" className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                    <textarea value={tradeItemDescription} onChange={(e) => setTradeItemDescription(e.target.value)} placeholder="Mô tả món đổi" rows={2} className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  </>
+                )}
+                <input value={offerMessage} onChange={(e) => setOfferMessage(e.target.value)} placeholder="Lời nhắn thêm" className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <button type="button" disabled={offerBusy} onClick={handleCreateOffer} className="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white disabled:opacity-50">Gửi đề xuất</button>
+              </div>
+            )}
+
+            {offers.length > 0 && (
+              <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 text-sm font-bold text-slate-900">{user?.id === product.sellerId ? 'Đề xuất từ người mua' : 'Đề xuất của bạn'}</div>
+                <div className="space-y-2">
+                  {offers.slice(0, 5).map((offer) => (
+                    <div key={offer.id || offer._id} className="rounded-lg border border-slate-100 bg-slate-50 p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold text-slate-800">
+                          {offer.type === 'TRADE' ? `Đổi: ${offer.tradeItemTitle}` : `${Number(offer.amount || 0).toLocaleString()}đ`}
+                        </div>
+                        <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-slate-600">{offer.status}</span>
+                      </div>
+                      {offer.message && <div className="mt-1 text-xs text-slate-500">{offer.message}</div>}
+                      {user?.id === product.sellerId && offer.status === 'PENDING' && (
+                        <div className="mt-2 flex gap-2">
+                          <button disabled={offerBusy} onClick={() => handleResolveOffer(offer.id || offer._id, 'ACCEPT')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Chấp nhận</button>
+                          <button disabled={offerBusy} onClick={() => handleResolveOffer(offer.id || offer._id, 'REJECT')} className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">Từ chối</button>
+                        </div>
+                      )}
+                      {user?.id !== product.sellerId && offer.status === 'ACCEPTED' && (
+                        <button disabled={offerBusy} onClick={() => handleOrderFromOffer(offer)} className="mt-2 rounded bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">Tạo đơn từ đề xuất</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="mb-5 grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-slate-200 bg-white p-4">

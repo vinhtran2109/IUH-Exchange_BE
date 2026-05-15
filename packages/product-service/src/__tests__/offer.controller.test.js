@@ -103,4 +103,33 @@ describe('offer.controller', () => {
     );
     expect(res.json).toHaveBeenCalled();
   });
+
+  it('returns checkout payload for accepted offer owner', async () => {
+    mockOfferModel.findById.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: 'offer123',
+        productId: 'prod123',
+        buyerId: 'buyer123',
+        sellerId: 'seller123',
+        status: 'ACCEPTED',
+        type: 'PRICE',
+        amount: 42000,
+      }),
+    });
+    mockProductModel.findById.mockReturnValue({
+      lean: vi.fn().mockResolvedValue({
+        _id: 'prod123',
+        sellerId: 'seller123',
+        status: 'AVAILABLE',
+        listingType: 'SELL',
+      }),
+    });
+
+    const { req, res } = mockReqRes({}, { offerId: 'offer123' }, { sub: 'buyer123' });
+    await offerController.getOfferCheckout(req, res);
+
+    const response = res.json.mock.calls[0][0];
+    expect(response.data.price).toBe(42000);
+    expect(response.data.productId).toBe('prod123');
+  });
 });
