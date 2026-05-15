@@ -325,6 +325,10 @@ export class OrderService {
       throw new BadRequestException('Đơn hàng đã được xác nhận');
     }
 
+    if (order.paymentMethod === 'BANK_TRANSFER' && order.paymentStatus !== 'PAID') {
+      throw new BadRequestException('Nguoi ban can xac nhan da nhan tien truoc khi hoan tat don chuyen khoan');
+    }
+
     this._assertTransition(order.status, 'COMPLETED');
 
     appendStatusHistory(order, 'COMPLETED', {

@@ -241,6 +241,20 @@ describe('order.service', () => {
       ).rejects.toThrow('không ở trạng thái chờ xác nhận');
     });
 
+    it('should reject bank transfer completion before seller confirms payment', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        sellerId: 'seller123',
+        status: 'AWAITING_SELLER',
+        paymentMethod: 'BANK_TRANSFER',
+        paymentStatus: 'UNPAID',
+      });
+
+      await expect(
+        orderService.confirmOrder('order123', 'seller123')
+      ).rejects.toThrow('xac nhan da nhan tien');
+    });
+
     it('should throw 404 for missing order', async () => {
       mockOrderModel.findById.mockResolvedValue(null);
       await expect(

@@ -260,6 +260,7 @@ const OrderDetail: React.FC = () => {
   const paymentDisplayStatus = (
     paymentStatus === 'UNPAID' && isBankTransfer && transferReported ? 'REPORTED' : paymentStatus
   ) as PaymentDisplayStatusKey;
+  const isCompletedButPaymentPending = currentStatus === 'COMPLETED' && isBankTransfer && paymentStatus !== 'PAID';
 
   const statusLabel: Record<OrderStatusKey, string> = {
     PENDING: 'Đang tạo yêu cầu mua',
@@ -274,6 +275,10 @@ const OrderDetail: React.FC = () => {
     COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     CANCELLED: 'bg-red-50 text-red-700 border-red-200',
   };
+  const orderStatusLabel = isCompletedButPaymentPending ? 'Cho xac nhan thanh toan' : statusLabel[currentStatus];
+  const orderStatusTone = isCompletedButPaymentPending
+    ? 'bg-blue-50 text-blue-700 border-blue-200'
+    : statusTone[currentStatus];
 
   const paymentLabel: Partial<Record<PaymentDisplayStatusKey, string>> = {
     UNPAID: 'Chưa thanh toán',
@@ -330,6 +335,9 @@ const OrderDetail: React.FC = () => {
     if (currentStatus === 'CANCELLED') {
       return { title: 'Đơn đã hủy', body: 'Luồng giao dịch đã dừng. Nếu có vấn đề, hãy mở tranh chấp hoặc liên hệ admin.' };
     }
+    if (isCompletedButPaymentPending) {
+      return { title: 'Dang cho nguoi ban xac nhan tien', body: 'Don da bi danh dau hoan tat nhung tien chuyen khoan chua duoc xac nhan. Nguoi ban can bam Da nhan tien de cap nhat thanh Da thanh toan.' };
+    }
     if (currentStatus === 'COMPLETED') {
       return { title: 'Giao dịch hoàn tất', body: 'Bạn có thể xem biên nhận, đánh giá người bán/người mua hoặc mở tranh chấp nếu cần.' };
     }
@@ -346,7 +354,7 @@ const OrderDetail: React.FC = () => {
       return { title: 'Bước tiếp theo: hoàn tất giao dịch', body: 'Sau khi đã giao hàng và điều kiện thanh toán đã ổn, người bán xác nhận hoàn tất đơn.' };
     }
     return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi lịch hẹn, thanh toán và thông báo từ người bán tại trang này.' };
-  }, [currentStatus, isBankTransfer, isBuyer, isSeller, order?.handoverLocation, order?.meetingProposals?.length, paymentDisplayStatus]);
+  }, [currentStatus, isBankTransfer, isBuyer, isSeller, isCompletedButPaymentPending, order?.handoverLocation, order?.meetingProposals?.length, paymentDisplayStatus]);
 
   if (loading) {
     return (
@@ -394,8 +402,8 @@ const OrderDetail: React.FC = () => {
       >
         <div className="bg-slate-900 p-6 text-white">
           <div className="mb-3 flex items-center justify-between">
-            <span className={`rounded border px-2 py-0.5 text-[10px] font-medium ${statusTone[currentStatus]} bg-white`}>
-              {statusLabel[currentStatus]}
+            <span className={`rounded border px-2 py-0.5 text-[10px] font-medium ${orderStatusTone} bg-white`}>
+              {orderStatusLabel}
             </span>
             <span className="text-xs text-white/50">{new Date(order.createdAt).toLocaleString()}</span>
           </div>
@@ -413,7 +421,7 @@ const OrderDetail: React.FC = () => {
           <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Trạng thái đơn</div>
-              <div className="text-sm font-semibold text-slate-800">{statusLabel[currentStatus]}</div>
+              <div className="text-sm font-semibold text-slate-800">{orderStatusLabel}</div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Thanh toán</div>
@@ -628,7 +636,7 @@ const OrderDetail: React.FC = () => {
                     </button>
                   )}
 
-                  {isSeller && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && (
+                  {isSeller && currentStatus !== 'CANCELLED' && (
                     <>
                       {isBankTransfer && paymentDisplayStatus === 'REPORTED' && (
                         <button
@@ -643,14 +651,14 @@ const OrderDetail: React.FC = () => {
                       <button
                         onClick={handleReject}
                         disabled={acting}
-                        className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
+                        className={`flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:opacity-50 ${currentStatus === 'COMPLETED' ? 'hidden' : ''}`}
                       >
                         <X size={14} /> Từ chối
                       </button>
                       <button
                         onClick={handleConfirm}
                         disabled={acting || (isBankTransfer && !transferConfirmed)}
-                        className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
+                        className={`flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50 ${currentStatus === 'COMPLETED' ? 'hidden' : ''}`}
                       >
                         <Check size={14} /> Xác nhận hoàn tất
                       </button>
