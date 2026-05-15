@@ -178,6 +178,7 @@ export class OrderService {
           handoverLocation: request.handoverLocation || '',
           handoverTime: request.handoverTime || null,
           handoverStatus: request.handoverLocation && request.handoverTime ? 'PROPOSED' : 'NOT_SCHEDULED',
+          paymentMethod: ['BANK_TRANSFER', 'CASH'].includes(request.paymentMethod) ? request.paymentMethod : 'NONE',
           meetingProposals: request.handoverLocation && request.handoverTime ? [{
             location: request.handoverLocation,
             time: request.handoverTime,

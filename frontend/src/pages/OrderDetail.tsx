@@ -322,6 +322,28 @@ const OrderDetail: React.FC = () => {
     [currentStatus, order?.createdAt, payment?.paidAt, payment?.transferReportedAt, paymentStatus, transferReported]
   );
 
+  const nextStep = useMemo(() => {
+    if (currentStatus === 'CANCELLED') {
+      return { title: 'Đơn đã hủy', body: 'Luồng giao dịch đã dừng. Nếu có vấn đề, hãy mở tranh chấp hoặc liên hệ admin.' };
+    }
+    if (currentStatus === 'COMPLETED') {
+      return { title: 'Giao dịch hoàn tất', body: 'Bạn có thể xem biên nhận, đánh giá người bán/người mua hoặc mở tranh chấp nếu cần.' };
+    }
+    if (isBuyer && isBankTransfer && paymentStatus !== 'PAID' && !transferReported) {
+      return { title: 'Bước tiếp theo: chuyển khoản', body: 'Chuyển khoản trực tiếp cho người bán, rồi bấm “Tôi đã chuyển khoản” để người bán xác nhận.' };
+    }
+    if (isSeller && isBankTransfer && transferReported && paymentStatus !== 'PAID') {
+      return { title: 'Bước tiếp theo: xác nhận tiền', body: 'Kiểm tra tài khoản ngân hàng. Nếu đã nhận tiền, bấm “Đã nhận tiền”.' };
+    }
+    if (!order?.handoverLocation && !order?.meetingProposals?.length) {
+      return { title: 'Bước tiếp theo: chốt lịch hẹn', body: 'Một trong hai bên đề xuất địa điểm và thời gian giao nhận trong trường.' };
+    }
+    if (isSeller) {
+      return { title: 'Bước tiếp theo: hoàn tất giao dịch', body: 'Sau khi đã giao hàng và điều kiện thanh toán đã ổn, người bán xác nhận hoàn tất đơn.' };
+    }
+    return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi lịch hẹn, thanh toán và thông báo từ người bán tại trang này.' };
+  }, [currentStatus, isBankTransfer, isBuyer, isSeller, order?.handoverLocation, order?.meetingProposals?.length, paymentStatus, transferReported]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
@@ -379,6 +401,11 @@ const OrderDetail: React.FC = () => {
         </div>
 
         <div className="space-y-6 p-6">
+          <section className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <div className="text-sm font-bold text-blue-900">{nextStep.title}</div>
+            <p className="mt-1 text-sm text-blue-800">{nextStep.body}</p>
+          </section>
+
           <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Trạng thái đơn</div>

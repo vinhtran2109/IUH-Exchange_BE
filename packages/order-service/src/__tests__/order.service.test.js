@@ -89,11 +89,14 @@ describe('order.service', () => {
         sellerId: 'seller123',
         price: 50000,
         buyerNote: 'Giao tại trường',
+        paymentMethod: 'BANK_TRANSFER',
         idempotencyKey: 'idem-key-001',
       });
 
       expect(result).toBeDefined();
-      expect(mockOrderModel.create).toHaveBeenCalled();
+      expect(mockOrderModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentMethod: 'BANK_TRANSFER' })
+      );
       expect(mockPublishOrderCreated).toHaveBeenCalled();
     });
 

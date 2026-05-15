@@ -213,6 +213,7 @@ const ProductDetail: React.FC = () => {
         price: product.price,
         buyerNote: buyerNote.trim(),
         handoverLocation: handoverLocation.trim(),
+        paymentMethod: paymentChoice,
         idempotencyKey: window.crypto.randomUUID(),
       };
 
@@ -390,7 +391,7 @@ const ProductDetail: React.FC = () => {
             )}
 
             {user && user.id !== product.sellerId && product.allowOffers !== false && (
-              <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+              <div id="offer-panel" className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 text-sm font-bold text-slate-900">Trả giá / đề xuất đổi</div>
                 <div className="mb-3 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setOfferType('PRICE')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${offerType === 'PRICE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>Trả giá</button>
@@ -509,13 +510,31 @@ const ProductDetail: React.FC = () => {
                     >
                       <ShoppingCart size={16} /> Mua sản phẩm
                     </button>
+                    {product.allowOffers !== false ? (
+                      <button
+                        onClick={() => document.getElementById('offer-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                        disabled={offerBusy}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <Wallet size={16} /> Thương lượng
+                      </button>
+                    ) : (
                     <button
                       onClick={() => chatService.triggerOpenChat(product.sellerId, sellerLabel)}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50"
                     >
                       <MessageSquare size={16} /> Chat người bán
                     </button>
+                    )}
                   </div>
+                  {product.allowOffers !== false && (
+                    <button
+                      onClick={() => chatService.triggerOpenChat(product.sellerId, sellerLabel)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50"
+                    >
+                      <MessageSquare size={16} /> Chat người bán
+                    </button>
+                  )}
                   <button onClick={handleReport} className="flex w-full items-center justify-center gap-1 py-2 text-xs font-medium text-slate-400 transition-colors hover:text-red-500">
                     <Flag size={12} /> Tố cáo sản phẩm
                   </button>

@@ -7,6 +7,7 @@ export interface CreateOrderRequest {
   buyerNote?: string;
   handoverLocation?: string;
   handoverTime?: string;
+  paymentMethod?: 'BANK_TRANSFER' | 'CASH';
   idempotencyKey: string;
   offerId?: string;
 }

@@ -33,7 +33,7 @@ export class OrderController {
       throw new BadRequestException('Missing Idempotency-Key header');
     }
 
-    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, offerId } = req.body;
+    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, paymentMethod, offerId } = req.body;
 
     if (!offerId && (!productId || !sellerId || price === undefined)) {
       throw new BadRequestException('productId, sellerId, and price are required');
@@ -51,6 +51,7 @@ export class OrderController {
       buyerNote,
       handoverLocation,
       handoverTime,
+      paymentMethod,
       idempotencyKey,
     });
 
