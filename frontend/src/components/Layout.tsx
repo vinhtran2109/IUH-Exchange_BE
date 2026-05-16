@@ -108,7 +108,7 @@ const Layout: React.FC = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xs">IUH</div>
-            <span className="font-bold text-base tracking-tight hidden sm:block text-slate-900">Campus Exchange</span>
+            <span className="font-bold text-base tracking-tight hidden sm:block text-slate-900">Chợ IUH</span>
           </Link>
 
           {/* Navigation Links */}
@@ -254,7 +254,7 @@ const Layout: React.FC = () => {
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 bg-slate-900 rounded-md flex items-center justify-center text-white font-bold text-[10px]">IUH</div>
-              <span className="font-bold text-base text-slate-900">Exchange</span>
+              <span className="font-bold text-base text-slate-900">Chợ IUH</span>
             </div>
             <p className="text-slate-500 text-sm max-w-sm leading-relaxed">Nền tảng mua bán và trao đổi đồ cũ dành cho cộng đồng sinh viên Đại học Công nghiệp TP.HCM.</p>
           </div>
@@ -273,7 +273,7 @@ const Layout: React.FC = () => {
             </ul>
           </div>
         </div>
-        <div className="container mx-auto px-4 mt-6 pt-6 border-t border-slate-100 text-center text-slate-400 text-xs">&copy; 2026 IUH Campus Exchange.</div>
+        <div className="container mx-auto px-4 mt-6 pt-6 border-t border-slate-100 text-center text-slate-400 text-xs">&copy; 2026 Chợ IUH.</div>
       </footer>
     </div>
   );

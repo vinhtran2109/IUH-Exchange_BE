@@ -236,8 +236,8 @@ const ProductDetail: React.FC = () => {
         state: {
           flashMessage:
             paymentChoice === 'BANK_TRANSFER'
-              ? 'Da tao don. Hay chuyen khoan cho nguoi ban, sau do bam Toi da chuyen khoan trong chi tiet don.'
-              : 'Da tao yeu cau mua thanh cong. Ban co the theo doi tien do don hang tai day.',
+              ? 'Đã tạo đơn. Hãy chuyển khoản cho người bán, sau đó bấm Tôi đã chuyển khoản trong chi tiết đơn.'
+              : 'Đã tạo yêu cầu mua thành công. Bạn có thể theo dõi tiến độ đơn hàng tại đây.',
         },
       });
     } catch (error: any) {
@@ -453,7 +453,7 @@ const ProductDetail: React.FC = () => {
               <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-bold uppercase text-emerald-700">Uy tin nguoi ban</div>
+                    <div className="text-xs font-bold uppercase text-emerald-700">Uy tín người bán</div>
                     <div className="mt-1 text-sm font-black text-slate-900">{sellerTrust.badge} - {sellerTrust.trustScore}/100</div>
                   </div>
                   {user && user.id !== product.sellerId && (
@@ -464,14 +464,14 @@ const ProductDetail: React.FC = () => {
                       }}
                       className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-700 shadow-sm"
                     >
-                      {followingSeller ? 'Dang theo doi' : 'Theo doi'}
+                      {followingSeller ? 'Đang theo dõi' : 'Theo dõi'}
                     </button>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.avgRating || 0}</div><div className="text-slate-400">Rating</div></div>
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.soldCount || 0}</div><div className="text-slate-400">Da ban</div></div>
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.followerCount || 0}</div><div className="text-slate-400">Theo doi</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.avgRating || 0}</div><div className="text-slate-400">Đánh giá</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.soldCount || 0}</div><div className="text-slate-400">Đã bán</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.followerCount || 0}</div><div className="text-slate-400">Theo dõi</div></div>
                 </div>
               </div>
             )}
@@ -602,11 +602,11 @@ const ProductDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Diem hen giao dich</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Điểm hẹn giao dịch</label>
                 <input
                   value={handoverLocation}
                   onChange={(e) => setHandoverLocation(e.target.value)}
-                  placeholder="Vi du: Sanh A, Thu vien IUH, cong Nguyen Van Bao"
+                  placeholder="Ví dụ: Sảnh A, Thư viện IUH, cổng Nguyễn Văn Bảo"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400"
                 />
               </div>
@@ -624,9 +624,9 @@ const ProductDetail: React.FC = () => {
                       paymentChoice === 'BANK_TRANSFER' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-medium">Chuyen khoan truc tiep cho nguoi ban</div>
+                    <div className="font-medium">Chuyển khoản trực tiếp cho người bán</div>
                     <div className={`mt-1 text-xs ${paymentChoice === 'BANK_TRANSFER' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      He thong hien thong tin ngan hang/QR cua nguoi ban, ban tu chuyen khoan va nguoi ban xac nhan da nhan tien.
+                      Hệ thống hiển thị thông tin ngân hàng/QR của người bán, bạn tự chuyển khoản và người bán xác nhận đã nhận tiền.
                     </div>
                   </button>
                   <button

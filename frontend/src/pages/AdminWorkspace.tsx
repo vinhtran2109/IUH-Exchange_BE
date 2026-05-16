@@ -34,7 +34,7 @@ const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({ children }) => {
             <div>
               <div className="flex items-center gap-2 text-sm font-bold text-slate-950">
                 <ShieldCheck size={16} className="text-teal-600" />
-                Admin Console
+                Bảng điều khiển quản trị
               </div>
               <div className="text-xs text-slate-500">Không gian quản trị độc lập</div>
             </div>
@@ -49,7 +49,7 @@ const AdminWorkspace: React.FC<AdminWorkspaceProps> = ({ children }) => {
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             </button>
             <div className="hidden text-right sm:block">
-              <div className="text-sm font-semibold text-slate-800">{user?.name || 'Administrator'}</div>
+              <div className="text-sm font-semibold text-slate-800">{user?.name || 'Quản trị viên'}</div>
               <div className="text-xs text-slate-500">{user?.email}</div>
             </div>
             <button

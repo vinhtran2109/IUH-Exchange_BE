@@ -133,14 +133,14 @@ const OrderDetail: React.FC = () => {
     try {
       setActing(true);
       const res = await orderService.reportBankTransfer(order.id || order._id, {
-        note: 'Buyer reported a direct bank transfer from order detail',
+        note: 'Người mua báo đã chuyển khoản trực tiếp từ chi tiết đơn',
       });
       if (res.success) {
-        setFlashMessage('Da ghi nhan bao chuyen khoan. Nguoi ban se xac nhan sau khi nhan tien.');
+        setFlashMessage('Đã ghi nhận báo chuyển khoản. Người bán sẽ xác nhận sau khi nhận tiền.');
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Khong the bao da chuyen khoan luc nay.');
+      alert(error?.response?.data?.message || 'Không thể báo đã chuyển khoản lúc này.');
     } finally {
       setActing(false);
     }
@@ -151,14 +151,14 @@ const OrderDetail: React.FC = () => {
     try {
       setActing(true);
       const res = await orderService.confirmBankTransfer(order.id || order._id, {
-        note: 'Seller confirmed the direct bank transfer',
+        note: 'Người bán xác nhận đã nhận chuyển khoản trực tiếp',
       });
       if (res.success) {
-        setFlashMessage('Da xac nhan nhan tien chuyen khoan.');
+        setFlashMessage('Đã xác nhận đã nhận tiền chuyển khoản.');
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Khong the xac nhan nhan tien luc nay.');
+      alert(error?.response?.data?.message || 'Không thể xác nhận nhận tiền lúc này.');
     } finally {
       setActing(false);
     }
@@ -275,7 +275,7 @@ const OrderDetail: React.FC = () => {
     COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
     CANCELLED: 'bg-red-50 text-red-700 border-red-200',
   };
-  const orderStatusLabel = isCompletedButPaymentPending ? 'Cho xac nhan thanh toan' : statusLabel[currentStatus];
+  const orderStatusLabel = isCompletedButPaymentPending ? 'Chờ xác nhận thanh toán' : statusLabel[currentStatus];
   const orderStatusTone = isCompletedButPaymentPending
     ? 'bg-blue-50 text-blue-700 border-blue-200'
     : statusTone[currentStatus];
@@ -300,24 +300,24 @@ const OrderDetail: React.FC = () => {
         done: true,
       },
       {
-        title: paymentDisplayStatus === 'PAID' ? 'Da thanh toan' : paymentDisplayStatus === 'REPORTED' ? 'Da bao chuyen khoan' : 'Cho thanh toan',
+        title: paymentDisplayStatus === 'PAID' ? 'Đã thanh toán' : paymentDisplayStatus === 'REPORTED' ? 'Đã báo chuyển khoản' : 'Chờ thanh toán',
         subtitle:
           paymentDisplayStatus === 'PAID'
             ? payment?.paidAt
               ? new Date(payment.paidAt).toLocaleString()
-              : 'Da ghi nhan thanh toan'
+              : 'Đã ghi nhận thanh toán'
             : transferReported && payment?.transferReportedAt
-              ? `Buyer reported transfer at ${new Date(payment.transferReportedAt).toLocaleString()}`
-              : 'Nguoi mua chuyen khoan truc tiep cho nguoi ban roi bao da chuyen.',
+              ? `Người mua báo chuyển khoản lúc ${new Date(payment.transferReportedAt).toLocaleString()}`
+              : 'Người mua chuyển khoản trực tiếp cho người bán rồi báo đã chuyển.',
         done: paymentDisplayStatus === 'PAID' || paymentDisplayStatus === 'REPORTED',
       },
       {
         title:
           currentStatus === 'COMPLETED'
-            ? 'Nguoi ban da xac nhan'
+            ? 'Người bán đã xác nhận'
             : currentStatus === 'CANCELLED'
-              ? 'Don hang da dung'
-              : 'Cho nguoi ban xac nhan',
+              ? 'Đơn hàng đã dừng'
+              : 'Chờ người bán xác nhận',
         subtitle:
           currentStatus === 'COMPLETED'
             ? 'Giao dịch đã hoàn tất.'
@@ -336,7 +336,7 @@ const OrderDetail: React.FC = () => {
       return { title: 'Đơn đã hủy', body: 'Luồng giao dịch đã dừng. Nếu có vấn đề, hãy mở tranh chấp hoặc liên hệ admin.' };
     }
     if (isCompletedButPaymentPending) {
-      return { title: 'Dang cho nguoi ban xac nhan tien', body: 'Don da bi danh dau hoan tat nhung tien chuyen khoan chua duoc xac nhan. Nguoi ban can bam Da nhan tien de cap nhat thanh Da thanh toan.' };
+      return { title: 'Đang chờ người bán xác nhận tiền', body: 'Đơn đã bị đánh dấu hoàn tất nhưng tiền chuyển khoản chưa được xác nhận. Người bán cần bấm Đã nhận tiền để cập nhật thành Đã thanh toán.' };
     }
     if (currentStatus === 'COMPLETED') {
       return { title: 'Giao dịch hoàn tất', body: 'Bạn có thể xem biên nhận, đánh giá người bán/người mua hoặc mở tranh chấp nếu cần.' };
@@ -426,14 +426,14 @@ const OrderDetail: React.FC = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Thanh toán</div>
               <div className={`inline-flex rounded-full border px-2 py-1 text-xs font-medium ${paymentDisplayStatus === 'REPORTED' ? 'bg-blue-50 text-blue-700 border-blue-200' : paymentTone[paymentDisplayStatus] || paymentTone.UNPAID}`}>
-                {paymentDisplayStatus === 'REPORTED' ? 'Da bao chuyen khoan' : paymentLabel[paymentDisplayStatus]}
+                {paymentDisplayStatus === 'REPORTED' ? 'Đã báo chuyển khoản' : paymentLabel[paymentDisplayStatus]}
               </div>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Phương thức</div>
               <div className="text-sm font-semibold text-slate-800">
                 {(payment?.paymentMethod || order?.paymentMethod) === 'BANK_TRANSFER'
-                  ? 'Chuyen khoan truc tiep'
+                  ? 'Chuyển khoản trực tiếp'
                   : (payment?.paymentMethod || order?.paymentMethod) === 'VNPAY_MOCK'
                   ? 'Thanh toán online'
                   : (payment?.paymentMethod || order?.paymentMethod) === 'CASH'
@@ -446,24 +446,24 @@ const OrderDetail: React.FC = () => {
           {isBankTransfer && (
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                <CreditCard size={16} className="text-slate-400" /> Chuyen khoan truc tiep
+                <CreditCard size={16} className="text-slate-400" /> Chuyển khoản trực tiếp
               </h3>
               <div className="grid gap-3 text-sm md:grid-cols-3">
                 <div>
-                  <div className="text-xs font-medium text-slate-500">Buyer bao chuyen</div>
+                  <div className="text-xs font-medium text-slate-500">Người mua báo chuyển</div>
                   <div className="font-semibold text-slate-800">
-                    {payment?.transferReportedAt ? new Date(payment.transferReportedAt).toLocaleString() : 'Chua bao'}
+                    {payment?.transferReportedAt ? new Date(payment.transferReportedAt).toLocaleString() : 'Chưa báo'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-slate-500">Seller xac nhan</div>
+                  <div className="text-xs font-medium text-slate-500">Người bán xác nhận</div>
                   <div className="font-semibold text-slate-800">
-                    {payment?.transferConfirmedAt ? new Date(payment.transferConfirmedAt).toLocaleString() : 'Chua xac nhan'}
+                    {payment?.transferConfirmedAt ? new Date(payment.transferConfirmedAt).toLocaleString() : 'Chưa xác nhận'}
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-slate-500">Ma giao dich</div>
-                  <div className="break-all font-semibold text-slate-800">{payment?.paymentTransactionId || 'Dang cap nhat'}</div>
+                  <div className="text-xs font-medium text-slate-500">Mã giao dịch</div>
+                  <div className="break-all font-semibold text-slate-800">{payment?.paymentTransactionId || 'Đang cập nhật'}</div>
                 </div>
               </div>
               {payment?.transferProofUrl && (
@@ -610,8 +610,8 @@ const OrderDetail: React.FC = () => {
                   <h3 className="text-sm font-semibold text-slate-800">Hành động</h3>
                   <p className="text-xs text-slate-500">
                     {isSeller
-                      ? 'Nguoi ban xac nhan khi da nhan tien hoac tu choi neu giao dich khong tiep tuc.'
-                      : 'Nguoi mua chuyen khoan truc tiep cho nguoi ban, sau do bao da chuyen tren don hang.'}
+                      ? 'Người bán xác nhận khi đã nhận tiền hoặc từ chối nếu giao dịch không tiếp tục.'
+                      : 'Người mua chuyển khoản trực tiếp cho người bán, sau đó báo đã chuyển trên đơn hàng.'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -622,7 +622,7 @@ const OrderDetail: React.FC = () => {
                       className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                     >
                       {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                      Toi da chuyen khoan
+                      Tôi đã chuyển khoản
                     </button>
                   )}
 
@@ -645,7 +645,7 @@ const OrderDetail: React.FC = () => {
                           className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                         >
                           {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                          Da nhan tien
+                          Đã nhận tiền
                         </button>
                       )}
                       <button

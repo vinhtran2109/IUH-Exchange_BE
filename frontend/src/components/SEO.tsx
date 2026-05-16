@@ -9,7 +9,7 @@ interface SEOProps {
 
 const SEO: React.FC<SEOProps> = ({ title, description, image, url }) => {
   useEffect(() => {
-    const baseTitle = 'IUH Campus Exchange';
+    const baseTitle = 'Chợ IUH';
     document.title = title ? `${title} | ${baseTitle}` : baseTitle;
 
     const setMeta = (attr: string, key: string, value: string) => {
