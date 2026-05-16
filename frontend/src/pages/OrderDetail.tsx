@@ -331,6 +331,9 @@ const OrderDetail: React.FC = () => {
     paymentStatus === 'UNPAID' && isBankTransfer && transferReported ? 'REPORTED' : paymentStatus
   ) as PaymentDisplayStatusKey;
   const isCompletedButPaymentPending = currentStatus === 'COMPLETED' && isBankTransfer && paymentStatus !== 'PAID';
+  const canBuyerReportTransfer = isBuyer && isBankTransfer && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && paymentDisplayStatus === 'UNPAID';
+  const canSellerConfirmTransfer = isSeller && isBankTransfer && currentStatus !== 'CANCELLED' && paymentDisplayStatus === 'REPORTED';
+  const canSellerCompleteOrder = isSeller && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED';
 
   const statusLabel: Record<OrderStatusKey, string> = {
     PENDING: 'Đang tạo yêu cầu mua',
@@ -426,6 +429,26 @@ const OrderDetail: React.FC = () => {
     return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi lịch hẹn, thanh toán và thông báo từ người bán tại trang này.' };
   }, [currentStatus, isBankTransfer, isBuyer, isSeller, isCompletedButPaymentPending, order?.handoverLocation, order?.meetingProposals?.length, paymentDisplayStatus]);
 
+  const paymentGuide = useMemo(() => {
+    if (paymentStatus === 'REFUNDED') {
+      return { title: 'Đơn này đã hoàn tiền', body: 'Không cần thao tác thanh toán thêm.', tone: 'slate' };
+    }
+    if (paymentStatus === 'PAID') {
+      return { title: 'Thanh toán đã xong', body: 'Hai bên chỉ cần hoàn tất bàn giao và người bán xác nhận hoàn tất đơn.', tone: 'emerald' };
+    }
+    if (paymentDisplayStatus === 'REPORTED') {
+      return isSeller
+        ? { title: 'Người mua đã báo chuyển khoản', body: 'Kiểm tra tài khoản. Nếu tiền đã vào, bấm Đã nhận tiền.', tone: 'blue' }
+        : { title: 'Đã báo chuyển khoản', body: 'Chờ người bán kiểm tra tài khoản và xác nhận đã nhận tiền.', tone: 'blue' };
+    }
+    if (isBankTransfer) {
+      return isBuyer
+        ? { title: 'Chuyển khoản cho người bán', body: 'Chuyển đúng số tiền, sau đó bấm Tôi đã chuyển khoản. Bạn không cần làm gì thêm cho tới khi người bán xác nhận.', tone: 'amber' }
+        : { title: 'Chờ người mua chuyển khoản', body: 'Khi người mua báo đã chuyển, bạn sẽ thấy nút Đã nhận tiền ở đây.', tone: 'amber' };
+    }
+    return { title: 'Thanh toán khi gặp', body: 'Hai bên gặp theo lịch hẹn, giao dịch xong thì người bán xác nhận hoàn tất đơn.', tone: 'slate' };
+  }, [isBankTransfer, isBuyer, isSeller, paymentDisplayStatus, paymentStatus]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-40">
@@ -488,6 +511,63 @@ const OrderDetail: React.FC = () => {
             <p className="mt-1 text-sm text-blue-800">{nextStep.body}</p>
           </section>
 
+          <section className={`rounded-xl border p-4 ${
+            paymentGuide.tone === 'emerald'
+              ? 'border-emerald-100 bg-emerald-50'
+              : paymentGuide.tone === 'blue'
+                ? 'border-blue-100 bg-blue-50'
+                : paymentGuide.tone === 'amber'
+                  ? 'border-amber-100 bg-amber-50'
+                  : 'border-slate-200 bg-slate-50'
+          }`}>
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="mb-1 flex items-center gap-2 text-sm font-black text-slate-900">
+                  <CreditCard size={16} />
+                  {paymentGuide.title}
+                </div>
+                <p className="text-sm text-slate-600">{paymentGuide.body}</p>
+                {isBankTransfer && (
+                  <div className="mt-2 text-xs text-slate-500">
+                    {payment?.transferReportedAt && <>Người mua báo chuyển: {new Date(payment.transferReportedAt).toLocaleString()}</>}
+                    {payment?.transferConfirmedAt && <> · Người bán xác nhận: {new Date(payment.transferConfirmedAt).toLocaleString()}</>}
+                  </div>
+                )}
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {canBuyerReportTransfer && (
+                  <button
+                    onClick={handleReportTransfer}
+                    disabled={acting}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+                    Tôi đã chuyển khoản
+                  </button>
+                )}
+                {canSellerConfirmTransfer && (
+                  <button
+                    onClick={handleConfirmTransfer}
+                    disabled={acting}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-slate-800 disabled:opacity-50"
+                  >
+                    {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+                    Đã nhận tiền
+                  </button>
+                )}
+                {canSellerCompleteOrder && (
+                  <button
+                    onClick={handleConfirm}
+                    disabled={acting || (isBankTransfer && !transferConfirmed)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
+                  >
+                    <Check size={14} /> Hoàn tất đơn
+                  </button>
+                )}
+              </div>
+            </div>
+          </section>
+
           <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Trạng thái đơn</div>
@@ -514,11 +594,11 @@ const OrderDetail: React.FC = () => {
           </section>
 
           {isBankTransfer && (
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                <CreditCard size={16} className="text-slate-400" /> Chuyển khoản trực tiếp
-              </h3>
-              <div className="grid gap-3 text-sm md:grid-cols-3">
+            <details className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+                Chi tiết chuyển khoản
+              </summary>
+              <div className="mt-3 grid gap-3 text-sm md:grid-cols-3">
                 <div>
                   <div className="text-xs font-medium text-slate-500">Người mua báo chuyển</div>
                   <div className="font-semibold text-slate-800">
@@ -543,10 +623,10 @@ const OrderDetail: React.FC = () => {
                   rel="noreferrer"
                   className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-slate-600 hover:text-slate-900"
                 >
-                  Xem bien nhan chuyen khoan <ExternalLink size={12} />
+                  Xem biên nhận chuyển khoản <ExternalLink size={12} />
                 </a>
               )}
-            </section>
+            </details>
           )}
 
           <section>
@@ -629,18 +709,21 @@ const OrderDetail: React.FC = () => {
                 <input value={handoverTime} onChange={(e) => setHandoverTime(e.target.value)} type="datetime-local" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                 <input value={handoverNote} onChange={(e) => setHandoverNote(e.target.value)} placeholder="Ghi chú" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </div>
-              {order.handoverCode && (
-                <div className="mb-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                  <div className="text-xs font-bold uppercase">Mã bàn giao</div>
-                  <div className="mt-1 font-mono text-2xl font-black tracking-widest">{order.handoverCode}</div>
-                  <div className="mt-1 text-xs">Mã hết hạn: {order.handoverCodeExpiresAt ? new Date(order.handoverCodeExpiresAt).toLocaleString() : 'Chưa xác định'}</div>
+              <details className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
+                <summary className="cursor-pointer text-sm font-bold text-slate-700">Xác nhận bàn giao bằng mã</summary>
+                {order.handoverCode && (
+                  <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                    <div className="text-xs font-bold uppercase">Mã bàn giao</div>
+                    <div className="mt-1 font-mono text-2xl font-black tracking-widest">{order.handoverCode}</div>
+                    <div className="mt-1 text-xs">Mã hết hạn: {order.handoverCodeExpiresAt ? new Date(order.handoverCodeExpiresAt).toLocaleString() : 'Chưa xác định'}</div>
+                  </div>
+                )}
+                <div className="mt-3 grid gap-2 md:grid-cols-3">
+                  <input value={handoverCode} onChange={(e) => setHandoverCode(e.target.value)} placeholder="Nhập mã bàn giao" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  <input value={handoverProofUrl} onChange={(e) => setHandoverProofUrl(e.target.value)} placeholder="URL ảnh/bằng chứng giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                  <input value={handoverProofNote} onChange={(e) => setHandoverProofNote(e.target.value)} placeholder="Ghi chú giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                 </div>
-              )}
-              <div className="mb-3 grid gap-2 md:grid-cols-3">
-                <input value={handoverCode} onChange={(e) => setHandoverCode(e.target.value)} placeholder="Nhập mã bàn giao" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input value={handoverProofUrl} onChange={(e) => setHandoverProofUrl(e.target.value)} placeholder="URL ảnh/bằng chứng giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input value={handoverProofNote} onChange={(e) => setHandoverProofNote(e.target.value)} placeholder="Ghi chú giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              </div>
+              </details>
               <div className="mb-4 flex flex-wrap gap-2">
                 <button onClick={handleProposeHandover} disabled={acting || !handoverLocation || !handoverTime} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đề xuất lịch hẹn</button>
                 <button onClick={handleConfirmHandover} disabled={acting || (!!order.handoverCode && !handoverCode)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50">Tôi đã giao/nhận</button>
@@ -661,85 +744,79 @@ const OrderDetail: React.FC = () => {
             </section>
           )}
 
-          {(isBuyer || isSeller) && currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED' && (
-            <section className="rounded-xl border border-rose-100 bg-rose-50 p-4">
-              <h3 className="mb-2 text-sm font-semibold text-rose-900">Báo không đến điểm hẹn</h3>
-              <p className="mb-3 text-xs text-rose-700">Dùng khi bên còn lại không đến theo lịch đã hẹn. Hệ thống sẽ hủy đơn và ghi nhận lịch sử để admin theo dõi.</p>
-              <div className="mb-3 grid gap-2 md:grid-cols-2">
-                <input value={noShowReason} onChange={(e) => setNoShowReason(e.target.value)} placeholder="Lý do không đến" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-                <input value={noShowEvidenceUrl} onChange={(e) => setNoShowEvidenceUrl(e.target.value)} placeholder="URL bằng chứng nếu có" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-              </div>
-              <button onClick={handleReportNoShow} disabled={acting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Báo không đến và hủy đơn</button>
-            </section>
-          )}
-
-          {(isBuyer || isSeller) && (isBankTransfer || paymentStatus === 'PAID') && (
-            <section className="rounded-xl border border-amber-100 bg-amber-50 p-4">
-              <h3 className="mb-2 text-sm font-semibold text-amber-900">Khiếu nại thanh toán</h3>
-              {currentStatus === 'CANCELLED' && paymentStatus === 'PAID' && (
-                <button onClick={handleRefundPayment} disabled={acting} className="mb-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Hoàn tiền đơn đã hủy</button>
-              )}
-              {payment?.paymentIssueStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN' ? (
-                <div className="rounded-lg bg-white/70 p-3 text-sm text-amber-800">
-                  Khiếu nại đang mở: {payment?.paymentIssueReason || order.paymentIssueReason}
-                </div>
-              ) : (
-                <>
-                  <textarea value={paymentIssueReason} onChange={(e) => setPaymentIssueReason(e.target.value)} rows={2} placeholder="Ví dụ: Người mua đã chuyển nhưng người bán chưa xác nhận, hoặc cần hoàn tiền..." className="mb-3 w-full rounded-lg border border-amber-100 px-3 py-2 text-sm" />
-                  <button onClick={handleOpenPaymentIssue} disabled={acting || paymentIssueReason.trim().length < 10} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Mở khiếu nại thanh toán</button>
-                </>
-              )}
-            </section>
-          )}
-
           {(isBuyer || isSeller) && (
-            <section className="rounded-xl border border-slate-200 bg-white p-4">
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">Tranh chấp & bằng chứng</h3>
-              {order.disputeStatus === 'OPEN' ? (
-                <>
-                  <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">Tranh chấp đang mở: {order.disputeReason}</div>
-                  <div className="mb-3 grid gap-2 md:grid-cols-2">
-                    <input value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} placeholder="URL bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                    <input value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+            <details className="rounded-xl border border-slate-200 bg-white p-4">
+              <summary className="cursor-pointer text-sm font-bold text-slate-800">Hỗ trợ khi có vấn đề</summary>
+              <div className="mt-4 space-y-4">
+                {currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED' && (
+                  <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-rose-900">Báo không đến điểm hẹn</h3>
+                    <p className="mb-3 text-xs text-rose-700">Chỉ dùng khi bên còn lại không đến theo lịch đã hẹn.</p>
+                    <div className="mb-3 grid gap-2 md:grid-cols-2">
+                      <input value={noShowReason} onChange={(e) => setNoShowReason(e.target.value)} placeholder="Lý do không đến" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
+                      <input value={noShowEvidenceUrl} onChange={(e) => setNoShowEvidenceUrl(e.target.value)} placeholder="URL bằng chứng nếu có" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
+                    </div>
+                    <button onClick={handleReportNoShow} disabled={acting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Báo không đến và hủy đơn</button>
                   </div>
-                  <button onClick={handleAddEvidence} disabled={acting || !evidenceUrl} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Thêm bằng chứng</button>
-                  {(order.disputeEvidence || []).map((item: any) => (
-                    <a key={item._id} href={item.url} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 hover:text-slate-900">{item.note || item.type}: {item.url}</a>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={2} placeholder="Lý do tranh chấp, tối thiểu 10 ký tự" className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                  <button onClick={handleOpenDispute} disabled={acting || disputeReason.trim().length < 10} className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">Mở tranh chấp</button>
-                </>
-              )}
-            </section>
+                )}
+
+                {(isBankTransfer || paymentStatus === 'PAID') && (
+                  <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+                    <h3 className="mb-2 text-sm font-semibold text-amber-900">Khiếu nại thanh toán</h3>
+                    {currentStatus === 'CANCELLED' && paymentStatus === 'PAID' && (
+                      <button onClick={handleRefundPayment} disabled={acting} className="mb-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Hoàn tiền đơn đã hủy</button>
+                    )}
+                    {payment?.paymentIssueStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN' ? (
+                      <div className="rounded-lg bg-white/70 p-3 text-sm text-amber-800">
+                        Khiếu nại đang mở: {payment?.paymentIssueReason || order.paymentIssueReason}
+                      </div>
+                    ) : (
+                      <>
+                        <textarea value={paymentIssueReason} onChange={(e) => setPaymentIssueReason(e.target.value)} rows={2} placeholder="Ví dụ: Người mua đã chuyển nhưng người bán chưa xác nhận, hoặc cần hoàn tiền..." className="mb-3 w-full rounded-lg border border-amber-100 px-3 py-2 text-sm" />
+                        <button onClick={handleOpenPaymentIssue} disabled={acting || paymentIssueReason.trim().length < 10} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Mở khiếu nại thanh toán</button>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Tranh chấp & bằng chứng</h3>
+                  {order.disputeStatus === 'OPEN' ? (
+                    <>
+                      <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">Tranh chấp đang mở: {order.disputeReason}</div>
+                      <div className="mb-3 grid gap-2 md:grid-cols-2">
+                        <input value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} placeholder="URL bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                        <input value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                      </div>
+                      <button onClick={handleAddEvidence} disabled={acting || !evidenceUrl} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Thêm bằng chứng</button>
+                      {(order.disputeEvidence || []).map((item: any) => (
+                        <a key={item._id} href={item.url} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 hover:text-slate-900">{item.note || item.type}: {item.url}</a>
+                      ))}
+                    </>
+                  ) : (
+                    <>
+                      <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={2} placeholder="Lý do tranh chấp, tối thiểu 10 ký tự" className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                      <button onClick={handleOpenDispute} disabled={acting || disputeReason.trim().length < 10} className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">Mở tranh chấp</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </details>
           )}
 
-          {(isBuyer || isSeller) && (
+          {(isBuyer || isSeller) && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && (
             <section className="border-t border-slate-100 pt-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h3 className="text-sm font-semibold text-slate-800">Hành động</h3>
+                  <h3 className="text-sm font-semibold text-slate-800">Hủy/từ chối đơn</h3>
                   <p className="text-xs text-slate-500">
                     {isSeller
-                      ? 'Người bán xác nhận khi đã nhận tiền hoặc từ chối nếu giao dịch không tiếp tục.'
-                      : 'Người mua chuyển khoản trực tiếp cho người bán, sau đó báo đã chuyển trên đơn hàng.'}
+                      ? 'Chỉ dùng khi hai bên thống nhất không tiếp tục giao dịch.'
+                      : 'Chỉ dùng khi bạn chưa muốn tiếp tục giao dịch.'}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {isBuyer && isBankTransfer && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && paymentDisplayStatus === 'UNPAID' && (
-                    <button
-                      onClick={handleReportTransfer}
-                      disabled={acting}
-                      className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
-                    >
-                      {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                      Tôi đã chuyển khoản
-                    </button>
-                  )}
-
-                  {isBuyer && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && (
+                  {isBuyer && (
                     <button
                       onClick={handleCancel}
                       disabled={acting}
@@ -749,31 +826,14 @@ const OrderDetail: React.FC = () => {
                     </button>
                   )}
 
-                  {isSeller && currentStatus !== 'CANCELLED' && (
+                  {isSeller && (
                     <>
-                      {isBankTransfer && paymentDisplayStatus === 'REPORTED' && (
-                        <button
-                          onClick={handleConfirmTransfer}
-                          disabled={acting}
-                          className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
-                        >
-                          {acting ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
-                          Đã nhận tiền
-                        </button>
-                      )}
                       <button
                         onClick={handleReject}
                         disabled={acting}
-                        className={`flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:opacity-50 ${currentStatus === 'COMPLETED' ? 'hidden' : ''}`}
+                        className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
                       >
                         <X size={14} /> Từ chối
-                      </button>
-                      <button
-                        onClick={handleConfirm}
-                        disabled={acting || (isBankTransfer && !transferConfirmed)}
-                        className={`flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-emerald-700 disabled:opacity-50 ${currentStatus === 'COMPLETED' ? 'hidden' : ''}`}
-                      >
-                        <Check size={14} /> Xác nhận hoàn tất
                       </button>
                     </>
                   )}

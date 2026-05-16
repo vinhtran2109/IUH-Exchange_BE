@@ -616,6 +616,7 @@ const ProductDetail: React.FC = () => {
                   <Wallet size={16} />
                   <span>Hình thức thanh toán</span>
                 </div>
+                <p className="mb-3 text-xs text-slate-500">Chọn một cách thanh toán. Sau khi tạo đơn, trang chi tiết đơn sẽ chỉ hiện nút cần bấm tiếp theo.</p>
                 <div className="space-y-2">
                   <button
                     type="button"
@@ -624,9 +625,9 @@ const ProductDetail: React.FC = () => {
                       paymentChoice === 'BANK_TRANSFER' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-medium">Chuyển khoản trực tiếp cho người bán</div>
+                    <div className="font-medium">Chuyển khoản cho người bán</div>
                     <div className={`mt-1 text-xs ${paymentChoice === 'BANK_TRANSFER' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      Hệ thống hiển thị thông tin ngân hàng/QR của người bán, bạn tự chuyển khoản và người bán xác nhận đã nhận tiền.
+                      Tạo đơn xong, bạn chuyển khoản rồi bấm Tôi đã chuyển khoản.
                     </div>
                   </button>
                   <button
@@ -638,7 +639,7 @@ const ProductDetail: React.FC = () => {
                   >
                     <div className="font-medium">Thanh toán khi gặp</div>
                     <div className={`mt-1 text-xs ${paymentChoice === 'CASH' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      Tạo đơn trước, trao đổi với người bán, rồi xác nhận hoàn tất sau khi giao dịch xong.
+                      Gặp trong trường, trả tiền và nhận hàng trực tiếp.
                     </div>
                   </button>
                 </div>
@@ -647,12 +648,12 @@ const ProductDetail: React.FC = () => {
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
                 <div className="mb-1 flex items-center gap-2 font-medium">
                   <ShieldCheck size={16} />
-                  <span>Luồng mua sau khi tạo đơn</span>
+                  <span>Sau khi tạo đơn</span>
                 </div>
                 <ul className="space-y-1 text-blue-700/90">
-                  <li>1. Hệ thống giữ sản phẩm cho đơn hàng của bạn.</li>
-                  <li>2. Bạn chat với người bán để chốt thời gian và địa điểm.</li>
-                  <li>3. Người bán xác nhận khi giao dịch hoàn tất.</li>
+                  <li>1. Sản phẩm được giữ cho đơn của bạn.</li>
+                  <li>2. Hai bên chốt lịch gặp trong trường.</li>
+                  <li>3. Trang chi tiết đơn sẽ hiện đúng nút cần bấm tiếp theo.</li>
                 </ul>
               </div>
 
