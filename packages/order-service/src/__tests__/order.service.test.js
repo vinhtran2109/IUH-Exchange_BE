@@ -491,6 +491,73 @@ describe('order.service', () => {
       expect(order.handoverStatus).toBe('HANDED_OVER');
       expect(order.sellerHandoverConfirmedAt).toBeTruthy();
     });
+
+    it('should require the scheduled handover code when present', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        handoverCode: '123456',
+        handoverCodeExpiresAt: new Date(Date.now() + 3600000),
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await expect(orderService.confirmHandover('order123', 'buyer123', { code: '000000' }))
+        .rejects.toThrow('Mã bàn giao không đúng');
+    });
+  });
+
+  describe('no-show cancellation', () => {
+    it('should cancel an active order when a participant reports no-show', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        noShowReports: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.reportNoShow('order123', 'buyer123', {
+        reason: 'Người bán không đến',
+        evidenceUrl: 'https://example.com/proof.jpg',
+      });
+
+      expect(order.status).toBe('CANCELLED');
+      expect(order.cancellationCategory).toBe('NO_SHOW');
+      expect(order.noShowReports).toHaveLength(1);
+      expect(mockPublishOrderCancelled).toHaveBeenCalled();
+    });
+  });
+
+  describe('payment issue handling', () => {
+    it('should open and resolve a bank-transfer payment issue', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        paymentMethod: 'BANK_TRANSFER',
+        paymentStatus: 'UNPAID',
+        paymentIssueStatus: 'NONE',
+        paymentIssueTimeline: [],
+        transactions: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.openPaymentIssue('order123', 'buyer123', 'Đã chuyển khoản nhưng chưa được xác nhận');
+      expect(order.paymentIssueStatus).toBe('OPEN');
+      expect(order.paymentIssueTimeline[0].action).toBe('OPENED');
+
+      await orderService.resolvePaymentIssue('order123', 'admin123', {
+        action: 'CONFIRM_PAID',
+        resolution: 'Đã kiểm tra bằng chứng chuyển khoản',
+      });
+      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentIssueStatus).toBe('RESOLVED');
+      expect(order.transactions.at(-1).type).toBe('TRANSFER_CONFIRMED');
+    });
   });
 
   describe('dispute evidence', () => {

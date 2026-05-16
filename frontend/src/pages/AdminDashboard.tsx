@@ -126,6 +126,10 @@ const statusLabel = (status?: string) => {
       return 'Đã báo chuyển khoản';
     case 'NONE':
       return 'Không có';
+    case 'NO_SHOW':
+      return 'Không đến';
+    case 'PAYMENT_ISSUE':
+      return 'Khiếu nại thanh toán';
     default:
       return status || 'Không rõ';
   }
@@ -1180,6 +1184,7 @@ const AdminDashboard: React.FC = () => {
               <th className="p-4">Tiền</th>
               <th className="p-4">Trạng thái</th>
               <th className="p-4">Tranh chấp</th>
+              <th className="p-4">Thanh toán</th>
               <th className="p-4">Hẹn giao</th>
               <th className="p-4">Xử lý</th>
             </tr>
@@ -1203,22 +1208,48 @@ const AdminDashboard: React.FC = () => {
                   </span>
                   {order.disputeReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.disputeReason}</div>}
                 </td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${order.paymentIssueStatus === 'OPEN' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {statusLabel(order.paymentIssueStatus || 'NONE')}
+                  </span>
+                  {order.paymentIssueReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.paymentIssueReason}</div>}
+                  {order.cancellationCategory && <div className="mt-1 text-xs text-rose-500">{statusLabel(order.cancellationCategory)}</div>}
+                </td>
                 <td className="p-4 text-slate-500">{order.handoverLocation || 'Chưa có'}</td>
                 <td className="p-4">
-                  {order.disputeStatus === 'OPEN' && (
-                    <div className="flex gap-2">
+                  {(order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN') && (
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={async () => {
-                          await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin đã xử lý tranh chấp');
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'CONFIRM_PAID', 'Admin xác nhận đã thanh toán');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin đã xử lý tranh chấp');
+                          }
                           await fetchData();
                         }}
                         className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700"
                       >
-                        Xác nhận
+                        {order.paymentIssueStatus === 'OPEN' ? 'Xác nhận tiền' : 'Xác nhận'}
                       </button>
+                      {order.paymentIssueStatus === 'OPEN' && (
+                        <button
+                          onClick={async () => {
+                            await adminService.resolvePaymentIssue(order._id, 'REFUND', 'Admin duyệt hoàn tiền');
+                            await fetchData();
+                          }}
+                          className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                        >
+                          Hoàn tiền
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
-                          await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Không đủ căn cứ');
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'REJECT', 'Không đủ căn cứ');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Không đủ căn cứ');
+                          }
                           await fetchData();
                         }}
                         className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
@@ -1231,7 +1262,7 @@ const AdminDashboard: React.FC = () => {
               </tr>
             ))}
             {adminOrders.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</td></tr>
+              <tr><td colSpan={8} className="p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</td></tr>
             )}
           </tbody>
         </table>

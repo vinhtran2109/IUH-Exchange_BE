@@ -38,9 +38,15 @@ const OrderDetail: React.FC = () => {
   const [handoverLocation, setHandoverLocation] = useState('');
   const [handoverTime, setHandoverTime] = useState('');
   const [handoverNote, setHandoverNote] = useState('');
+  const [handoverCode, setHandoverCode] = useState('');
+  const [handoverProofUrl, setHandoverProofUrl] = useState('');
+  const [handoverProofNote, setHandoverProofNote] = useState('');
   const [disputeReason, setDisputeReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
+  const [paymentIssueReason, setPaymentIssueReason] = useState('');
+  const [noShowReason, setNoShowReason] = useState('');
+  const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
 
   const fetchDetail = async (silent = false) => {
     if (!id) return;
@@ -203,10 +209,74 @@ const OrderDetail: React.FC = () => {
     if (!order) return;
     try {
       setActing(true);
-      const res = await orderService.confirmHandover(order.id || order._id);
-      if (res.success) await fetchDetail(true);
+      const res = await orderService.confirmHandover(order.id || order._id, {
+        code: handoverCode,
+        evidenceUrl: handoverProofUrl,
+        note: handoverProofNote,
+      });
+      if (res.success) {
+        setHandoverCode('');
+        setHandoverProofUrl('');
+        setHandoverProofNote('');
+        await fetchDetail(true);
+      }
     } catch (error: any) {
       alert(error?.response?.data?.message || 'Không thể xác nhận giao nhận.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleReportNoShow = async () => {
+    if (!order) return;
+    const reason = noShowReason.trim() || (isBuyer ? 'Người bán không đến điểm hẹn' : 'Người mua không đến điểm hẹn');
+    try {
+      setActing(true);
+      const res = await orderService.reportNoShow(order.id || order._id, {
+        reason,
+        evidenceUrl: noShowEvidenceUrl.trim(),
+      });
+      if (res.success) {
+        setNoShowReason('');
+        setNoShowEvidenceUrl('');
+        setFlashMessage('Đã ghi nhận báo không đến. Đơn đã được hủy và sản phẩm được trả lại trạng thái khả dụng.');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể báo không đến lúc này.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleOpenPaymentIssue = async () => {
+    if (!order || paymentIssueReason.trim().length < 10) return;
+    try {
+      setActing(true);
+      const res = await orderService.openPaymentIssue(order.id || order._id, paymentIssueReason.trim());
+      if (res.success) {
+        setPaymentIssueReason('');
+        setFlashMessage('Đã mở khiếu nại thanh toán. Admin sẽ xem bằng chứng và xử lý.');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể mở khiếu nại thanh toán.');
+    } finally {
+      setActing(false);
+    }
+  };
+
+  const handleRefundPayment = async () => {
+    if (!order) return;
+    try {
+      setActing(true);
+      const res = await orderService.refundPayment(order.id || order._id);
+      if (res.success) {
+        setFlashMessage('Đã xử lý hoàn tiền cho đơn hàng.');
+        await fetchDetail(true);
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.message || 'Không thể hoàn tiền lúc này.');
     } finally {
       setActing(false);
     }
@@ -559,9 +629,21 @@ const OrderDetail: React.FC = () => {
                 <input value={handoverTime} onChange={(e) => setHandoverTime(e.target.value)} type="datetime-local" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                 <input value={handoverNote} onChange={(e) => setHandoverNote(e.target.value)} placeholder="Ghi chú" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
               </div>
+              {order.handoverCode && (
+                <div className="mb-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
+                  <div className="text-xs font-bold uppercase">Mã bàn giao</div>
+                  <div className="mt-1 font-mono text-2xl font-black tracking-widest">{order.handoverCode}</div>
+                  <div className="mt-1 text-xs">Mã hết hạn: {order.handoverCodeExpiresAt ? new Date(order.handoverCodeExpiresAt).toLocaleString() : 'Chưa xác định'}</div>
+                </div>
+              )}
+              <div className="mb-3 grid gap-2 md:grid-cols-3">
+                <input value={handoverCode} onChange={(e) => setHandoverCode(e.target.value)} placeholder="Nhập mã bàn giao" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input value={handoverProofUrl} onChange={(e) => setHandoverProofUrl(e.target.value)} placeholder="URL ảnh/bằng chứng giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                <input value={handoverProofNote} onChange={(e) => setHandoverProofNote(e.target.value)} placeholder="Ghi chú giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+              </div>
               <div className="mb-4 flex flex-wrap gap-2">
                 <button onClick={handleProposeHandover} disabled={acting || !handoverLocation || !handoverTime} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đề xuất lịch hẹn</button>
-                <button onClick={handleConfirmHandover} disabled={acting} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50">Tôi đã giao/nhận</button>
+                <button onClick={handleConfirmHandover} disabled={acting || (!!order.handoverCode && !handoverCode)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50">Tôi đã giao/nhận</button>
               </div>
               {(order.meetingProposals || []).slice(-3).map((proposal: any) => (
                 <div key={proposal._id} className="mb-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
@@ -576,6 +658,37 @@ const OrderDetail: React.FC = () => {
                   )}
                 </div>
               ))}
+            </section>
+          )}
+
+          {(isBuyer || isSeller) && currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED' && (
+            <section className="rounded-xl border border-rose-100 bg-rose-50 p-4">
+              <h3 className="mb-2 text-sm font-semibold text-rose-900">Báo không đến điểm hẹn</h3>
+              <p className="mb-3 text-xs text-rose-700">Dùng khi bên còn lại không đến theo lịch đã hẹn. Hệ thống sẽ hủy đơn và ghi nhận lịch sử để admin theo dõi.</p>
+              <div className="mb-3 grid gap-2 md:grid-cols-2">
+                <input value={noShowReason} onChange={(e) => setNoShowReason(e.target.value)} placeholder="Lý do không đến" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
+                <input value={noShowEvidenceUrl} onChange={(e) => setNoShowEvidenceUrl(e.target.value)} placeholder="URL bằng chứng nếu có" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
+              </div>
+              <button onClick={handleReportNoShow} disabled={acting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Báo không đến và hủy đơn</button>
+            </section>
+          )}
+
+          {(isBuyer || isSeller) && (isBankTransfer || paymentStatus === 'PAID') && (
+            <section className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+              <h3 className="mb-2 text-sm font-semibold text-amber-900">Khiếu nại thanh toán</h3>
+              {currentStatus === 'CANCELLED' && paymentStatus === 'PAID' && (
+                <button onClick={handleRefundPayment} disabled={acting} className="mb-3 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Hoàn tiền đơn đã hủy</button>
+              )}
+              {payment?.paymentIssueStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN' ? (
+                <div className="rounded-lg bg-white/70 p-3 text-sm text-amber-800">
+                  Khiếu nại đang mở: {payment?.paymentIssueReason || order.paymentIssueReason}
+                </div>
+              ) : (
+                <>
+                  <textarea value={paymentIssueReason} onChange={(e) => setPaymentIssueReason(e.target.value)} rows={2} placeholder="Ví dụ: Người mua đã chuyển nhưng người bán chưa xác nhận, hoặc cần hoàn tiền..." className="mb-3 w-full rounded-lg border border-amber-100 px-3 py-2 text-sm" />
+                  <button onClick={handleOpenPaymentIssue} disabled={acting || paymentIssueReason.trim().length < 10} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Mở khiếu nại thanh toán</button>
+                </>
+              )}
             </section>
           )}
 
