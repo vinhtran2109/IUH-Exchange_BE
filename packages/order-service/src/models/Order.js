@@ -94,6 +94,56 @@ const disputeTimelineSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const noShowReportSchema = new mongoose.Schema(
+  {
+    reportedBy: { type: String, required: true },
+    actorRole: {
+      type: String,
+      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
+      default: 'SYSTEM',
+    },
+    reason: { type: String, default: '', maxlength: 1000 },
+    evidenceUrl: { type: String, default: '' },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const handoverProofSchema = new mongoose.Schema(
+  {
+    confirmedBy: { type: String, required: true },
+    actorRole: {
+      type: String,
+      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
+      default: 'SYSTEM',
+    },
+    codeUsed: { type: String, default: '' },
+    evidenceUrl: { type: String, default: '' },
+    note: { type: String, default: '', maxlength: 1000 },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
+const paymentIssueTimelineSchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      enum: ['OPENED', 'EVIDENCE_ADDED', 'RESOLVED', 'REJECTED'],
+      required: true,
+    },
+    actorId: { type: String, required: true },
+    actorRole: {
+      type: String,
+      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
+      default: 'SYSTEM',
+    },
+    note: { type: String, default: '', maxlength: 2000 },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: true }
+);
+
 const orderSchema = new mongoose.Schema(
   {
     buyerId: { type: String, required: true, index: true },
@@ -127,8 +177,20 @@ const orderSchema = new mongoose.Schema(
       index: true,
     },
     meetingProposals: { type: [meetingProposalSchema], default: [] },
+    handoverCode: { type: String, default: null },
+    handoverCodeExpiresAt: { type: Date, default: null },
+    handoverProofs: { type: [handoverProofSchema], default: [] },
     buyerHandoverConfirmedAt: { type: Date, default: null },
     sellerHandoverConfirmedAt: { type: Date, default: null },
+    noShowReports: { type: [noShowReportSchema], default: [] },
+    cancellationReason: { type: String, default: '' },
+    cancellationCategory: {
+      type: String,
+      enum: ['BUYER_CANCELLED', 'SELLER_REJECTED', 'NO_SHOW', 'PAYMENT_ISSUE', 'ADMIN_CANCELLED', 'OTHER'],
+      default: null,
+    },
+    cancelledBy: { type: String, default: null },
+    cancelledAt: { type: Date, default: null },
     disputeStatus: {
       type: String,
       enum: ['NONE', 'OPEN', 'RESOLVED', 'REJECTED'],
@@ -162,6 +224,19 @@ const orderSchema = new mongoose.Schema(
     transferConfirmedBy: { type: String, default: null },
     paymentProviderStatus: { type: String, default: 'MOCK_PENDING' },
     paymentWebhookVerified: { type: Boolean, default: false },
+    paymentIssueStatus: {
+      type: String,
+      enum: ['NONE', 'OPEN', 'RESOLVED', 'REJECTED'],
+      default: 'NONE',
+      index: true,
+    },
+    paymentIssueReason: { type: String, default: '' },
+    paymentIssueOpenedBy: { type: String, default: null },
+    paymentIssueOpenedAt: { type: Date, default: null },
+    paymentIssueResolvedBy: { type: String, default: null },
+    paymentIssueResolvedAt: { type: Date, default: null },
+    paymentIssueResolution: { type: String, default: '' },
+    paymentIssueTimeline: { type: [paymentIssueTimelineSchema], default: [] },
     reconciliationStatus: {
       type: String,
       enum: ['NOT_REQUIRED', 'PENDING', 'MATCHED', 'MISMATCHED'],

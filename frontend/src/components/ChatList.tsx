@@ -119,6 +119,30 @@ const ChatList: React.FC<ChatListProps> = ({ onClose, onSelectUser }) => {
     }
   }, [user?.id]);
 
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const removeListener = chatService.addListener((msg) => {
+      if ((msg as any).type && !(msg as any).senderId && !(msg as any).receiverId) return;
+
+      const senderId = String(msg.senderId || '');
+      const receiverId = String((msg as any).receiverId || (msg as any).recipientId || '');
+      if (!senderId || !receiverId) return;
+      if (senderId !== user.id && receiverId !== user.id) return;
+
+      const partnerId = senderId === user.id ? receiverId : senderId;
+      const conversationId = (msg as any).conversationId || chatService.buildConversationId(senderId, receiverId);
+      const lastMessage = (msg as any).messageType === 'IMAGE' ? 'Ảnh' : msg.content || '';
+
+      setConversations((prev) => {
+        const next = prev.filter((conv) => conv.partnerId !== partnerId);
+        return [{ partnerId, conversationId, lastMessage }, ...next];
+      });
+    });
+
+    return removeListener;
+  }, [user?.id]);
+
   const loadMore = () => {
     const nextPage = page + 1;
     setPage(nextPage);

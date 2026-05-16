@@ -213,6 +213,7 @@ const ProductDetail: React.FC = () => {
         price: product.price,
         buyerNote: buyerNote.trim(),
         handoverLocation: handoverLocation.trim(),
+        paymentMethod: paymentChoice,
         idempotencyKey: window.crypto.randomUUID(),
       };
 
@@ -235,8 +236,8 @@ const ProductDetail: React.FC = () => {
         state: {
           flashMessage:
             paymentChoice === 'BANK_TRANSFER'
-              ? 'Da tao don. Hay chuyen khoan cho nguoi ban, sau do bam Toi da chuyen khoan trong chi tiet don.'
-              : 'Da tao yeu cau mua thanh cong. Ban co the theo doi tien do don hang tai day.',
+              ? 'Đã tạo đơn. Hãy chuyển khoản cho người bán, sau đó bấm Tôi đã chuyển khoản trong chi tiết đơn.'
+              : 'Đã tạo yêu cầu mua thành công. Bạn có thể theo dõi tiến độ đơn hàng tại đây.',
         },
       });
     } catch (error: any) {
@@ -390,7 +391,7 @@ const ProductDetail: React.FC = () => {
             )}
 
             {user && user.id !== product.sellerId && product.allowOffers !== false && (
-              <div className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
+              <div id="offer-panel" className="mb-5 rounded-xl border border-slate-200 bg-white p-4">
                 <div className="mb-3 text-sm font-bold text-slate-900">Trả giá / đề xuất đổi</div>
                 <div className="mb-3 grid grid-cols-2 gap-2">
                   <button type="button" onClick={() => setOfferType('PRICE')} className={`rounded-lg border px-3 py-2 text-sm font-bold ${offerType === 'PRICE' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 text-slate-600'}`}>Trả giá</button>
@@ -452,7 +453,7 @@ const ProductDetail: React.FC = () => {
               <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-4">
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs font-bold uppercase text-emerald-700">Uy tin nguoi ban</div>
+                    <div className="text-xs font-bold uppercase text-emerald-700">Uy tín người bán</div>
                     <div className="mt-1 text-sm font-black text-slate-900">{sellerTrust.badge} - {sellerTrust.trustScore}/100</div>
                   </div>
                   {user && user.id !== product.sellerId && (
@@ -463,14 +464,14 @@ const ProductDetail: React.FC = () => {
                       }}
                       className="rounded-lg bg-white px-3 py-2 text-xs font-bold text-emerald-700 shadow-sm"
                     >
-                      {followingSeller ? 'Dang theo doi' : 'Theo doi'}
+                      {followingSeller ? 'Đang theo dõi' : 'Theo dõi'}
                     </button>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.avgRating || 0}</div><div className="text-slate-400">Rating</div></div>
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.soldCount || 0}</div><div className="text-slate-400">Da ban</div></div>
-                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.followerCount || 0}</div><div className="text-slate-400">Theo doi</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.avgRating || 0}</div><div className="text-slate-400">Đánh giá</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.soldCount || 0}</div><div className="text-slate-400">Đã bán</div></div>
+                  <div className="rounded-lg bg-white p-2"><div className="font-black text-slate-900">{sellerTrust.followerCount || 0}</div><div className="text-slate-400">Theo dõi</div></div>
                 </div>
               </div>
             )}
@@ -509,13 +510,31 @@ const ProductDetail: React.FC = () => {
                     >
                       <ShoppingCart size={16} /> Mua sản phẩm
                     </button>
+                    {product.allowOffers !== false ? (
+                      <button
+                        onClick={() => document.getElementById('offer-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                        disabled={offerBusy}
+                        className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50"
+                      >
+                        <Wallet size={16} /> Thương lượng
+                      </button>
+                    ) : (
                     <button
                       onClick={() => chatService.triggerOpenChat(product.sellerId, sellerLabel)}
                       className="flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50"
                     >
                       <MessageSquare size={16} /> Chat người bán
                     </button>
+                    )}
                   </div>
+                  {product.allowOffers !== false && (
+                    <button
+                      onClick={() => chatService.triggerOpenChat(product.sellerId, sellerLabel)}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50"
+                    >
+                      <MessageSquare size={16} /> Chat người bán
+                    </button>
+                  )}
                   <button onClick={handleReport} className="flex w-full items-center justify-center gap-1 py-2 text-xs font-medium text-slate-400 transition-colors hover:text-red-500">
                     <Flag size={12} /> Tố cáo sản phẩm
                   </button>
@@ -583,11 +602,11 @@ const ProductDetail: React.FC = () => {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Diem hen giao dich</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Điểm hẹn giao dịch</label>
                 <input
                   value={handoverLocation}
                   onChange={(e) => setHandoverLocation(e.target.value)}
-                  placeholder="Vi du: Sanh A, Thu vien IUH, cong Nguyen Van Bao"
+                  placeholder="Ví dụ: Sảnh A, Thư viện IUH, cổng Nguyễn Văn Bảo"
                   className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400"
                 />
               </div>
@@ -597,6 +616,7 @@ const ProductDetail: React.FC = () => {
                   <Wallet size={16} />
                   <span>Hình thức thanh toán</span>
                 </div>
+                <p className="mb-3 text-xs text-slate-500">Chọn một cách thanh toán. Sau khi tạo đơn, trang chi tiết đơn sẽ chỉ hiện nút cần bấm tiếp theo.</p>
                 <div className="space-y-2">
                   <button
                     type="button"
@@ -605,9 +625,9 @@ const ProductDetail: React.FC = () => {
                       paymentChoice === 'BANK_TRANSFER' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-medium">Chuyen khoan truc tiep cho nguoi ban</div>
+                    <div className="font-medium">Chuyển khoản cho người bán</div>
                     <div className={`mt-1 text-xs ${paymentChoice === 'BANK_TRANSFER' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      He thong hien thong tin ngan hang/QR cua nguoi ban, ban tu chuyen khoan va nguoi ban xac nhan da nhan tien.
+                      Tạo đơn xong, bạn chuyển khoản rồi bấm Tôi đã chuyển khoản.
                     </div>
                   </button>
                   <button
@@ -619,7 +639,7 @@ const ProductDetail: React.FC = () => {
                   >
                     <div className="font-medium">Thanh toán khi gặp</div>
                     <div className={`mt-1 text-xs ${paymentChoice === 'CASH' ? 'text-slate-200' : 'text-slate-500'}`}>
-                      Tạo đơn trước, trao đổi với người bán, rồi xác nhận hoàn tất sau khi giao dịch xong.
+                      Gặp trong trường, trả tiền và nhận hàng trực tiếp.
                     </div>
                   </button>
                 </div>
@@ -628,12 +648,12 @@ const ProductDetail: React.FC = () => {
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-700">
                 <div className="mb-1 flex items-center gap-2 font-medium">
                   <ShieldCheck size={16} />
-                  <span>Luồng mua sau khi tạo đơn</span>
+                  <span>Sau khi tạo đơn</span>
                 </div>
                 <ul className="space-y-1 text-blue-700/90">
-                  <li>1. Hệ thống giữ sản phẩm cho đơn hàng của bạn.</li>
-                  <li>2. Bạn chat với người bán để chốt thời gian và địa điểm.</li>
-                  <li>3. Người bán xác nhận khi giao dịch hoàn tất.</li>
+                  <li>1. Sản phẩm được giữ cho đơn của bạn.</li>
+                  <li>2. Hai bên chốt lịch gặp trong trường.</li>
+                  <li>3. Trang chi tiết đơn sẽ hiện đúng nút cần bấm tiếp theo.</li>
                 </ul>
               </div>
 

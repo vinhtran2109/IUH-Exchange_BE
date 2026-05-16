@@ -17,7 +17,7 @@ const AdminLogin: React.FC = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    document.title = 'Admin Login | IUH Exchange';
+    document.title = 'Đăng nhập quản trị | IUH Exchange';
   }, []);
 
   if (isAuthenticated && user?.role === 'ADMIN') {
@@ -90,7 +90,7 @@ const AdminLogin: React.FC = () => {
             <div className="h-11 w-11 rounded-lg bg-slate-950 text-white grid place-items-center font-black dark:bg-white dark:text-slate-950">IUH</div>
             <div>
             <div className="text-sm font-semibold text-slate-950 dark:text-white">IUH Exchange</div>
-            <div className="text-xs text-slate-400">Administration Console</div>
+            <div className="text-xs text-slate-400">Bảng điều khiển quản trị</div>
             </div>
           </div>
           <button
@@ -105,7 +105,7 @@ const AdminLogin: React.FC = () => {
         <div className="relative z-10 max-w-xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-teal-400/30 bg-teal-400/10 px-3 py-1 text-xs font-semibold text-teal-200">
             <ShieldCheck size={14} />
-            Secure staff access
+            Truy cập nội bộ an toàn
           </div>
           <h1 className="text-5xl font-black leading-tight tracking-normal text-slate-950 dark:text-white">
             Trung tâm vận hành riêng cho đội quản trị.
@@ -116,10 +116,10 @@ const AdminLogin: React.FC = () => {
         </div>
 
         <div className="relative z-10 grid grid-cols-3 gap-3 text-xs text-slate-300">
-          {['Moderation', 'User Trust', 'System Health'].map((item) => (
+          {['Kiểm duyệt', 'Uy tín người dùng', 'Sức khỏe hệ thống'].map((item) => (
             <div key={item} className="rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3">
               <div className="font-semibold text-white">{item}</div>
-              <div className="mt-1 text-slate-500">Admin only</div>
+              <div className="mt-1 text-slate-500">Chỉ dành cho quản trị viên</div>
             </div>
           ))}
         </div>
@@ -132,7 +132,7 @@ const AdminLogin: React.FC = () => {
             <div className="h-10 w-10 rounded-lg bg-slate-950 text-white dark:bg-white dark:text-slate-950 grid place-items-center font-black">IUH</div>
             <div>
               <div className="font-semibold">IUH Exchange</div>
-              <div className="text-xs text-slate-400">Administration Console</div>
+              <div className="text-xs text-slate-400">Bảng điều khiển quản trị</div>
             </div>
             </div>
             <button

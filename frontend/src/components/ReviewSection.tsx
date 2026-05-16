@@ -135,7 +135,7 @@ const ReviewSection: React.FC<ReviewSectionProps> = ({ productId, orderId, onRev
         >
           <h3 className="font-bold text-lg mb-4">Đánh giá sản phẩm</h3>
           <div className="mb-4">
-            <label className="text-sm font-bold text-slate-600 mb-2 block">Sao</label>
+            <label className="text-sm font-bold text-slate-600 mb-2 block">Số sao</label>
             {renderStars(rating, true)}
           </div>
           <div className="mb-4">

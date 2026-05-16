@@ -11,6 +11,13 @@ export interface Notification {
   createdAt: string;
 }
 
+export const normalizeNotification = (notification: any): Notification => ({
+  ...notification,
+  id: notification?.id || notification?._id,
+  isRead: Boolean(notification?.isRead),
+  createdAt: notification?.createdAt || new Date().toISOString(),
+});
+
 export const notificationService = {
   // Lấy danh sách thông báo của tôi
   getNotifications: async () => {
@@ -19,7 +26,10 @@ export const notificationService = {
     // Backend returns paginated { success, data: { content: [...] } }
     // Flatten for frontend compatibility
     if (data?.success && data?.data?.content) {
-      return { success: true, data: data.data.content };
+      return { success: true, data: data.data.content.map(normalizeNotification) };
+    }
+    if (data?.success && Array.isArray(data.data)) {
+      return { ...data, data: data.data.map(normalizeNotification) };
     }
     return data;
   },

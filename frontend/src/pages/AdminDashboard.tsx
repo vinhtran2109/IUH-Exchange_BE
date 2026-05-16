@@ -56,17 +56,17 @@ type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
 type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
 
 const ADMIN_TABS = [
-  { id: 'overview', label: 'Tổng quan', group: 'Dashboard', icon: TrendingUp },
-  { id: 'analytics', label: 'Phân tích', group: 'Dashboard', icon: TrendingUp },
+  { id: 'overview', label: 'Tổng quan', group: 'Bảng chính', icon: TrendingUp },
+  { id: 'analytics', label: 'Phân tích', group: 'Bảng chính', icon: TrendingUp },
   { id: 'users', label: 'Sinh viên', group: 'Quản trị', icon: Users },
   { id: 'products', label: 'Duyệt bài', group: 'Quản trị', icon: PackageCheck },
   { id: 'reports', label: 'Tố cáo', group: 'Kiểm duyệt', icon: AlertTriangle },
   { id: 'lostFound', label: 'Đồ thất lạc', group: 'Kiểm duyệt', icon: MapPin },
-  { id: 'email', label: 'Email compose', group: 'Hệ thống', icon: Mail },
+  { id: 'email', label: 'Soạn email', group: 'Hệ thống', icon: Mail },
   { id: 'dlq', label: 'DLQ', group: 'Hệ thống', icon: Server },
-  { id: 'audit', label: 'Audit log', group: 'Há»‡ thá»‘ng', icon: ShieldCheck },
-  { id: 'orders', label: 'Don hang', group: 'Dashboard', icon: ShoppingBag },
-  { id: 'chatReports', label: 'Tin nhan', group: 'Dashboard', icon: MessageSquareWarning },
+  { id: 'audit', label: 'Nhật ký hệ thống', group: 'Hệ thống', icon: ShieldCheck },
+  { id: 'orders', label: 'Đơn hàng', group: 'Bảng chính', icon: ShoppingBag },
+  { id: 'chatReports', label: 'Tin nhắn', group: 'Bảng chính', icon: MessageSquareWarning },
 ] as const;
 
 const formatDate = (value?: string) => {
@@ -76,7 +76,7 @@ const formatDate = (value?: string) => {
   return date.toLocaleString('vi-VN');
 };
 
-const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}d`;
+const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
 const getEntityId = (value: any) => value?.id || value?._id || '';
 
@@ -110,6 +110,26 @@ const statusLabel = (status?: string) => {
       return 'Đang thử lại';
     case 'RETRY_FAILED':
       return 'Thử lại lỗi';
+    case 'COMPLETED':
+      return 'Hoàn tất';
+    case 'CANCELLED':
+      return 'Đã hủy';
+    case 'AWAITING_SELLER':
+      return 'Chờ người bán';
+    case 'UNPAID':
+      return 'Chưa thanh toán';
+    case 'PAID':
+      return 'Đã thanh toán';
+    case 'REFUNDED':
+      return 'Đã hoàn tiền';
+    case 'REPORTED':
+      return 'Đã báo chuyển khoản';
+    case 'NONE':
+      return 'Không có';
+    case 'NO_SHOW':
+      return 'Không đến';
+    case 'PAYMENT_ISSUE':
+      return 'Khiếu nại thanh toán';
     default:
       return status || 'Không rõ';
   }
@@ -733,10 +753,10 @@ const AdminDashboard: React.FC = () => {
         <SimpleBarChart
           title="Tổng quan hệ thống"
           data={[
-            { label: 'Users', value: stats.user?.total || 0, color: '#6366f1' },
-            { label: 'Products', value: stats.product?.total || 0, color: '#f59e0b' },
-            { label: 'Available', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Sold', value: stats.product?.sold || 0, color: '#ef4444' },
+            { label: 'Sinh viên', value: stats.user?.total || 0, color: '#6366f1' },
+            { label: 'Sản phẩm', value: stats.product?.total || 0, color: '#f59e0b' },
+            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
+            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#ef4444' },
           ]}
         />
         <SimpleDonutChart
@@ -753,9 +773,9 @@ const AdminDashboard: React.FC = () => {
       <SimpleLineChart
         title="Đường theo dõi nhanh"
         data={[
-          { label: 'Users', value: stats.user?.total || 0 },
-          { label: 'Products', value: stats.product?.total || 0 },
-          { label: 'Reports', value: reports.length || 0 },
+          { label: 'Sinh viên', value: stats.user?.total || 0 },
+          { label: 'Sản phẩm', value: stats.product?.total || 0 },
+          { label: 'Tố cáo', value: reports.length || 0 },
           { label: 'DLQ', value: dlqEvents.length || 0 },
           { label: 'Đồ thất lạc', value: lostFoundItems.length || 0 },
         ]}
@@ -810,9 +830,9 @@ const AdminDashboard: React.FC = () => {
                       onChange={(e) => handleRoleChange(targetUser.id, e.target.value)}
                       className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
                     >
-                      <option value="STUDENT">STUDENT</option>
-                      <option value="MODERATOR">MODERATOR</option>
-                      <option value="ADMIN">ADMIN</option>
+                      <option value="STUDENT">Sinh viên</option>
+                      <option value="MODERATOR">Điều phối viên</option>
+                      <option value="ADMIN">Quản trị viên</option>
                     </select>
                   </td>
                   <td className="p-4">
@@ -1095,15 +1115,15 @@ const AdminDashboard: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-xl font-black text-slate-900">Audit log</h2>
-          <p className="mt-1 text-sm text-slate-500">Theo doi cac thao tac nhay cam, dang nhap va thay doi du lieu quan tri.</p>
+          <h2 className="text-xl font-black text-slate-900">Nhật ký hệ thống</h2>
+          <p className="mt-1 text-sm text-slate-500">Theo dõi các thao tác nhạy cảm, đăng nhập và thay đổi dữ liệu quản trị.</p>
         </div>
         <button
           onClick={() => fetchData()}
           className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
         >
           <RefreshCw size={16} />
-          Lam moi
+          Làm mới
         </button>
       </div>
 
@@ -1111,13 +1131,13 @@ const AdminDashboard: React.FC = () => {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
             <tr>
-              <th className="p-4">Thoi gian</th>
-              <th className="p-4">Action</th>
-              <th className="p-4">Resource</th>
-              <th className="p-4">Method</th>
-              <th className="p-4">Status</th>
-              <th className="p-4">User</th>
-              <th className="p-4">Path</th>
+              <th className="p-4">Thời gian</th>
+              <th className="p-4">Hành động</th>
+              <th className="p-4">Tài nguyên</th>
+              <th className="p-4">Phương thức</th>
+              <th className="p-4">Trạng thái</th>
+              <th className="p-4">Người dùng</th>
+              <th className="p-4">Đường dẫn</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1140,7 +1160,7 @@ const AdminDashboard: React.FC = () => {
             ))}
             {auditLogs.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-10 text-center text-slate-400">Chua co audit log phu hop.</td>
+                <td colSpan={7} className="p-10 text-center text-slate-400">Chưa có nhật ký phù hợp.</td>
               </tr>
             )}
           </tbody>
@@ -1152,20 +1172,21 @@ const AdminDashboard: React.FC = () => {
   const renderAdminOrders = () => (
     <div className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Don hang va tranh chap</h2>
-        <p className="mt-1 text-sm text-slate-500">Theo doi giao dich, thanh toan, refund va dispute cua cho do cu.</p>
+        <h2 className="text-xl font-black text-slate-900">Đơn hàng và tranh chấp</h2>
+        <p className="mt-1 text-sm text-slate-500">Theo dõi giao dịch, thanh toán, hoàn tiền và tranh chấp của chợ đồ cũ.</p>
       </div>
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
             <tr>
-              <th className="p-4">Order</th>
-              <th className="p-4">Buyer / Seller</th>
-              <th className="p-4">Tien</th>
-              <th className="p-4">Trang thai</th>
-              <th className="p-4">Dispute</th>
-              <th className="p-4">Hen giao</th>
-              <th className="p-4">Xu ly</th>
+              <th className="p-4">Đơn hàng</th>
+              <th className="p-4">Người mua / Người bán</th>
+              <th className="p-4">Tiền</th>
+              <th className="p-4">Trạng thái</th>
+              <th className="p-4">Tranh chấp</th>
+              <th className="p-4">Thanh toán</th>
+              <th className="p-4">Hẹn giao</th>
+              <th className="p-4">Xử lý</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -1178,36 +1199,62 @@ const AdminDashboard: React.FC = () => {
                 </td>
                 <td className="p-4 font-black text-slate-900">{currency(order.price)}</td>
                 <td className="p-4">
-                  <div className="font-bold text-slate-700">{order.status}</div>
-                  <div className="text-xs text-slate-400">{order.paymentStatus}</div>
+                  <div className="font-bold text-slate-700">{statusLabel(order.status)}</div>
+                  <div className="text-xs text-slate-400">{statusLabel(order.paymentStatus)}</div>
                 </td>
                 <td className="p-4">
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${order.disputeStatus === 'OPEN' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
-                    {order.disputeStatus || 'NONE'}
+                    {statusLabel(order.disputeStatus || 'NONE')}
                   </span>
                   {order.disputeReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.disputeReason}</div>}
                 </td>
-                <td className="p-4 text-slate-500">{order.handoverLocation || 'Chua co'}</td>
                 <td className="p-4">
-                  {order.disputeStatus === 'OPEN' && (
-                    <div className="flex gap-2">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${order.paymentIssueStatus === 'OPEN' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {statusLabel(order.paymentIssueStatus || 'NONE')}
+                  </span>
+                  {order.paymentIssueReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.paymentIssueReason}</div>}
+                  {order.cancellationCategory && <div className="mt-1 text-xs text-rose-500">{statusLabel(order.cancellationCategory)}</div>}
+                </td>
+                <td className="p-4 text-slate-500">{order.handoverLocation || 'Chưa có'}</td>
+                <td className="p-4">
+                  {(order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN') && (
+                    <div className="flex flex-wrap gap-2">
                       <button
                         onClick={async () => {
-                          await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin da xu ly tranh chap');
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'CONFIRM_PAID', 'Admin xác nhận đã thanh toán');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin đã xử lý tranh chấp');
+                          }
                           await fetchData();
                         }}
                         className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700"
                       >
-                        Resolve
+                        {order.paymentIssueStatus === 'OPEN' ? 'Xác nhận tiền' : 'Xác nhận'}
                       </button>
+                      {order.paymentIssueStatus === 'OPEN' && (
+                        <button
+                          onClick={async () => {
+                            await adminService.resolvePaymentIssue(order._id, 'REFUND', 'Admin duyệt hoàn tiền');
+                            await fetchData();
+                          }}
+                          className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                        >
+                          Hoàn tiền
+                        </button>
+                      )}
                       <button
                         onClick={async () => {
-                          await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Khong du can cu');
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'REJECT', 'Không đủ căn cứ');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Không đủ căn cứ');
+                          }
                           await fetchData();
                         }}
                         className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
                       >
-                        Reject
+                        Từ chối
                       </button>
                     </div>
                   )}
@@ -1215,7 +1262,7 @@ const AdminDashboard: React.FC = () => {
               </tr>
             ))}
             {adminOrders.length === 0 && (
-              <tr><td colSpan={7} className="p-10 text-center text-slate-400">Chua co don hang phu hop.</td></tr>
+              <tr><td colSpan={8} className="p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</td></tr>
             )}
           </tbody>
         </table>
@@ -1226,8 +1273,8 @@ const AdminDashboard: React.FC = () => {
   const renderReportedMessages = () => (
     <div className="space-y-6">
       <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Kiem duyet tin nhan</h2>
-        <p className="mt-1 text-sm text-slate-500">Xu ly cac tin nhan bi nguoi dung bao cao trong chat.</p>
+        <h2 className="text-xl font-black text-slate-900">Kiểm duyệt tin nhắn</h2>
+        <p className="mt-1 text-sm text-slate-500">Xử lý các tin nhắn bị người dùng báo cáo trong chat.</p>
       </div>
       <div className="grid gap-4">
         {reportedMessages.map((message) => (
@@ -1237,7 +1284,7 @@ const AdminDashboard: React.FC = () => {
                 <div className="text-xs font-bold uppercase text-slate-400">{message.senderId} {'->'} {message.receiverId}</div>
                 <p className="mt-2 text-sm font-medium text-slate-800">{message.content}</p>
                 <div className="mt-3 text-xs text-rose-600">
-                  {(message.reports || []).map((report) => report.reason).join(' | ') || 'Reported'}
+                  {(message.reports || []).map((report) => report.reason).join(' | ') || 'Đã báo cáo'}
                 </div>
               </div>
               <div className="flex gap-2">
@@ -1248,7 +1295,7 @@ const AdminDashboard: React.FC = () => {
                   }}
                   className="rounded-xl bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700"
                 >
-                  Reviewed
+                  Đã xem
                 </button>
                 <button
                   onClick={async () => {
@@ -1257,14 +1304,14 @@ const AdminDashboard: React.FC = () => {
                   }}
                   className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
                 >
-                  Dismiss
+                  Bỏ qua
                 </button>
               </div>
             </div>
           </div>
         ))}
         {reportedMessages.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Khong co tin nhan dang cho xu ly.</div>
+          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Không có tin nhắn đang chờ xử lý.</div>
         )}
       </div>
     </div>
@@ -1350,7 +1397,7 @@ const AdminDashboard: React.FC = () => {
         <div className="mt-5 space-y-4 text-sm">
           <div className="rounded-2xl bg-slate-50 p-4">
             <div className="text-xs font-bold text-slate-400">Người gửi</div>
-            <div className="mt-1 font-black text-slate-800">{user?.email || 'Admin'}</div>
+            <div className="mt-1 font-black text-slate-800">{user?.email || 'Quản trị viên'}</div>
           </div>
           <div className="rounded-2xl bg-slate-50 p-4">
             <div className="text-xs font-bold text-slate-400">SMTP</div>
@@ -1358,7 +1405,7 @@ const AdminDashboard: React.FC = () => {
           </div>
           <div className="rounded-2xl bg-amber-50 p-4 text-amber-800">
             <div className="font-black">Lưu ý</div>
-            <p className="mt-1 text-xs leading-5">Email chỉ gửi được khi `.env` đã cấu hình SMTP. Nội dung được escape HTML ở backend trước khi gửi.</p>
+            <p className="mt-1 text-xs leading-5">Email chỉ gửi được khi `.env` đã cấu hình SMTP. Nội dung được xử lý an toàn ở backend trước khi gửi.</p>
           </div>
         </div>
       </aside>
@@ -1452,14 +1499,14 @@ const AdminDashboard: React.FC = () => {
                 <Shield size={22} />
               </div>
               <div>
-                <div className="text-sm font-black text-slate-900">Adminator</div>
+                <div className="text-sm font-black text-slate-900">Quản trị IUH</div>
                 <div className="text-xs font-medium text-slate-400">IUH Exchange</div>
               </div>
             </div>
           </div>
 
           <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
-            {['Dashboard', 'Quản trị', 'Kiểm duyệt', 'Hệ thống'].map((group) => (
+            {['Bảng chính', 'Quản trị', 'Kiểm duyệt', 'Hệ thống'].map((group) => (
               <div key={group}>
                 <div className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
                 <div className="space-y-1">

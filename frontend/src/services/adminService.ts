@@ -59,6 +59,10 @@ export interface AdminOrderData {
   paymentMethod?: string;
   disputeStatus?: string;
   disputeReason?: string;
+  paymentIssueStatus?: string;
+  paymentIssueReason?: string;
+  cancellationCategory?: string;
+  cancellationReason?: string;
   handoverLocation?: string;
   createdAt: string;
 }
@@ -199,7 +203,7 @@ export const adminService = {
     return response.data;
   },
 
-  getAdminOrders: async (page = 1, size = 100, filters: { status?: string; paymentStatus?: string; disputeStatus?: string } = {}) => {
+  getAdminOrders: async (page = 1, size = 100, filters: { status?: string; paymentStatus?: string; disputeStatus?: string; paymentIssueStatus?: string } = {}) => {
     const params = new URLSearchParams({ page: String(Math.max(1, page)), size: String(size) });
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== 'ALL') params.set(key, value);
@@ -210,6 +214,11 @@ export const adminService = {
 
   resolveOrderDispute: async (orderId: string, status: 'RESOLVED' | 'REJECTED', resolution: string) => {
     const response = await api.patch(`/orders/${orderId}/disputes/resolve`, { status, resolution });
+    return response.data;
+  },
+
+  resolvePaymentIssue: async (orderId: string, action: 'CONFIRM_PAID' | 'REFUND' | 'REJECT', resolution: string) => {
+    const response = await api.patch(`/orders/${orderId}/payment-issues/resolve`, { action, resolution });
     return response.data;
   },
 

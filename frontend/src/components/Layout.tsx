@@ -11,7 +11,7 @@ import {
 
 import ChatManager from './ChatManager';
 import { chatService } from '../services/chatService';
-import { notificationService } from '../services/notificationService';
+import { normalizeNotification, notificationService } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
 import { authService } from '../services/authService';
 
@@ -35,10 +35,16 @@ const Layout: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    chatService.connect();
     fetchNotifs();
 
     const removeNotifListener = chatService.addNotificationListener((notif: Notification) => {
-      setNotifications(prev => [notif, ...prev]);
+      const normalized = normalizeNotification(notif);
+      setNotifications(prev => {
+        const notificationId = normalized.id;
+        if (notificationId && prev.some(n => n.id === notificationId)) return prev;
+        return [normalized, ...prev];
+      });
     });
 
     const interval = setInterval(fetchNotifs, 120000);
@@ -66,6 +72,7 @@ const Layout: React.FC = () => {
   }, []);
 
   const handleMarkRead = async (id: string) => {
+    if (!id) return;
     try {
       await notificationService.markAsRead(id);
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
@@ -101,7 +108,7 @@ const Layout: React.FC = () => {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center text-white font-bold text-xs">IUH</div>
-            <span className="font-bold text-base tracking-tight hidden sm:block text-slate-900">Campus Exchange</span>
+            <span className="font-bold text-base tracking-tight hidden sm:block text-slate-900">Chợ IUH</span>
           </Link>
 
           {/* Navigation Links */}
@@ -171,12 +178,11 @@ const Layout: React.FC = () => {
                               <div 
                                 key={n.id} 
                                 onClick={() => {
+                                  if (n.id) handleMarkRead(n.id);
                                   if (n.targetId && n.type && n.type.includes('ORDER')) {
                                     navigate(`/orders/${n.targetId}`);
                                   } else if (n.targetId && n.type === 'PRODUCT') {
                                     navigate(`/products/${n.targetId}`);
-                                  } else {
-                                    handleMarkRead(n.id);
                                   }
                                   setShowNotifications(false);
                                 }}
@@ -248,7 +254,7 @@ const Layout: React.FC = () => {
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-7 h-7 bg-slate-900 rounded-md flex items-center justify-center text-white font-bold text-[10px]">IUH</div>
-              <span className="font-bold text-base text-slate-900">Exchange</span>
+              <span className="font-bold text-base text-slate-900">Chợ IUH</span>
             </div>
             <p className="text-slate-500 text-sm max-w-sm leading-relaxed">Nền tảng mua bán và trao đổi đồ cũ dành cho cộng đồng sinh viên Đại học Công nghiệp TP.HCM.</p>
           </div>
@@ -267,7 +273,7 @@ const Layout: React.FC = () => {
             </ul>
           </div>
         </div>
-        <div className="container mx-auto px-4 mt-6 pt-6 border-t border-slate-100 text-center text-slate-400 text-xs">&copy; 2026 IUH Campus Exchange.</div>
+        <div className="container mx-auto px-4 mt-6 pt-6 border-t border-slate-100 text-center text-slate-400 text-xs">&copy; 2026 Chợ IUH.</div>
       </footer>
     </div>
   );

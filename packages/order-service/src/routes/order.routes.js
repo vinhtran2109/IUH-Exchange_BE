@@ -110,6 +110,18 @@ export function createOrderRoutes(orderService) {
     controller.resolveDispute(req, res).catch(next);
   });
 
+  router.post('/:id/no-show', (req, res, next) => {
+    controller.reportNoShow(req, res).catch(next);
+  });
+
+  router.post('/:id/payment-issues', (req, res, next) => {
+    controller.openPaymentIssue(req, res).catch(next);
+  });
+
+  router.patch('/:id/payment-issues/resolve', (req, res, next) => {
+    controller.resolvePaymentIssue(req, res).catch(next);
+  });
+
   router.post('/:id/handover/proposals', (req, res, next) => {
     controller.proposeHandover(req, res).catch(next);
   });

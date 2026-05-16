@@ -146,7 +146,7 @@ const Login: React.FC = () => {
         </div>
         
         <p className="text-center text-[11px] text-slate-400 mt-4">
-          &copy; {new Date().getFullYear()} IUH Campus Exchange
+          &copy; {new Date().getFullYear()} Chợ IUH
         </p>
       </motion.div>
     </div>

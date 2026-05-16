@@ -33,7 +33,7 @@ export class OrderController {
       throw new BadRequestException('Missing Idempotency-Key header');
     }
 
-    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, offerId } = req.body;
+    const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, paymentMethod, offerId } = req.body;
 
     if (!offerId && (!productId || !sellerId || price === undefined)) {
       throw new BadRequestException('productId, sellerId, and price are required');
@@ -51,6 +51,7 @@ export class OrderController {
       buyerNote,
       handoverLocation,
       handoverTime,
+      paymentMethod,
       idempotencyKey,
     });
 
@@ -177,7 +178,11 @@ export class OrderController {
   async confirmHandover(req, res) {
     const userId = req.headers['x-user-id'];
     if (!userId) throw new BadRequestException('Missing X-User-Id header');
-    const order = await this.orderService.confirmHandover(req.params.id, userId);
+    const order = await this.orderService.confirmHandover(req.params.id, userId, {
+      code: String(req.body?.code || '').trim(),
+      evidenceUrl: String(req.body?.evidenceUrl || '').trim(),
+      note: String(req.body?.note || '').trim(),
+    });
     return res.json(ApiResponse.ok(order, 'Handover confirmed'));
   }
 
@@ -193,6 +198,7 @@ export class OrderController {
       status: req.query.status,
       paymentStatus: req.query.paymentStatus,
       disputeStatus: req.query.disputeStatus,
+      paymentIssueStatus: req.query.paymentIssueStatus,
     });
     return res.json(ApiResponse.ok(result));
   }
@@ -213,6 +219,40 @@ export class OrderController {
     const resolution = String(req.body?.resolution || '').trim();
     const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution });
     return res.json(ApiResponse.ok(order, 'Dispute resolved'));
+  }
+
+  async reportNoShow(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const order = await this.orderService.reportNoShow(req.params.id, userId, {
+      reason: String(req.body?.reason || '').trim(),
+      evidenceUrl: String(req.body?.evidenceUrl || '').trim(),
+    });
+    return res.status(201).json(ApiResponse.created(order, 'No-show reported'));
+  }
+
+  async openPaymentIssue(req, res) {
+    const userId = req.headers['x-user-id'];
+    if (!userId) throw new BadRequestException('Missing X-User-Id header');
+    const reason = String(req.body?.reason || '').trim();
+    if (reason.length < 10) throw new BadRequestException('Payment issue reason must be at least 10 characters');
+    const order = await this.orderService.openPaymentIssue(req.params.id, userId, reason);
+    return res.status(201).json(ApiResponse.created(order, 'Payment issue opened'));
+  }
+
+  async resolvePaymentIssue(req, res) {
+    const role = req.headers['x-user-role'] || req.user?.role;
+    const adminId = req.headers['x-user-id'] || req.user?.sub;
+    if (role !== 'ADMIN') throw new BadRequestException('Admin access required');
+    const action = String(req.body?.action || '').toUpperCase();
+    if (!['CONFIRM_PAID', 'REFUND', 'REJECT'].includes(action)) {
+      throw new BadRequestException('action must be CONFIRM_PAID, REFUND, or REJECT');
+    }
+    const order = await this.orderService.resolvePaymentIssue(req.params.id, adminId, {
+      action,
+      resolution: String(req.body?.resolution || '').trim(),
+    });
+    return res.json(ApiResponse.ok(order, 'Payment issue resolved'));
   }
 
   /**

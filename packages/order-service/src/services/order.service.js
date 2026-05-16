@@ -79,12 +79,22 @@ function appendStatusHistory(order, nextStatus, {
   if (nextStatus === 'COMPLETED') {
     order.completedAt = new Date();
   }
+  if (nextStatus === 'CANCELLED') {
+    order.cancelledAt = new Date();
+    order.cancelledBy = changedBy;
+    order.cancellationReason = reason;
+    order.cancellationCategory = metadata?.category || order.cancellationCategory || 'OTHER';
+  }
 }
 
 function buildReceiptNumber(order) {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const suffix = order._id.toString().slice(-6).toUpperCase();
   return `IUH-${datePart}-${suffix}`;
+}
+
+function generateHandoverCode() {
+  return String(crypto.randomInt(100000, 1000000));
 }
 
 /**
@@ -178,6 +188,7 @@ export class OrderService {
           handoverLocation: request.handoverLocation || '',
           handoverTime: request.handoverTime || null,
           handoverStatus: request.handoverLocation && request.handoverTime ? 'PROPOSED' : 'NOT_SCHEDULED',
+          paymentMethod: ['BANK_TRANSFER', 'CASH'].includes(request.paymentMethod) ? request.paymentMethod : 'NONE',
           meetingProposals: request.handoverLocation && request.handoverTime ? [{
             location: request.handoverLocation,
             time: request.handoverTime,
@@ -324,6 +335,10 @@ export class OrderService {
       throw new BadRequestException('Đơn hàng đã được xác nhận');
     }
 
+    if (order.paymentMethod === 'BANK_TRANSFER' && order.paymentStatus !== 'PAID') {
+      throw new BadRequestException('Nguoi ban can xac nhan da nhan tien truoc khi hoan tat don chuyen khoan');
+    }
+
     this._assertTransition(order.status, 'COMPLETED');
 
     appendStatusHistory(order, 'COMPLETED', {
@@ -353,7 +368,7 @@ export class OrderService {
    * @param {string} reason
    * @returns {object} Updated order
    */
-  async rejectOrder(orderId, sellerId, reason) {
+  async rejectOrder(orderId, sellerId, reason, { category = 'SELLER_REJECTED' } = {}) {
     const order = await Order.findById(orderId);
     if (!order) {
       throw new ResourceNotFoundException('Order', orderId);
@@ -373,6 +388,7 @@ export class OrderService {
       changedBy: sellerId,
       actorRole: 'SELLER',
       reason,
+      metadata: { category },
     });
     await order.save();
     logger.info(`[SELLER REJECT] Order cancelled: orderId=${orderId}, sellerId=${sellerId}, reason=${reason}`);
@@ -457,7 +473,7 @@ export class OrderService {
    * @param {string} [reason]
    * @returns {object} Updated order
    */
-  async cancelByBuyer(orderId, buyerId, reason) {
+  async cancelByBuyer(orderId, buyerId, reason, { category = 'BUYER_CANCELLED' } = {}) {
     const order = await Order.findById(orderId);
     if (!order) {
       throw new ResourceNotFoundException('Order', orderId);
@@ -481,6 +497,7 @@ export class OrderService {
       changedBy: buyerId,
       actorRole: 'BUYER',
       reason: reason || 'Người mua hủy đơn hàng',
+      metadata: { category },
     });
     await order.save();
     logger.info(`[BUYER CANCEL] Order cancelled: orderId=${orderId}, buyerId=${buyerId}, reason=${reason || 'N/A'}`);
@@ -491,6 +508,49 @@ export class OrderService {
       buyerId: order.buyerId,
       sellerId: order.sellerId,
       reason: reason || 'Người mua hủy đơn hàng',
+    });
+
+    return order.toObject();
+  }
+
+  async reportNoShow(orderId, userId, { reason = '', evidenceUrl = '' } = {}) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    const role = actorRoleFor(order, userId);
+    if (role === 'SYSTEM') throw new ForbiddenException('Bạn không có quyền báo không đến cho đơn này');
+    if (!['PENDING', 'AWAITING_SELLER'].includes(order.status)) {
+      throw new BadRequestException('Chỉ có thể báo không đến khi đơn đang xử lý');
+    }
+
+    const alreadyReported = (order.noShowReports || []).some((item) => String(item.reportedBy) === String(userId));
+    if (alreadyReported) throw new BadRequestException('Bạn đã báo không đến cho đơn này');
+
+    const noShowReason = reason || (role === 'BUYER' ? 'Người bán không đến điểm hẹn' : 'Người mua không đến điểm hẹn');
+    order.noShowReports = order.noShowReports || [];
+    order.noShowReports.push({ reportedBy: userId, actorRole: role, reason: noShowReason, evidenceUrl });
+
+    appendStatusHistory(order, 'CANCELLED', {
+      changedBy: userId,
+      actorRole: role,
+      reason: noShowReason,
+      metadata: { category: 'NO_SHOW', evidenceUrl },
+    });
+    await order.save();
+
+    await publishOrderCancelled({
+      orderId: order._id.toString(),
+      productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      reason: noShowReason,
+    });
+
+    await publishOrderEvent('order.no_show.reported', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      reportedBy: userId,
+      actorRole: role,
     });
 
     return order.toObject();
@@ -662,6 +722,8 @@ export class OrderService {
     if (action === 'ACCEPT') {
       order.handoverLocation = proposal.location;
       order.handoverTime = proposal.time;
+      order.handoverCode = generateHandoverCode();
+      order.handoverCodeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     }
     await order.save();
     await publishOrderEvent('order.handover.responded', {
@@ -675,7 +737,7 @@ export class OrderService {
     return order.toObject();
   }
 
-  async confirmHandover(orderId, userId) {
+  async confirmHandover(orderId, userId, { code = '', evidenceUrl = '', note = '' } = {}) {
     const order = await Order.findById(orderId);
     if (!order) throw new ResourceNotFoundException('Order', orderId);
     const role = actorRoleFor(order, userId);
@@ -683,15 +745,27 @@ export class OrderService {
     if (!['AWAITING_SELLER', 'COMPLETED'].includes(order.status)) {
       throw new BadRequestException('Chỉ có thể xác nhận giao nhận khi đơn đã được giữ chỗ hoặc hoàn tất');
     }
+    if (order.handoverCode) {
+      if (!code || String(code).trim() !== String(order.handoverCode)) {
+        throw new BadRequestException('Mã bàn giao không đúng');
+      }
+      if (order.handoverCodeExpiresAt && order.handoverCodeExpiresAt.getTime() < Date.now()) {
+        throw new BadRequestException('Mã bàn giao đã hết hạn');
+      }
+    }
 
     if (role === 'BUYER') {
       order.buyerHandoverConfirmedAt = new Date();
     } else {
       order.sellerHandoverConfirmedAt = new Date();
     }
+    order.handoverProofs = order.handoverProofs || [];
+    order.handoverProofs.push({ confirmedBy: userId, actorRole: role, codeUsed: code, evidenceUrl, note });
 
     if (order.buyerHandoverConfirmedAt && order.sellerHandoverConfirmedAt) {
       order.handoverStatus = 'HANDED_OVER';
+      order.handoverCode = null;
+      order.handoverCodeExpiresAt = null;
     } else {
       order.handoverStatus = role === 'BUYER' ? 'BUYER_CONFIRMED' : 'SELLER_CONFIRMED';
     }
@@ -729,11 +803,107 @@ export class OrderService {
     return order.toObject();
   }
 
-  async getAdminOrders({ page = 1, size = 20, status, paymentStatus, disputeStatus } = {}) {
+  async openPaymentIssue(orderId, userId, reason) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    const role = actorRoleFor(order, userId);
+    if (role === 'SYSTEM') throw new ForbiddenException('Bạn không có quyền mở khiếu nại thanh toán cho đơn này');
+    if (order.paymentIssueStatus === 'OPEN') {
+      throw new BadRequestException('Đơn hàng đã có khiếu nại thanh toán đang xử lý');
+    }
+    if (order.paymentStatus === 'REFUNDED') {
+      throw new BadRequestException('Đơn hàng đã hoàn tiền');
+    }
+    if (order.paymentMethod !== 'BANK_TRANSFER' && order.paymentStatus !== 'PAID') {
+      throw new BadRequestException('Chỉ có thể khiếu nại thanh toán cho đơn chuyển khoản hoặc đã thanh toán');
+    }
+
+    order.paymentIssueStatus = 'OPEN';
+    order.paymentIssueReason = reason;
+    order.paymentIssueOpenedBy = userId;
+    order.paymentIssueOpenedAt = new Date();
+    order.paymentIssueTimeline = order.paymentIssueTimeline || [];
+    order.paymentIssueTimeline.push({ action: 'OPENED', actorId: userId, actorRole: role, note: reason });
+    await order.save();
+
+    await publishOrderEvent('order.payment_issue.opened', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      openedBy: userId,
+      reason,
+    });
+
+    return order.toObject();
+  }
+
+  async resolvePaymentIssue(orderId, adminId, { action, resolution = '' }) {
+    const order = await Order.findById(orderId);
+    if (!order) throw new ResourceNotFoundException('Order', orderId);
+    if (order.paymentIssueStatus !== 'OPEN') {
+      throw new BadRequestException('Đơn hàng không có khiếu nại thanh toán đang mở');
+    }
+
+    if (action === 'CONFIRM_PAID') {
+      order.paymentStatus = 'PAID';
+      order.paymentProviderStatus = 'ADMIN_CONFIRMED_PAID';
+      order.reconciliationStatus = 'MATCHED';
+      order.paidAt = order.paidAt || new Date();
+      order.transactions = order.transactions || [];
+      order.transactions.push({
+        type: 'TRANSFER_CONFIRMED',
+        transactionId: order.paymentTransactionId || `ADMIN_${Date.now()}`,
+        amount: order.price,
+        method: order.paymentMethod || 'BANK_TRANSFER',
+        status: 'SUCCESS',
+        note: resolution || 'Admin xác nhận thanh toán',
+      });
+    } else if (action === 'REFUND') {
+      order.paymentStatus = 'REFUNDED';
+      order.paymentProviderStatus = 'ADMIN_REFUNDED';
+      order.reconciliationStatus = 'MATCHED';
+      order.refundedAt = new Date();
+      order.transactions = order.transactions || [];
+      order.transactions.push({
+        type: 'REFUND_CREATED',
+        transactionId: order.paymentTransactionId,
+        amount: order.price,
+        method: order.paymentMethod || 'BANK_TRANSFER',
+        status: 'REFUNDED',
+        note: resolution || 'Admin duyệt hoàn tiền',
+      });
+    }
+
+    order.paymentIssueStatus = action === 'REJECT' ? 'REJECTED' : 'RESOLVED';
+    order.paymentIssueResolution = resolution;
+    order.paymentIssueResolvedBy = adminId;
+    order.paymentIssueResolvedAt = new Date();
+    order.paymentIssueTimeline = order.paymentIssueTimeline || [];
+    order.paymentIssueTimeline.push({
+      action: order.paymentIssueStatus,
+      actorId: adminId,
+      actorRole: 'ADMIN',
+      note: resolution,
+    });
+    await order.save();
+
+    await publishOrderEvent('order.payment_issue.resolved', {
+      orderId: order._id.toString(),
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      action,
+      status: order.paymentIssueStatus,
+    });
+
+    return order.toObject();
+  }
+
+  async getAdminOrders({ page = 1, size = 20, status, paymentStatus, disputeStatus, paymentIssueStatus } = {}) {
     const filter = {};
     if (status && status !== 'ALL') filter.status = status;
     if (paymentStatus && paymentStatus !== 'ALL') filter.paymentStatus = paymentStatus;
     if (disputeStatus && disputeStatus !== 'ALL') filter.disputeStatus = disputeStatus;
+    if (paymentIssueStatus && paymentIssueStatus !== 'ALL') filter.paymentIssueStatus = paymentIssueStatus;
 
     const skip = (page - 1) * size;
     const [orders, totalElements] = await Promise.all([
@@ -752,13 +922,14 @@ export class OrderService {
   }
 
   async getAdminOrderStats() {
-    const [total, completed, cancelled, paid, refunded, disputesOpen] = await Promise.all([
+    const [total, completed, cancelled, paid, refunded, disputesOpen, paymentIssuesOpen] = await Promise.all([
       Order.countDocuments(),
       Order.countDocuments({ status: 'COMPLETED' }),
       Order.countDocuments({ status: 'CANCELLED' }),
       Order.countDocuments({ paymentStatus: 'PAID' }),
       Order.countDocuments({ paymentStatus: 'REFUNDED' }),
       Order.countDocuments({ disputeStatus: 'OPEN' }),
+      Order.countDocuments({ paymentIssueStatus: 'OPEN' }),
     ]);
 
     const revenueAgg = await Order.aggregate([
@@ -778,6 +949,7 @@ export class OrderService {
       paid,
       refunded,
       disputesOpen,
+      paymentIssuesOpen,
       grossPaymentAmount: totals.PAID?.amount || 0,
       refundedAmount: totals.REFUNDED?.amount || 0,
       cancellationRate: total > 0 ? Math.round((cancelled / total) * 1000) / 10 : 0,
