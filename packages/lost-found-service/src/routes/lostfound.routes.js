@@ -10,6 +10,8 @@ import {
   deleteItemAsAdmin,
   claimItem,
   getUploadUrl,
+  getMatches,
+  previewMatches,
 } from '../controllers/lostfound.controller.js';
 
 const router = Router();
@@ -34,8 +36,14 @@ router.post('/', authenticate, createItem);
 // Upload presigned URL (must be before /:id)
 router.post('/upload-url', authenticate, getUploadUrl);
 
+// Match preview (before creating) — must be before /:id
+router.post('/match-preview', optionalAuth, previewMatches);
+
 // Public: view single item
 router.get('/:id', optionalAuth, getItemById);
+
+// Find matches for an existing item
+router.get('/:id/matches', optionalAuth, getMatches);
 
 // Protected: update/delete/claim
 router.put('/:id', authenticate, updateItem);

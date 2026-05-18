@@ -95,6 +95,35 @@ export async function getAvatarPresign(req, res) {
 }
 
 /**
+ * GET /api/v1/users/by-student/:studentId
+ * Lookup user by student ID (MSSV).
+ * Used internally by lost-found-service for notification routing.
+ * Rate-limited to prevent enumeration.
+ */
+export async function getUserByStudentId(req, res) {
+  const { studentId } = req.params;
+
+  if (!studentId || !/^\d{8,12}$/.test(studentId)) {
+    throw new BadRequestException('Invalid studentId format. Must be 8-12 digits.');
+  }
+
+  const cacheKey = `users:student:${studentId}`;
+  const cached = await cache.get(cacheKey);
+  if (cached) return res.json(cached);
+
+  const user = await User.findOne({ studentId, isDeleted: false, isActive: true })
+    .select('name email studentId avatarUrl karmaPoint role isVerified createdAt');
+
+  if (!user) {
+    throw new ResourceNotFoundException('User', `studentId=${studentId}`);
+  }
+
+  const response = ApiResponse.ok(mapToProfile(user));
+  await cache.set(cacheKey, response, 300); // Cache 5 minutes
+  res.json(response);
+}
+
+/**
  * DELETE /api/v1/users/me
  * Soft-delete the authenticated user's account.
  * Anonymizes personal data and marks account as deleted.

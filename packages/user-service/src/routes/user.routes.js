@@ -10,6 +10,7 @@ const router = Router();
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 router.get('/me', authenticate, asyncHandler(userCtrl.getMyProfile));
+router.get('/by-student/:studentId', asyncHandler(userCtrl.getUserByStudentId));
 router.get('/:id', asyncHandler(userCtrl.getUserProfile));
 router.put('/profile', authenticate, validate(updateProfileSchema), asyncHandler(userCtrl.updateProfile));
 router.patch('/me', authenticate, validate(updateProfileSchema), asyncHandler(userCtrl.updateProfile));

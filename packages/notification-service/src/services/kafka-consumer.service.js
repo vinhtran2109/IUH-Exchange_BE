@@ -18,6 +18,8 @@ const TOPICS = [
   { topic: 'product.rejected', fromBeginning: false },
   { topic: 'karma.updated', fromBeginning: false },
   { topic: 'report.created', fromBeginning: false },
+  { topic: 'lostfound.analyzed', fromBeginning: false },
+  { topic: 'lostfound.match', fromBeginning: false },
 ];
 
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
@@ -245,6 +247,79 @@ const eventHandlers = {
         type: 'REPORT',
         targetId: reportId,
       });
+    }
+  },
+
+  'lostfound.analyzed': async (payload) => {
+    const { userId, itemId, title, detectedType, studentId, confidence, type } = payload;
+
+    const label = detectedType ? ` (${detectedType})` : '';
+    const confidencePercent = Math.round((confidence || 0) * 100);
+
+    let message = `Bài đăng "${title}" đã được phân tích${label}. Độ tin cậy: ${confidencePercent}%.`;
+
+    if (studentId) {
+      message += ` Phát hiện MSSV: ${studentId}.`;
+    }
+
+    await sendNotification({
+      recipientId: userId,
+      title: 'Phân tích hoàn tất',
+      message,
+      type: 'SYSTEM',
+      targetId: itemId,
+    });
+
+    // If MSSV found and item is FOUND, try to notify the owner of that student ID
+    if (studentId && type === 'FOUND') {
+      try {
+        const userRes = await fetch(`${USER_SERVICE_URL}/api/v1/users/by-student/${studentId}`);
+        const userData = await userRes.json();
+        if (userData?.data?.id) {
+          await sendNotification({
+            recipientId: userData.data.id,
+            title: 'Có thể tìm thấy đồ của bạn!',
+            message: `Một vật phẩm phù hợp với MSSV ${studentId} của bạn vừa được đăng tìm: "${title}"`,
+            type: 'SYSTEM',
+            targetId: itemId,
+          });
+        }
+      } catch {
+        // User not found or service unavailable — non-fatal
+        logger.debug(`Could not resolve studentId ${studentId} to user`);
+      }
+    }
+  },
+
+  'lostfound.match': async (payload) => {
+    const { userId, itemId, title, type, matches } = payload;
+
+    if (!matches?.length) return;
+
+    const matchCount = matches.length;
+    const bestScore = Math.round((matches[0]?.score || 0) * 100);
+
+    await sendNotification({
+      recipientId: userId,
+      title: 'Tìm thấy vật phẩm phù hợp!',
+      message: `Có ${matchCount} vật phẩm có thể khớp với "${title}" (độ phù hợp cao nhất: ${bestScore}%). Kiểm tra ngay!`,
+      type: 'SYSTEM',
+      targetId: itemId,
+    });
+
+    // Also notify the owners of matched items
+    const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
+    for (const match of matches.slice(0, 3)) { // Limit to top 3 to avoid spam
+      if (match.ownerId && match.ownerId !== userId) {
+        const matchScore = Math.round((match.score || 0) * 100);
+        await sendNotification({
+          recipientId: match.ownerId,
+          title: 'Có vật phẩm khớp với bài đăng của bạn!',
+          message: `"${title}" có thể là vật phẩm ${oppositeType === 'LOST' ? 'bị mất' : 'nhặt được'} liên quan đến bài "${match.title}" của bạn (${matchScore}% phù hợp).`,
+          type: 'SYSTEM',
+          targetId: match.itemId,
+        });
+      }
     }
   },
 };
