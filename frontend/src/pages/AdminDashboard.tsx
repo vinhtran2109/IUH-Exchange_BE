@@ -9,13 +9,17 @@ import {
   Download,
   Eye,
   Loader2,
+  Mail,
   MapPin,
+  MessageSquareWarning,
   PackageCheck,
   RefreshCw,
   Search,
+  Send,
   Server,
   Shield,
   ShieldCheck,
+  ShoppingBag,
   Trash2,
   TrendingUp,
   Users,
@@ -25,9 +29,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import {
   adminService,
+  type AdminOrderData,
+  type AuditLogData,
   type DlqEventData,
   type LostFoundAdminData,
   type ReportData,
+  type ReportedMessageData,
   type UserAdminData,
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
@@ -42,11 +49,25 @@ const PERMISSION_LABELS: Record<string, string> = {
   CAN_APPROVE_POST: 'Duyệt bài',
 };
 
-type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'dlq' | 'analytics';
+type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'orders' | 'chatReports' | 'dlq' | 'analytics' | 'email' | 'audit';
 type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECTED';
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
 type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
+
+const ADMIN_TABS = [
+  { id: 'overview', label: 'Tổng quan', group: 'Bảng chính', icon: TrendingUp },
+  { id: 'analytics', label: 'Phân tích', group: 'Bảng chính', icon: TrendingUp },
+  { id: 'users', label: 'Sinh viên', group: 'Quản trị', icon: Users },
+  { id: 'products', label: 'Duyệt bài', group: 'Quản trị', icon: PackageCheck },
+  { id: 'reports', label: 'Tố cáo', group: 'Kiểm duyệt', icon: AlertTriangle },
+  { id: 'lostFound', label: 'Đồ thất lạc', group: 'Kiểm duyệt', icon: MapPin },
+  { id: 'email', label: 'Soạn email', group: 'Hệ thống', icon: Mail },
+  { id: 'dlq', label: 'DLQ', group: 'Hệ thống', icon: Server },
+  { id: 'audit', label: 'Nhật ký hệ thống', group: 'Hệ thống', icon: ShieldCheck },
+  { id: 'orders', label: 'Đơn hàng', group: 'Bảng chính', icon: ShoppingBag },
+  { id: 'chatReports', label: 'Tin nhắn', group: 'Bảng chính', icon: MessageSquareWarning },
+] as const;
 
 const formatDate = (value?: string) => {
   if (!value) return 'N/A';
@@ -55,7 +76,7 @@ const formatDate = (value?: string) => {
   return date.toLocaleString('vi-VN');
 };
 
-const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}d`;
+const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
 const getEntityId = (value: any) => value?.id || value?._id || '';
 
@@ -89,6 +110,26 @@ const statusLabel = (status?: string) => {
       return 'Đang thử lại';
     case 'RETRY_FAILED':
       return 'Thử lại lỗi';
+    case 'COMPLETED':
+      return 'Hoàn tất';
+    case 'CANCELLED':
+      return 'Đã hủy';
+    case 'AWAITING_SELLER':
+      return 'Chờ người bán';
+    case 'UNPAID':
+      return 'Chưa thanh toán';
+    case 'PAID':
+      return 'Đã thanh toán';
+    case 'REFUNDED':
+      return 'Đã hoàn tiền';
+    case 'REPORTED':
+      return 'Đã báo chuyển khoản';
+    case 'NONE':
+      return 'Không có';
+    case 'NO_SHOW':
+      return 'Không đến';
+    case 'PAYMENT_ISSUE':
+      return 'Khiếu nại thanh toán';
     default:
       return status || 'Không rõ';
   }
@@ -159,12 +200,20 @@ const AdminDashboard: React.FC = () => {
   const [reportTargetType, setReportTargetType] = useState<'ALL' | 'USER' | 'PRODUCT' | 'LOST_FOUND'>('ALL');
   const [lostFoundTypeFilter, setLostFoundTypeFilter] = useState<LostFoundTypeFilter>('ALL');
   const [dlqFilter, setDlqFilter] = useState<DlqFilter>('ALL');
+  const [emailTo, setEmailTo] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [users, setUsers] = useState<UserAdminData[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
   const [dlqEvents, setDlqEvents] = useState<DlqEventData[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogData[]>([]);
+  const [adminOrders, setAdminOrders] = useState<AdminOrderData[]>([]);
+  const [reportedMessages, setReportedMessages] = useState<ReportedMessageData[]>([]);
   const [dlqStats, setDlqStats] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<any>({ user: {}, product: {} });
 
@@ -239,6 +288,12 @@ const AdminDashboard: React.FC = () => {
         return;
       }
 
+      if (activeTab === 'orders') {
+        const res = await adminService.getAdminOrders(1, 100);
+        if (res.success) setAdminOrders(res.data?.content || []);
+        return;
+      }
+
       if (activeTab === 'reports') {
         const reportRes = await adminService.getReports(reportFilter, 1, 100, reportTargetType);
         setReports(reportRes.data?.content || []);
@@ -248,6 +303,18 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'lostFound') {
         const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, 100);
         setLostFoundItems(lostFoundRes.data?.content || []);
+        return;
+      }
+
+      if (activeTab === 'chatReports') {
+        const res = await adminService.getReportedMessages('PENDING', 1, 100);
+        if (res.success) setReportedMessages(res.data?.content || []);
+        return;
+      }
+
+      if (activeTab === 'audit') {
+        const res = await adminService.getAuditLogs(1, 100);
+        if (res.success) setAuditLogs(res.data?.content || []);
         return;
       }
 
@@ -440,6 +507,32 @@ const AdminDashboard: React.FC = () => {
       if (res.success) await fetchData();
     } catch (e: any) {
       alert('Lỗi: ' + (e.response?.data?.message || 'Không thể bỏ qua sự kiện'));
+    }
+  };
+
+  const handleSendEmail = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setEmailSending(true);
+    setEmailResult(null);
+
+    try {
+      const res = await adminService.sendComposedEmail({
+        to: emailTo,
+        subject: emailSubject,
+        body: emailBody,
+      });
+      if (res.success) {
+        setEmailResult({ type: 'success', message: `Đã gửi email đến ${res.data?.recipients || 1} người nhận.` });
+        setEmailTo('');
+        setEmailSubject('');
+        setEmailBody('');
+      } else {
+        setEmailResult({ type: 'error', message: res.message || 'Không thể gửi email.' });
+      }
+    } catch (e: any) {
+      setEmailResult({ type: 'error', message: e.response?.data?.message || e.response?.data?.error || 'Không thể gửi email.' });
+    } finally {
+      setEmailSending(false);
     }
   };
 
@@ -660,10 +753,10 @@ const AdminDashboard: React.FC = () => {
         <SimpleBarChart
           title="Tổng quan hệ thống"
           data={[
-            { label: 'Users', value: stats.user?.total || 0, color: '#6366f1' },
-            { label: 'Products', value: stats.product?.total || 0, color: '#f59e0b' },
-            { label: 'Available', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Sold', value: stats.product?.sold || 0, color: '#ef4444' },
+            { label: 'Sinh viên', value: stats.user?.total || 0, color: '#6366f1' },
+            { label: 'Sản phẩm', value: stats.product?.total || 0, color: '#f59e0b' },
+            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
+            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#ef4444' },
           ]}
         />
         <SimpleDonutChart
@@ -680,9 +773,9 @@ const AdminDashboard: React.FC = () => {
       <SimpleLineChart
         title="Đường theo dõi nhanh"
         data={[
-          { label: 'Users', value: stats.user?.total || 0 },
-          { label: 'Products', value: stats.product?.total || 0 },
-          { label: 'Reports', value: reports.length || 0 },
+          { label: 'Sinh viên', value: stats.user?.total || 0 },
+          { label: 'Sản phẩm', value: stats.product?.total || 0 },
+          { label: 'Tố cáo', value: reports.length || 0 },
           { label: 'DLQ', value: dlqEvents.length || 0 },
           { label: 'Đồ thất lạc', value: lostFoundItems.length || 0 },
         ]}
@@ -737,9 +830,9 @@ const AdminDashboard: React.FC = () => {
                       onChange={(e) => handleRoleChange(targetUser.id, e.target.value)}
                       className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold"
                     >
-                      <option value="STUDENT">STUDENT</option>
-                      <option value="MODERATOR">MODERATOR</option>
-                      <option value="ADMIN">ADMIN</option>
+                      <option value="STUDENT">Sinh viên</option>
+                      <option value="MODERATOR">Điều phối viên</option>
+                      <option value="ADMIN">Quản trị viên</option>
                     </select>
                   </td>
                   <td className="p-4">
@@ -1018,6 +1111,307 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const renderAuditLogs = () => (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-slate-900">Nhật ký hệ thống</h2>
+          <p className="mt-1 text-sm text-slate-500">Theo dõi các thao tác nhạy cảm, đăng nhập và thay đổi dữ liệu quản trị.</p>
+        </div>
+        <button
+          onClick={() => fetchData()}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
+        >
+          <RefreshCw size={16} />
+          Làm mới
+        </button>
+      </div>
+
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="p-4">Thời gian</th>
+              <th className="p-4">Hành động</th>
+              <th className="p-4">Tài nguyên</th>
+              <th className="p-4">Phương thức</th>
+              <th className="p-4">Trạng thái</th>
+              <th className="p-4">Người dùng</th>
+              <th className="p-4">Đường dẫn</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {auditLogs.map((log) => (
+              <tr key={log._id} className="hover:bg-slate-50/70">
+                <td className="p-4 font-medium text-slate-700">{formatDate(log.createdAt)}</td>
+                <td className="p-4">
+                  <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{log.action}</span>
+                </td>
+                <td className="p-4 text-slate-700">{log.resource}{log.resourceId ? ` / ${log.resourceId}` : ''}</td>
+                <td className="p-4 font-black text-slate-700">{log.method}</td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${(log.statusCode || 0) >= 400 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {log.statusCode || 'N/A'}
+                  </span>
+                </td>
+                <td className="p-4 text-slate-500">{log.userId || 'system'}</td>
+                <td className="max-w-[280px] truncate p-4 text-slate-500" title={log.path}>{log.path}</td>
+              </tr>
+            ))}
+            {auditLogs.length === 0 && (
+              <tr>
+                <td colSpan={7} className="p-10 text-center text-slate-400">Chưa có nhật ký phù hợp.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderAdminOrders = () => (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-black text-slate-900">Đơn hàng và tranh chấp</h2>
+        <p className="mt-1 text-sm text-slate-500">Theo dõi giao dịch, thanh toán, hoàn tiền và tranh chấp của chợ đồ cũ.</p>
+      </div>
+      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-slate-100 bg-slate-50 text-xs uppercase text-slate-400">
+            <tr>
+              <th className="p-4">Đơn hàng</th>
+              <th className="p-4">Người mua / Người bán</th>
+              <th className="p-4">Tiền</th>
+              <th className="p-4">Trạng thái</th>
+              <th className="p-4">Tranh chấp</th>
+              <th className="p-4">Thanh toán</th>
+              <th className="p-4">Hẹn giao</th>
+              <th className="p-4">Xử lý</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {adminOrders.map((order) => (
+              <tr key={order._id} className="hover:bg-slate-50/70">
+                <td className="p-4 font-mono text-xs text-slate-500">{order._id}</td>
+                <td className="p-4 text-slate-700">
+                  <div>{order.buyerId}</div>
+                  <div className="text-xs text-slate-400">{order.sellerId}</div>
+                </td>
+                <td className="p-4 font-black text-slate-900">{currency(order.price)}</td>
+                <td className="p-4">
+                  <div className="font-bold text-slate-700">{statusLabel(order.status)}</div>
+                  <div className="text-xs text-slate-400">{statusLabel(order.paymentStatus)}</div>
+                </td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${order.disputeStatus === 'OPEN' ? 'bg-rose-50 text-rose-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {statusLabel(order.disputeStatus || 'NONE')}
+                  </span>
+                  {order.disputeReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.disputeReason}</div>}
+                </td>
+                <td className="p-4">
+                  <span className={`rounded-full px-3 py-1 text-xs font-black ${order.paymentIssueStatus === 'OPEN' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {statusLabel(order.paymentIssueStatus || 'NONE')}
+                  </span>
+                  {order.paymentIssueReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.paymentIssueReason}</div>}
+                  {order.cancellationCategory && <div className="mt-1 text-xs text-rose-500">{statusLabel(order.cancellationCategory)}</div>}
+                </td>
+                <td className="p-4 text-slate-500">{order.handoverLocation || 'Chưa có'}</td>
+                <td className="p-4">
+                  {(order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN') && (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={async () => {
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'CONFIRM_PAID', 'Admin xác nhận đã thanh toán');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'RESOLVED', 'Admin đã xử lý tranh chấp');
+                          }
+                          await fetchData();
+                        }}
+                        className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700"
+                      >
+                        {order.paymentIssueStatus === 'OPEN' ? 'Xác nhận tiền' : 'Xác nhận'}
+                      </button>
+                      {order.paymentIssueStatus === 'OPEN' && (
+                        <button
+                          onClick={async () => {
+                            await adminService.resolvePaymentIssue(order._id, 'REFUND', 'Admin duyệt hoàn tiền');
+                            await fetchData();
+                          }}
+                          className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700"
+                        >
+                          Hoàn tiền
+                        </button>
+                      )}
+                      <button
+                        onClick={async () => {
+                          if (order.paymentIssueStatus === 'OPEN') {
+                            await adminService.resolvePaymentIssue(order._id, 'REJECT', 'Không đủ căn cứ');
+                          } else {
+                            await adminService.resolveOrderDispute(order._id, 'REJECTED', 'Không đủ căn cứ');
+                          }
+                          await fetchData();
+                        }}
+                        className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
+                      >
+                        Từ chối
+                      </button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {adminOrders.length === 0 && (
+              <tr><td colSpan={8} className="p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const renderReportedMessages = () => (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-black text-slate-900">Kiểm duyệt tin nhắn</h2>
+        <p className="mt-1 text-sm text-slate-500">Xử lý các tin nhắn bị người dùng báo cáo trong chat.</p>
+      </div>
+      <div className="grid gap-4">
+        {reportedMessages.map((message) => (
+          <div key={message._id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <div className="text-xs font-bold uppercase text-slate-400">{message.senderId} {'->'} {message.receiverId}</div>
+                <p className="mt-2 text-sm font-medium text-slate-800">{message.content}</p>
+                <div className="mt-3 text-xs text-rose-600">
+                  {(message.reports || []).map((report) => report.reason).join(' | ') || 'Đã báo cáo'}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    await adminService.resolveReportedMessage(message._id, 'REVIEWED');
+                    await fetchData();
+                  }}
+                  className="rounded-xl bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700"
+                >
+                  Đã xem
+                </button>
+                <button
+                  onClick={async () => {
+                    await adminService.resolveReportedMessage(message._id, 'DISMISSED');
+                    await fetchData();
+                  }}
+                  className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
+                >
+                  Bỏ qua
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {reportedMessages.length === 0 && (
+          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Không có tin nhắn đang chờ xử lý.</div>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderEmailCompose = () => (
+    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
+      <form onSubmit={handleSendEmail} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-6 flex items-start justify-between gap-4 border-b border-slate-100 pb-5">
+          <div>
+            <h2 className="text-xl font-black text-slate-900">Soạn email</h2>
+            <p className="mt-1 text-sm text-slate-500">Gửi thông báo thủ công từ hệ thống quản trị IUH Exchange.</p>
+          </div>
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white">
+            <Mail size={20} />
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          <label className="block">
+            <span className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-400">Người nhận</span>
+            <textarea
+              value={emailTo}
+              onChange={(event) => setEmailTo(event.target.value)}
+              required
+              rows={3}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-400"
+              placeholder="student@student.iuh.edu.vn, another@student.iuh.edu.vn"
+            />
+            <span className="mt-2 block text-xs text-slate-400">Có thể nhập nhiều email, phân tách bằng dấu phẩy, chấm phẩy hoặc xuống dòng. Tối đa 50 người nhận.</span>
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-400">Tiêu đề</span>
+            <input
+              value={emailSubject}
+              onChange={(event) => setEmailSubject(event.target.value)}
+              required
+              maxLength={160}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-400"
+              placeholder="Thông báo từ IUH Exchange"
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-2 block text-xs font-black uppercase tracking-wider text-slate-400">Nội dung</span>
+            <textarea
+              value={emailBody}
+              onChange={(event) => setEmailBody(event.target.value)}
+              required
+              rows={12}
+              maxLength={5000}
+              className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium leading-6 text-slate-800 outline-none transition focus:border-slate-400"
+              placeholder="Nhập nội dung email..."
+            />
+          </label>
+
+          {emailResult && (
+            <div className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+              emailResult.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-rose-200 bg-rose-50 text-rose-700'
+            }`}>
+              {emailResult.message}
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={emailSending}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {emailSending ? <Loader2 size={17} className="animate-spin" /> : <Send size={17} />}
+              {emailSending ? 'Đang gửi...' : 'Gửi email'}
+            </button>
+          </div>
+        </div>
+      </form>
+
+      <aside className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="text-sm font-black uppercase tracking-wider text-slate-400">Thông tin gửi</h3>
+        <div className="mt-5 space-y-4 text-sm">
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="text-xs font-bold text-slate-400">Người gửi</div>
+            <div className="mt-1 font-black text-slate-800">{user?.email || 'Quản trị viên'}</div>
+          </div>
+          <div className="rounded-2xl bg-slate-50 p-4">
+            <div className="text-xs font-bold text-slate-400">SMTP</div>
+            <div className="mt-1 font-black text-slate-800">Cấu hình từ Notification Service</div>
+          </div>
+          <div className="rounded-2xl bg-amber-50 p-4 text-amber-800">
+            <div className="font-black">Lưu ý</div>
+            <p className="mt-1 text-xs leading-5">Email chỉ gửi được khi `.env` đã cấu hình SMTP. Nội dung được xử lý an toàn ở backend trước khi gửi.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+
   const renderDlq = () => (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1096,7 +1490,59 @@ const AdminDashboard: React.FC = () => {
   );
 
   return (
-    <div className="max-w-7xl mx-auto py-8 px-4">
+    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-8 lg:pl-[284px] lg:pr-8">
+      <aside className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[260px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
+        <div className="flex h-full flex-col">
+          <div className="border-b border-slate-100 px-6 py-6">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-900 text-white">
+                <Shield size={22} />
+              </div>
+              <div>
+                <div className="text-sm font-black text-slate-900">Quản trị IUH</div>
+                <div className="text-xs font-medium text-slate-400">IUH Exchange</div>
+              </div>
+            </div>
+          </div>
+
+          <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+            {['Bảng chính', 'Quản trị', 'Kiểm duyệt', 'Hệ thống'].map((group) => (
+              <div key={group}>
+                <div className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
+                <div className="space-y-1">
+                  {ADMIN_TABS.filter((tab) => tab.group === group).map((tab) => {
+                    const active = activeTab === tab.id;
+                    return (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as AdminTab)}
+                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${
+                          active
+                            ? 'bg-slate-900 text-white shadow-sm'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                      >
+                        <tab.icon size={17} className={active ? 'text-teal-300' : 'text-slate-400'} />
+                        <span>{tab.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </nav>
+
+          <div className="border-t border-slate-100 p-4">
+            <div className="rounded-lg bg-slate-50 p-4">
+              <div className="text-xs font-black uppercase tracking-wider text-slate-400">Trạng thái</div>
+              <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-700">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                Console hoạt động
+              </div>
+            </div>
+          </div>
+        </div>
+      </aside>
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
@@ -1109,7 +1555,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex gap-2 mb-8 bg-slate-100/50 p-1 rounded-2xl w-fit flex-wrap">
+      <div className="hidden">
         {[
           { id: 'overview', label: 'Tổng quan', icon: TrendingUp },
           { id: 'analytics', label: 'Phân tích', icon: TrendingUp },
@@ -1142,10 +1588,18 @@ const AdminDashboard: React.FC = () => {
         renderUsers()
       ) : activeTab === 'products' ? (
         renderProducts()
+      ) : activeTab === 'orders' ? (
+        renderAdminOrders()
       ) : activeTab === 'reports' ? (
         renderReports()
+      ) : activeTab === 'chatReports' ? (
+        renderReportedMessages()
       ) : activeTab === 'lostFound' ? (
         renderLostFound()
+      ) : activeTab === 'audit' ? (
+        renderAuditLogs()
+      ) : activeTab === 'email' ? (
+        renderEmailCompose()
       ) : (
         renderDlq()
       )}

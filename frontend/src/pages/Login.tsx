@@ -24,8 +24,17 @@ const Login: React.FC = () => {
       if (response && response.success) {
         const d = response.data;
         const role = d.role || d.user?.role;
+        if (role === 'ADMIN') {
+          try {
+            await authService.logout();
+          } catch {
+            // Ignore logout errors here; the admin session is not stored in this client state.
+          }
+          setError('Tài khoản quản trị vui lòng đăng nhập tại /admin/login.');
+          return;
+        }
         login({ id: d.userId || d.user?.id, email: d.email || d.user?.email, name: d.name || d.user?.name, role, studentId: d.studentId || d.user?.studentId || '', karmaPoint: d.karmaPoint || d.user?.karmaPoint || 0 }, d.accessToken);
-        navigate(role === 'ADMIN' ? '/admin' : '/');
+        navigate('/');
       } else {
         setError(response.message || 'Đăng nhập thất bại. Vui lòng thử lại!');
       }
@@ -137,7 +146,7 @@ const Login: React.FC = () => {
         </div>
         
         <p className="text-center text-[11px] text-slate-400 mt-4">
-          &copy; {new Date().getFullYear()} IUH Campus Exchange
+          &copy; {new Date().getFullYear()} Chợ IUH
         </p>
       </motion.div>
     </div>

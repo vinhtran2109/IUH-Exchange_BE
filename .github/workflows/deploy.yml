@@ -1,0 +1,99 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-images:
+    name: Build and push service images
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: api-gateway
+            dockerfile: Dockerfile.gateway
+            context: .
+          - image: ws-gateway
+            dockerfile: Dockerfile.ws-gateway
+            context: .
+          - image: user-service
+            dockerfile: Dockerfile.user-service
+            context: .
+          - image: product-service
+            dockerfile: Dockerfile.product-service
+            context: .
+          - image: order-service
+            dockerfile: Dockerfile.order-service
+            context: .
+          - image: notification-service
+            dockerfile: Dockerfile.notification-service
+            context: .
+          - image: chat-service
+            dockerfile: Dockerfile.chat-service
+            context: .
+          - image: lost-found-service
+            dockerfile: Dockerfile.lost-found-service
+            context: .
+          - image: frontend
+            dockerfile: Dockerfile
+            context: frontend
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/iuh-exchange-${{ matrix.image }}:${{ github.sha }}
+            ghcr.io/${{ github.repository_owner }}/iuh-exchange-${{ matrix.image }}:latest
+
+  deploy-k8s:
+    name: Apply Kubernetes manifests
+    runs-on: ubuntu-latest
+    needs: build-images
+    env:
+      KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Skip when kubeconfig is not configured
+        if: env.KUBE_CONFIG_B64 == ''
+        run: echo "KUBE_CONFIG secret is not configured; images were published but cluster deploy was skipped."
+
+      - name: Configure kubeconfig
+        if: env.KUBE_CONFIG_B64 != ''
+        run: |
+          mkdir -p ~/.kube
+          echo "$KUBE_CONFIG_B64" | base64 -d > ~/.kube/config
+
+      - name: Point manifests to this registry owner
+        if: env.KUBE_CONFIG_B64 != ''
+        run: sed -i "s#ghcr.io/your-org/iuh-exchange-#ghcr.io/${{ github.repository_owner }}/iuh-exchange-#g" k8s/base/deployments.yaml
+
+      - name: Deploy base manifests
+        if: env.KUBE_CONFIG_B64 != ''
+        run: kubectl apply -k k8s/base

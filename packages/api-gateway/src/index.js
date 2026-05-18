@@ -52,7 +52,15 @@ app.use(cors({
     ? process.env.CORS_ORIGIN.split(',').map(s => s.trim())
     : ['http://localhost:5173', 'http://127.0.0.1:5173', 'http://localhost:3000'],
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-Requested-With', 'Idempotency-Key'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Request-ID',
+    'X-Requested-With',
+    'Idempotency-Key',
+    'X-Admin-Portal',
+    'X-Admin-Otp',
+  ],
   exposedHeaders: ['X-Request-ID'],
   credentials: true,
   maxAge: 3600,

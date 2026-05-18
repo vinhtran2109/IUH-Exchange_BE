@@ -2,6 +2,8 @@ import { createConsumer, logger } from '@iuh-exchange/common';
 import { Product } from '../models/Product.js';
 import { publishProductEvent } from './kafka.service.js';
 
+const RESERVATION_TTL_MINUTES = Number(process.env.PRODUCT_RESERVATION_TTL_MINUTES || 30);
+
 /**
  * Saga listener: handles order lifecycle events that affect product status.
  *
@@ -49,7 +51,7 @@ export async function initSagaListener() {
 }
 
 async function handleOrderCreated(payload) {
-  const { orderId, productId } = payload;
+  const { orderId, productId, buyerId } = payload;
   logger.info(`[SAGA] OrderCreated: orderId=${orderId}, productId=${productId}`);
 
   const product = await Product.findById(productId);
@@ -59,9 +61,9 @@ async function handleOrderCreated(payload) {
     return;
   }
 
-  if (product.status === 'PENDING') {
+  if ((product.status === 'RESERVED' || product.status === 'PENDING') && product.reservedOrderId === orderId) {
     logger.info(`[SAGA] Product already reserved: ${productId}, skipping`);
-    await publishProductEvent('product.reserved', { id: orderId, orderId, productId });
+    await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: product.sellerId, buyerId });
     return;
   }
 
@@ -71,11 +73,25 @@ async function handleOrderCreated(payload) {
     return;
   }
 
-  product.status = 'PENDING';
-  await product.save();
+  const reserved = await Product.findOneAndUpdate(
+    { _id: productId, status: 'AVAILABLE' },
+    {
+      status: 'RESERVED',
+      reservedOrderId: orderId,
+      reservedBy: buyerId || null,
+      reservedAt: new Date(),
+      reservationExpiresAt: new Date(Date.now() + RESERVATION_TTL_MINUTES * 60 * 1000),
+    },
+    { new: true }
+  );
+
+  if (!reserved) {
+    await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product was reserved by another order' });
+    return;
+  }
   logger.info(`[SAGA] Product reserved: ${productId}`);
 
-  await publishProductEvent('product.reserved', { id: orderId, orderId, productId });
+  await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: reserved.sellerId, buyerId });
 }
 
 async function handleOrderCompleted(payload) {
@@ -92,6 +108,10 @@ async function handleOrderCompleted(payload) {
       return;
     }
     product.status = 'SOLD';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
+    product.reservationExpiresAt = null;
     await product.save();
     logger.info(`[SAGA] Product marked as SOLD: ${productId}`);
   }
@@ -105,9 +125,45 @@ async function handleOrderCancelled(payload) {
   }
 
   const product = await Product.findById(productId);
-  if (product && product.status === 'PENDING') {
+  if (product && (product.status === 'RESERVED' || product.status === 'PENDING') && (!product.reservedOrderId || product.reservedOrderId === payload.orderId)) {
     product.status = 'AVAILABLE';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
+    product.reservationExpiresAt = null;
     await product.save();
     logger.info(`[SAGA] Product released: ${productId}, reason=${reason}`);
   }
+}
+
+export async function releaseExpiredReservations(now = new Date()) {
+  const expiredProducts = await Product.find({
+    status: 'RESERVED',
+    reservationExpiresAt: { $lte: now },
+  });
+
+  for (const product of expiredProducts) {
+    const orderId = product.reservedOrderId;
+    const buyerId = product.reservedBy;
+    const sellerId = product.sellerId;
+    product.status = 'AVAILABLE';
+    product.reservedOrderId = null;
+    product.reservedBy = null;
+    product.reservedAt = null;
+    product.reservationExpiresAt = null;
+    await product.save();
+
+    if (orderId) {
+      await publishProductEvent('product.reserve.expired', {
+        id: orderId,
+        orderId,
+        productId: product._id.toString(),
+        buyerId,
+        sellerId,
+        reason: 'Reservation expired',
+      });
+    }
+  }
+
+  return expiredProducts.length;
 }

@@ -55,7 +55,7 @@ export function sendNotificationToUser(userId, notification) {
     if (!sessionData) continue;
 
     for (const sub of sessionData.subscriptions.values()) {
-      if (sub.destination.startsWith('/user/queue/')) {
+      if (sub.destination === '/user/queue/notifications') {
         const conn = sessionData.conn;
         if (conn) {
           sendFrame(conn, 'MESSAGE', {

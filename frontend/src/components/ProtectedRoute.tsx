@@ -5,9 +5,16 @@ import { useAuthStore } from '../store/authStore';
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requiredRole?: string;
+  redirectTo?: string;
+  unauthorizedTo?: string;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
+  children,
+  requiredRole,
+  redirectTo = '/login',
+  unauthorizedTo = '/',
+}) => {
   const { user, isAuthenticated, isLoading } = useAuthStore() as any;
 
   if (isLoading) {
@@ -19,11 +26,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   }
 
   if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   if (requiredRole && user.role !== requiredRole) {
-    return <Navigate to="/" replace />;
+    return <Navigate to={unauthorizedTo} replace />;
   }
 
   return <>{children}</>;

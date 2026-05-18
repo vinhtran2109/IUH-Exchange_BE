@@ -5,6 +5,9 @@ import {
   getUserConversations,
   markConversationAsRead,
   markAllConversationsAsRead,
+  listReportedMessages,
+  reportMessage,
+  resolveReportedMessage,
   searchMessages,
 } from '../controllers/chat.controller.js';
 
@@ -12,6 +15,9 @@ const router = Router();
 
 router.use(authenticate);
 
+router.get('/admin/reported-messages', listReportedMessages);
+router.patch('/admin/reported-messages/:id/resolve', resolveReportedMessage);
+router.post('/messages/:id/report', reportMessage);
 router.get('/conversations', getUserConversations);
 router.get('/conversations/:conversationId', getConversationHistory);
 router.patch('/conversations/:conversationId/read', markConversationAsRead);

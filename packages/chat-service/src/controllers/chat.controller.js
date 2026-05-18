@@ -1,5 +1,13 @@
 import { ChatMessage } from '../models/ChatMessage.js';
-import { ApiResponse, PageResponse, parsePagination, logger } from '@iuh-exchange/common';
+import {
+  ApiResponse,
+  BadRequestException,
+  ForbiddenException,
+  PageResponse,
+  parsePagination,
+  ResourceNotFoundException,
+  logger,
+} from '@iuh-exchange/common';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
 function escapeRegex(str) {
@@ -182,6 +190,99 @@ export async function searchMessages(req, res, next) {
     });
 
     res.json(ApiResponse.ok(pageResponse));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/chat/messages/:id/report
+ * Report an abusive or inappropriate chat message.
+ */
+export async function reportMessage(req, res, next) {
+  try {
+    const userId = req.user.sub;
+    const { id } = req.params;
+    const reason = String(req.body?.reason || '').trim();
+
+    if (!reason || reason.length < 3) {
+      throw new BadRequestException('Reason must be at least 3 characters');
+    }
+
+    const message = await ChatMessage.findById(id);
+    if (!message) throw new ResourceNotFoundException('ChatMessage', id);
+
+    const isParticipant = String(message.senderId) === String(userId) || String(message.receiverId) === String(userId);
+    if (!isParticipant) {
+      throw new ForbiddenException('You can only report messages from your own conversations');
+    }
+
+    message.reports = message.reports || [];
+    const alreadyReported = message.reports.some((report) => String(report.reportedBy) === String(userId));
+    if (alreadyReported) {
+      throw new BadRequestException('You have already reported this message');
+    }
+
+    message.reported = true;
+    message.moderationStatus = 'PENDING';
+    message.reports.push({ reportedBy: userId, reason });
+    await message.save();
+
+    logger.warn(`Chat message reported: messageId=${id}, reporter=${userId}`);
+    res.json(ApiResponse.ok({
+      messageId: id,
+      reported: true,
+      moderationStatus: message.moderationStatus,
+    }, 'Message reported'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function listReportedMessages(req, res, next) {
+  try {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'MODERATOR') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const { page, size, skip } = parsePagination(req.query);
+    const status = req.query.status || 'PENDING';
+    const filter = { reported: true };
+    if (status && status !== 'ALL') filter.moderationStatus = status;
+
+    const [messages, total] = await Promise.all([
+      ChatMessage.find(filter).sort({ updatedAt: -1 }).skip(skip).limit(size).lean(),
+      ChatMessage.countDocuments(filter),
+    ]);
+
+    res.json(ApiResponse.ok(new PageResponse({
+      content: messages,
+      page,
+      size,
+      totalElements: total,
+      totalPages: Math.ceil(total / size),
+      last: page * size >= total,
+    })));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resolveReportedMessage(req, res, next) {
+  try {
+    if (req.user.role !== 'ADMIN' && req.user.role !== 'MODERATOR') {
+      throw new ForbiddenException('Admin access required');
+    }
+
+    const { id } = req.params;
+    const status = req.body?.status === 'DISMISSED' ? 'DISMISSED' : 'REVIEWED';
+    const message = await ChatMessage.findById(id);
+    if (!message) throw new ResourceNotFoundException('ChatMessage', id);
+
+    message.moderationStatus = status;
+    await message.save();
+
+    res.json(ApiResponse.ok(message.toObject(), 'Reported message resolved'));
   } catch (err) {
     next(err);
   }

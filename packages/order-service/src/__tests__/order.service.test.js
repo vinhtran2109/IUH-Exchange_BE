@@ -36,6 +36,7 @@ const mockRedis = {
 const mockPublishOrderCreated = vi.fn().mockResolvedValue(true);
 const mockPublishOrderCancelled = vi.fn().mockResolvedValue(true);
 const mockPublishOrderCompleted = vi.fn().mockResolvedValue(true);
+const mockPublishOrderEvent = vi.fn().mockResolvedValue(true);
 
 vi.mock('../models/Order.js', () => ({
   Order: mockOrderModel,
@@ -54,6 +55,8 @@ vi.mock('../services/saga.service.js', () => ({
   publishOrderCreated: (...args) => mockPublishOrderCreated(...args),
   publishOrderCancelled: (...args) => mockPublishOrderCancelled(...args),
   publishOrderCompleted: (...args) => mockPublishOrderCompleted(...args),
+  publishOrderDisputeOpened: vi.fn().mockResolvedValue(true),
+  publishOrderEvent: (...args) => mockPublishOrderEvent(...args),
 }));
 
 const { OrderService } = await import('../services/order.service.js');
@@ -86,11 +89,14 @@ describe('order.service', () => {
         sellerId: 'seller123',
         price: 50000,
         buyerNote: 'Giao tại trường',
+        paymentMethod: 'BANK_TRANSFER',
         idempotencyKey: 'idem-key-001',
       });
 
       expect(result).toBeDefined();
-      expect(mockOrderModel.create).toHaveBeenCalled();
+      expect(mockOrderModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentMethod: 'BANK_TRANSFER' })
+      );
       expect(mockPublishOrderCreated).toHaveBeenCalled();
     });
 
@@ -151,6 +157,46 @@ describe('order.service', () => {
       expect(result).toBeDefined();
       expect(mockOrderModel.findOne).toHaveBeenCalled();
     });
+
+    it('should validate accepted offer before creating order from offer', async () => {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            offerId: 'offer123',
+            productId: 'prod123',
+            sellerId: 'seller123',
+            buyerId: 'buyer123',
+            price: 42000,
+            listingType: 'SELL',
+          },
+        }),
+      });
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+      mockOrderModel.create.mockResolvedValue({
+        ...mockOrder,
+        offerId: 'offer123',
+        price: 42000,
+        toObject: () => ({ ...mockOrder, offerId: 'offer123', price: 42000 }),
+      });
+
+      const result = await orderService.createOrder('buyer123', {
+        offerId: 'offer123',
+        idempotencyKey: 'idem-offer-001',
+      });
+
+      expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/offers/offer123/checkout'), expect.any(Object));
+      expect(mockOrderModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        offerId: 'offer123',
+        productId: 'prod123',
+        sellerId: 'seller123',
+        price: 42000,
+      }));
+      expect(result.offerId).toBe('offer123');
+      fetchSpy.mockRestore();
+    });
   });
 
   describe('confirmOrder', () => {
@@ -193,6 +239,20 @@ describe('order.service', () => {
       await expect(
         orderService.confirmOrder('order123', 'seller123')
       ).rejects.toThrow('không ở trạng thái chờ xác nhận');
+    });
+
+    it('should reject bank transfer completion before seller confirms payment', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        sellerId: 'seller123',
+        status: 'AWAITING_SELLER',
+        paymentMethod: 'BANK_TRANSFER',
+        paymentStatus: 'UNPAID',
+      });
+
+      await expect(
+        orderService.confirmOrder('order123', 'seller123')
+      ).rejects.toThrow('xac nhan da nhan tien');
     });
 
     it('should throw 404 for missing order', async () => {
@@ -390,6 +450,138 @@ describe('order.service', () => {
       await orderService.markAwaitingSellerConfirmation('order123');
 
       expect(order.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handover scheduling', () => {
+    it('should create a handover proposal', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        meetingProposals: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.proposeHandover('order123', 'buyer123', {
+        location: 'Thư viện IUH',
+        time: new Date(Date.now() + 3600000),
+        note: 'Gặp ở tầng 1',
+      });
+
+      expect(order.handoverStatus).toBe('PROPOSED');
+      expect(order.meetingProposals).toHaveLength(1);
+      expect(order.save).toHaveBeenCalled();
+    });
+
+    it('should mark handover as handed over after both sides confirm', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        buyerHandoverConfirmedAt: new Date(),
+        sellerHandoverConfirmedAt: null,
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.confirmHandover('order123', 'seller123');
+
+      expect(order.handoverStatus).toBe('HANDED_OVER');
+      expect(order.sellerHandoverConfirmedAt).toBeTruthy();
+    });
+
+    it('should require the scheduled handover code when present', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        handoverCode: '123456',
+        handoverCodeExpiresAt: new Date(Date.now() + 3600000),
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await expect(orderService.confirmHandover('order123', 'buyer123', { code: '000000' }))
+        .rejects.toThrow('Mã bàn giao không đúng');
+    });
+  });
+
+  describe('no-show cancellation', () => {
+    it('should cancel an active order when a participant reports no-show', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        noShowReports: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.reportNoShow('order123', 'buyer123', {
+        reason: 'Người bán không đến',
+        evidenceUrl: 'https://example.com/proof.jpg',
+      });
+
+      expect(order.status).toBe('CANCELLED');
+      expect(order.cancellationCategory).toBe('NO_SHOW');
+      expect(order.noShowReports).toHaveLength(1);
+      expect(mockPublishOrderCancelled).toHaveBeenCalled();
+    });
+  });
+
+  describe('payment issue handling', () => {
+    it('should open and resolve a bank-transfer payment issue', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        paymentMethod: 'BANK_TRANSFER',
+        paymentStatus: 'UNPAID',
+        paymentIssueStatus: 'NONE',
+        paymentIssueTimeline: [],
+        transactions: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.openPaymentIssue('order123', 'buyer123', 'Đã chuyển khoản nhưng chưa được xác nhận');
+      expect(order.paymentIssueStatus).toBe('OPEN');
+      expect(order.paymentIssueTimeline[0].action).toBe('OPENED');
+
+      await orderService.resolvePaymentIssue('order123', 'admin123', {
+        action: 'CONFIRM_PAID',
+        resolution: 'Đã kiểm tra bằng chứng chuyển khoản',
+      });
+      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentIssueStatus).toBe('RESOLVED');
+      expect(order.transactions.at(-1).type).toBe('TRANSFER_CONFIRMED');
+    });
+  });
+
+  describe('dispute evidence', () => {
+    it('should append evidence and dispute timeline entries', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'COMPLETED',
+        disputeStatus: 'OPEN',
+        disputeEvidence: [],
+        disputeTimeline: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject() { return this; },
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.addDisputeEvidence('order123', 'buyer123', {
+        type: 'IMAGE',
+        url: 'https://example.com/evidence.jpg',
+        note: 'Hàng bị trầy',
+      });
+
+      expect(order.disputeEvidence).toHaveLength(1);
+      expect(order.disputeTimeline[0].action).toBe('EVIDENCE_ADDED');
+      expect(order.save).toHaveBeenCalled();
     });
   });
 });

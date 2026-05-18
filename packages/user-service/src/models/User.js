@@ -11,7 +11,27 @@ const userSchema = new mongoose.Schema({
   passwordHash: { type: String, required: true },
   name: { type: String, required: true, trim: true },
   studentId: { type: String, default: '' },
+  studentVerification: {
+    status: {
+      type: String,
+      enum: ['UNSUBMITTED', 'PENDING', 'VERIFIED', 'REJECTED'],
+      default: 'UNSUBMITTED',
+      index: true,
+    },
+    submittedStudentId: { type: String, default: '' },
+    evidenceUrl: { type: String, default: '' },
+    adminNote: { type: String, default: '' },
+    submittedAt: { type: Date, default: null },
+    reviewedAt: { type: Date, default: null },
+    reviewedBy: { type: String, default: null },
+  },
   avatarUrl: { type: String, default: '' },
+  bankInfo: {
+    bankName: { type: String, default: '' },
+    accountNumber: { type: String, default: '' },
+    accountHolder: { type: String, default: '' },
+    qrCodeUrl: { type: String, default: '' },
+  },
   isVerified: { type: Boolean, default: false },
   isActive: { type: Boolean, default: true },
   karmaPoint: { type: Number, default: 100 },
@@ -30,6 +50,9 @@ const userSchema = new mongoose.Schema({
   refreshToken: { type: String },
   passwordResetOtp: { type: String },
   passwordResetOtpExpiry: { type: Date },
+  adminTwoFactorEnabled: { type: Boolean, default: true },
+  adminLoginOtp: { type: String },
+  adminLoginOtpExpiry: { type: Date },
   failedLoginAttempts: { type: Number, default: 0 },
   lockUntil: { type: Date, default: null },
   isDeleted: { type: Boolean, default: false, index: true },
@@ -39,5 +62,9 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.index({ email: 1 });
+userSchema.index(
+  { studentId: 1 },
+  { unique: true, partialFilterExpression: { studentId: { $type: 'string', $gt: '' } } }
+);
 
 export const User = mongoose.model('User', userSchema);

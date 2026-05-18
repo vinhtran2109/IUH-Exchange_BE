@@ -3,6 +3,8 @@ import { verifyGatewaySignature } from '@iuh-exchange/common';
 import {
   createPayment,
   paymentCallback,
+  reportBankTransfer,
+  confirmBankTransfer,
   processRefund,
   getPaymentDetails,
 } from '../controllers/payment.controller.js';
@@ -26,6 +28,14 @@ router.post('/:id/payment/create', (req, res, next) => {
  */
 router.post('/:id/payment/callback', (req, res, next) => {
   paymentCallback(req, res).catch(next);
+});
+
+router.post('/:id/payment/bank-transfer/report', (req, res, next) => {
+  reportBankTransfer(req, res).catch(next);
+});
+
+router.post('/:id/payment/bank-transfer/confirm', (req, res, next) => {
+  confirmBankTransfer(req, res).catch(next);
 });
 
 /**

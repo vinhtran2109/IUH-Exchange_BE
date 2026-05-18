@@ -4,10 +4,12 @@ import {
   logger,
   connectMongo,
   errorHandler,
+  auditLog,
 } from '@iuh-exchange/common';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
+import { initKafkaProducer } from './services/kafka.service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +17,7 @@ const MONGODB_URI = process.env.USER_SERVICE_MONGO_URI || process.env.MONGODB_UR
 
 // ── Middleware ──
 app.use(express.json());
+app.use(auditLog());
 
 // ── Health ──
 app.get('/health', async (req, res) => {
@@ -45,6 +48,7 @@ app.use(errorHandler);
 
 // ── Start ──
 await connectMongo(MONGODB_URI);
+await initKafkaProducer();
 
 app.listen(PORT, () => {
   logger.info(`🚀 User Service running on port ${PORT}`);

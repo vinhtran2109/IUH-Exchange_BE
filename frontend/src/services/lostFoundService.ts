@@ -9,7 +9,10 @@ export type ItemType = typeof ItemType[keyof typeof ItemType];
 
 export const ItemStatus = {
   ACTIVE: 'ACTIVE',
-  RESOLVED: 'RESOLVED'
+  RESOLVED: 'RESOLVED',
+  OPEN: 'OPEN',
+  CLAIMED: 'CLAIMED',
+  CLOSED: 'CLOSED'
 } as const;
 
 export type ItemStatus = typeof ItemStatus[keyof typeof ItemStatus];

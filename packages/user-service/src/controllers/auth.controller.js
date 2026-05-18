@@ -3,6 +3,7 @@ import {
   BadRequestException,
   ResourceNotFoundException,
   UnauthorizedException,
+  ForbiddenException,
   ApiResponse,
   hashPassword,
   comparePassword,
@@ -14,7 +15,7 @@ import {
   logger,
 } from '@iuh-exchange/common';
 import crypto from 'crypto';
-import { sendOtpEmail, sendPasswordResetOtpEmail } from '../services/email.service.js';
+import { sendAdminLoginOtpEmail, sendOtpEmail, sendPasswordResetOtpEmail } from '../services/email.service.js';
 
 function parseCookieHeader(cookieHeader = '') {
   return cookieHeader
@@ -143,6 +144,7 @@ export async function resendOtp(req, res) {
  */
 export async function login(req, res) {
   const { email, password } = req.body;
+  const adminOtp = req.headers['x-admin-otp'] || req.body?.adminOtp;
 
   const user = await User.findOne({ email });
   if (!user) throw new UnauthorizedException('Email hoặc mật khẩu không đúng');
@@ -174,6 +176,39 @@ export async function login(req, res) {
     await user.save();
     const remaining = MAX_ATTEMPTS - user.failedLoginAttempts;
     throw new UnauthorizedException(`Email hoặc mật khẩu không đúng. Còn ${remaining} lần thử.`);
+  }
+
+  if (user.role === 'ADMIN' && req.headers['x-admin-portal'] !== 'true') {
+    logger.warn(`[Auth] Blocked ADMIN login outside admin portal: ${email}`);
+    throw new ForbiddenException('Admin accounts must sign in through the admin portal');
+  }
+
+  if (user.role === 'ADMIN' && user.adminTwoFactorEnabled !== false) {
+    if (!adminOtp) {
+      const otp = crypto.randomInt(100000, 999999).toString();
+      user.adminLoginOtp = hashToken(otp);
+      user.adminLoginOtpExpiry = new Date(Date.now() + 10 * 60 * 1000);
+      await user.save();
+      await sendAdminLoginOtpEmail(user.email, otp, user.name);
+      return res.status(202).json(ApiResponse.ok({
+        requiresTwoFactor: true,
+        email: user.email,
+        expiresInSeconds: 600,
+      }, 'Vui lòng nhập mã OTP quản trị'));
+    }
+
+    const otpValid =
+      user.adminLoginOtp &&
+      user.adminLoginOtpExpiry &&
+      user.adminLoginOtpExpiry > new Date() &&
+      compareToken(String(adminOtp), user.adminLoginOtp);
+
+    if (!otpValid) {
+      throw new UnauthorizedException('Mã OTP quản trị không hợp lệ hoặc đã hết hạn');
+    }
+
+    user.adminLoginOtp = undefined;
+    user.adminLoginOtpExpiry = undefined;
   }
 
   // Reset failed login attempts on successful login

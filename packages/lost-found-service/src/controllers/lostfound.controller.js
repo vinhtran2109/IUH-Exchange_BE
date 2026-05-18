@@ -12,6 +12,7 @@ import { LostFoundItem } from '../models/LostFound.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
 import { findMatches, autoMatchOnCreate } from '../services/matching.service.js';
 import { queueAnalysis } from '../services/image-processor.service.js';
+import { publishLostFoundEvent } from '../services/kafka.service.js';
 
 // ── Validation Schemas ──
 
@@ -26,6 +27,7 @@ const createItemSchema = z.object({
   contactInfo: z.string().max(200).optional(),
   category: z.enum(CATEGORY_ENUM).optional().default('OTHER'),
   tags: z.array(z.string().max(50).trim().toLowerCase()).max(10).optional().default([]),
+  verificationQuestion: z.string().max(300).optional().default(''),
 });
 
 const updateItemSchema = z.object({
@@ -36,7 +38,18 @@ const updateItemSchema = z.object({
   contactInfo: z.string().max(200).optional(),
   category: z.enum(CATEGORY_ENUM).optional(),
   tags: z.array(z.string().max(50).trim().toLowerCase()).max(10).optional(),
+  verificationQuestion: z.string().max(300).optional(),
   status: z.enum(['OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED']).optional(),
+});
+
+const claimSchema = z.object({
+  answer: z.string().min(2).max(1000).trim(),
+  evidenceUrls: z.array(z.string().url()).max(5).optional().default([]),
+});
+
+const reviewClaimSchema = z.object({
+  action: z.enum(['APPROVE', 'REJECT']),
+  ownerNote: z.string().max(1000).optional().default(''),
 });
 
 const uploadUrlSchema = z.object({
@@ -53,6 +66,7 @@ function mapItem(item) {
     id: obj._id?.toString() || obj.id,
     imageUrls: obj.images || [],
     studentId: obj.userId?.toString() || obj.userId,
+    claims: obj.claims || [],
   };
 }
 
@@ -288,10 +302,11 @@ export async function deleteItemAsAdmin(req, res, next) {
 
 /**
  * POST /api/v1/lost-found/:id/claim
- * Claim an item (set status to CLAIMED). Only non-owners can claim.
+ * Claim an item. The owner reviews the verification answer before approval.
  */
 export async function claimItem(req, res, next) {
   try {
+    const data = claimSchema.parse(req.body || {});
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
 
@@ -303,11 +318,77 @@ export async function claimItem(req, res, next) {
       throw new BadRequestException(`Item is not available for claiming (current status: ${item.status})`);
     }
 
-    item.status = 'CLAIMED';
+    const existingPending = (item.claims || []).find(
+      (claim) => claim.claimantId.toString() === req.user.sub && claim.status === 'PENDING'
+    );
+    if (existingPending) throw new BadRequestException('You already have a pending claim for this item');
+
+    item.claims = item.claims || [];
+    item.claims.push({
+      claimantId: req.user.sub,
+      answer: data.answer,
+      evidenceUrls: data.evidenceUrls,
+      status: 'PENDING',
+    });
     await item.save();
+    const claim = item.claims[item.claims.length - 1];
+    await publishLostFoundEvent('lostfound.claim.created', {
+      id: claim._id?.toString(),
+      claimId: claim._id?.toString(),
+      itemId: item._id.toString(),
+      ownerId: item.userId.toString(),
+      claimantId: req.user.sub,
+      title: item.title,
+    });
 
     logger.info(`LostFoundItem claimed: ${item._id} by user ${req.user.sub}`);
-    res.json(ApiResponse.ok(mapItem(item), 'Item claimed successfully'));
+    res.status(201).json(ApiResponse.created(mapItem(item), 'Claim submitted for owner verification'));
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function reviewClaim(req, res, next) {
+  try {
+    const data = reviewClaimSchema.parse(req.body || {});
+    const item = await LostFoundItem.findById(req.params.id);
+    if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
+    if (item.userId.toString() !== req.user.sub) {
+      throw new ForbiddenException('Only the item owner can review claims');
+    }
+
+    const claim = item.claims.id?.(req.params.claimId)
+      || item.claims.find((entry) => entry._id.toString() === req.params.claimId);
+    if (!claim) throw new ResourceNotFoundException('LostFoundClaim', req.params.claimId);
+    if (claim.status !== 'PENDING') throw new BadRequestException(`Claim is already ${claim.status.toLowerCase()}`);
+
+    claim.status = data.action === 'APPROVE' ? 'APPROVED' : 'REJECTED';
+    claim.ownerNote = data.ownerNote;
+    claim.reviewedAt = new Date();
+
+    if (claim.status === 'APPROVED') {
+      item.status = 'CLAIMED';
+      item.approvedClaimId = claim._id;
+      for (const other of item.claims) {
+        if (other._id.toString() !== claim._id.toString() && other.status === 'PENDING') {
+          other.status = 'REJECTED';
+          other.ownerNote = 'Another claim was approved';
+          other.reviewedAt = new Date();
+        }
+      }
+    }
+
+    await item.save();
+    await publishLostFoundEvent('lostfound.claim.resolved', {
+      id: claim._id?.toString(),
+      claimId: claim._id?.toString(),
+      itemId: item._id.toString(),
+      ownerId: item.userId.toString(),
+      claimantId: claim.claimantId.toString(),
+      status: claim.status,
+      title: item.title,
+    });
+    res.json(ApiResponse.ok(mapItem(item), 'Claim reviewed'));
   } catch (err) {
     next(err);
   }

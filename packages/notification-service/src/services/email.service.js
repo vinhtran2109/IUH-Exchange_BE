@@ -93,3 +93,58 @@ export async function sendOrderEmail(toEmail, { subject, title, body, orderId, s
     logger.error(`[Email] Failed to send to ${toEmail}: ${err.message}`);
   }
 }
+
+/**
+ * Send a manually composed email from the admin console.
+ */
+export async function sendAdminComposedEmail({ to, subject, body, senderName }) {
+  const transport = getTransporter();
+  if (!transport) {
+    logger.warn('[Email] SMTP not configured, cannot send admin composed email');
+    throw new Error('SMTP is not configured');
+  }
+
+  const recipients = Array.isArray(to) ? to : [to];
+  const safeBody = escapeHtml(body).replace(/\n/g, '<br />');
+  const safeSender = escapeHtml(senderName || 'IUH Exchange Admin');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f4f6f8;font-family:'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8;padding:40px 0;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb;">
+        <tr>
+          <td style="background:#0f172a;padding:24px 32px;">
+            <h1 style="color:#fff;margin:0;font-size:18px;font-weight:700;">${escapeHtml(APP_NAME)}</h1>
+            <p style="color:#94a3b8;margin:6px 0 0;font-size:13px;">Thông báo từ ban quản trị</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:32px;color:#334155;font-size:14px;line-height:1.7;">
+            ${safeBody}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#f8fafc;padding:18px 32px;border-top:1px solid #e5e7eb;color:#64748b;font-size:12px;">
+            Người gửi: ${safeSender}
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const result = await transport.sendMail({
+    from: `"${APP_NAME}" <${SMTP_FROM}>`,
+    to: recipients.join(','),
+    subject: `[${APP_NAME}] ${subject}`,
+    text: body,
+    html,
+  });
+
+  logger.info(`[Email] Admin composed email sent to ${recipients.length} recipient(s)`);
+  return { messageId: result.messageId, accepted: result.accepted, rejected: result.rejected };
+}

@@ -34,13 +34,23 @@ export async function ensureIndex() {
               description: { type: 'text', analyzer: 'standard' },
               price: { type: 'double' },
               category: { type: 'keyword' },
+              location: { type: 'text', fields: { keyword: { type: 'keyword' } } },
               condition: { type: 'keyword' },
               status: { type: 'keyword' },
+              createdAt: { type: 'date' },
             },
           },
         },
       });
       logger.info(`ElasticSearch index "${INDEX}" created`);
+    } else {
+      await esClient.indices.putMapping({
+        index: INDEX,
+        properties: {
+          location: { type: 'text', fields: { keyword: { type: 'keyword' } } },
+          createdAt: { type: 'date' },
+        },
+      });
     }
   } catch (err) {
     logger.error(`ElasticSearch index setup failed: ${err.message}`);
@@ -62,8 +72,10 @@ export async function indexProduct(product) {
           description: product.description,
           price: product.price,
           category: product.category,
+          location: product.location || '',
           condition: product.condition || 'GOOD',
           status: product.status,
+          createdAt: product.createdAt || new Date().toISOString(),
         },
       });
     });
@@ -98,6 +110,7 @@ export async function removeProduct(productId) {
  * @param {number} [filters.maxPrice] - Maximum price
  * @param {string} [filters.category] - Category filter
  * @param {string} [filters.condition] - Condition filter (NEW, LIKE_NEW, GOOD, FAIR, POOR)
+ * @param {string} [filters.location] - Location filter
  * @param {string} [filters.sort] - Sort option (price_asc, price_desc, date_asc, date_desc)
  * @returns {Promise<{ hits: object[], total: number }>}
  */
@@ -141,6 +154,10 @@ export async function searchProducts(keyword, page = 1, size = 20, filters = {})
       filterClauses.push({ term: { condition: filters.condition } });
     }
 
+    if (filters.location) {
+      filterClauses.push({ match: { location: filters.location } });
+    }
+
     // Build sort
     let sort = [];
     if (filters.sort) {
@@ -182,5 +199,44 @@ export async function searchProducts(keyword, page = 1, size = 20, filters = {})
   } catch (err) {
     logger.error(`ES search failed: ${err.message}`);
     return { hits: [], total: 0 };
+  }
+}
+
+/**
+ * Autocomplete product titles/categories/locations.
+ * @param {string} keyword
+ * @param {number} limit
+ * @returns {Promise<object[]>}
+ */
+export async function suggestProducts(keyword, limit = 8) {
+  if (!keyword || keyword.trim().length < 2) return [];
+
+  try {
+    const result = await esClient.search({
+      index: INDEX,
+      size: limit,
+      query: {
+        bool: {
+          filter: [{ term: { status: 'AVAILABLE' } }],
+          should: [
+            { match_phrase_prefix: { title: { query: keyword, boost: 3 } } },
+            { prefix: { category: { value: keyword, boost: 2, case_insensitive: true } } },
+            { match_phrase_prefix: { location: { query: keyword } } },
+          ],
+          minimum_should_match: 1,
+        },
+      },
+      _source: ['title', 'category', 'location'],
+    });
+
+    return result.hits.hits.map((hit) => ({
+      id: hit._id,
+      title: hit._source.title,
+      category: hit._source.category,
+      location: hit._source.location,
+    }));
+  } catch (err) {
+    logger.error(`ES suggest failed: ${err.message}`);
+    return [];
   }
 }

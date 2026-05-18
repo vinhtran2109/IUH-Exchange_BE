@@ -10,6 +10,7 @@ import {
   hashPassword,
 } from '@iuh-exchange/common';
 import { getAvatarUploadUrl } from '../services/s3.service.js';
+import { publishUserEvent } from '../services/kafka.service.js';
 
 function mapToProfile(user) {
   return {
@@ -17,7 +18,9 @@ function mapToProfile(user) {
     email: user.email,
     name: user.name,
     studentId: user.studentId,
+    studentVerification: user.studentVerification || { status: 'UNSUBMITTED' },
     avatarUrl: user.avatarUrl,
+    bankInfo: user.bankInfo || {},
     isVerified: user.isVerified,
     isActive: user.isActive,
     karmaPoint: user.karmaPoint,
@@ -46,7 +49,7 @@ export async function getUserProfile(req, res) {
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
-  const user = await User.findById(req.params.id).select('name email studentId avatarUrl karmaPoint role isVerified createdAt');
+  const user = await User.findById(req.params.id).select('name email studentId avatarUrl karmaPoint role isVerified bankInfo createdAt');
   if (!user) throw new ResourceNotFoundException('User', req.params.id);
 
   const response = ApiResponse.ok(mapToProfile(user));
@@ -59,13 +62,21 @@ export async function getUserProfile(req, res) {
  */
 export async function updateProfile(req, res) {
   const userId = req.user.sub;
-  const { name, avatarUrl } = req.body;
+  const { name, avatarUrl, bankInfo } = req.body;
 
   const user = await User.findById(userId);
   if (!user) throw new ResourceNotFoundException('User', userId);
 
   if (name !== undefined) user.name = name;
   if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+  if (bankInfo !== undefined) {
+    user.bankInfo = {
+      bankName: bankInfo.bankName || '',
+      accountNumber: bankInfo.accountNumber || '',
+      accountHolder: bankInfo.accountHolder || '',
+      qrCodeUrl: bankInfo.qrCodeUrl || '',
+    };
+  }
 
   await user.save();
 
@@ -75,6 +86,45 @@ export async function updateProfile(req, res) {
   await cache.del(`users:profile:${userId}`);
 
   res.json(ApiResponse.ok(mapToProfile(user), 'Cập nhật hồ sơ thành công'));
+}
+
+export async function requestStudentVerification(req, res) {
+  const userId = req.user.sub;
+  const submittedStudentId = String(req.body?.studentId || '').trim().toUpperCase();
+  const evidenceUrl = String(req.body?.evidenceUrl || '').trim();
+
+  if (!/^\d{6,12}$/.test(submittedStudentId)) {
+    throw new BadRequestException('MSSV phải gồm 6-12 chữ số');
+  }
+
+  const duplicate = await User.findOne({
+    _id: { $ne: userId },
+    studentId: submittedStudentId,
+    isDeleted: { $ne: true },
+  }).lean();
+  if (duplicate) throw new BadRequestException('MSSV này đã được xác minh cho tài khoản khác');
+
+  const user = await User.findById(userId);
+  if (!user) throw new ResourceNotFoundException('User', userId);
+
+  user.studentVerification = {
+    status: 'PENDING',
+    submittedStudentId,
+    evidenceUrl,
+    adminNote: '',
+    submittedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+  };
+  await user.save();
+  await cache.del(`users:profile:${userId}`);
+  await publishUserEvent('user.student_verification.requested', {
+    id: userId,
+    userId,
+    studentId: submittedStudentId,
+  });
+
+  res.status(202).json(ApiResponse.ok(mapToProfile(user), 'Đã gửi yêu cầu xác minh MSSV'));
 }
 
 /**

@@ -34,6 +34,50 @@ export interface DlqEventData {
   createdAt: string;
 }
 
+export interface AuditLogData {
+  _id: string;
+  userId?: string | null;
+  action: string;
+  resource: string;
+  resourceId?: string | null;
+  method: string;
+  path: string;
+  ip?: string | null;
+  userAgent?: string | null;
+  statusCode?: number | null;
+  createdAt: string;
+}
+
+export interface AdminOrderData {
+  _id: string;
+  buyerId: string;
+  sellerId: string;
+  productId: string;
+  price: number;
+  status: string;
+  paymentStatus: string;
+  paymentMethod?: string;
+  disputeStatus?: string;
+  disputeReason?: string;
+  paymentIssueStatus?: string;
+  paymentIssueReason?: string;
+  cancellationCategory?: string;
+  cancellationReason?: string;
+  handoverLocation?: string;
+  createdAt: string;
+}
+
+export interface ReportedMessageData {
+  _id: string;
+  senderId: string;
+  receiverId: string;
+  conversationId: string;
+  content: string;
+  moderationStatus: string;
+  reports?: Array<{ reportedBy: string; reason: string; createdAt: string }>;
+  updatedAt: string;
+}
+
 export interface LostFoundAdminData {
   id: string;
   title: string;
@@ -154,6 +198,50 @@ export const adminService = {
     return response.data;
   },
 
+  getOrderStats: async () => {
+    const response = await api.get('/orders/admin/stats');
+    return response.data;
+  },
+
+  getAdminOrders: async (page = 1, size = 100, filters: { status?: string; paymentStatus?: string; disputeStatus?: string; paymentIssueStatus?: string } = {}) => {
+    const params = new URLSearchParams({ page: String(Math.max(1, page)), size: String(size) });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== 'ALL') params.set(key, value);
+    });
+    const response = await api.get(`/orders/admin?${params.toString()}`);
+    return response.data;
+  },
+
+  resolveOrderDispute: async (orderId: string, status: 'RESOLVED' | 'REJECTED', resolution: string) => {
+    const response = await api.patch(`/orders/${orderId}/disputes/resolve`, { status, resolution });
+    return response.data;
+  },
+
+  resolvePaymentIssue: async (orderId: string, action: 'CONFIRM_PAID' | 'REFUND' | 'REJECT', resolution: string) => {
+    const response = await api.patch(`/orders/${orderId}/payment-issues/resolve`, { action, resolution });
+    return response.data;
+  },
+
+  getReportedMessages: async (status = 'PENDING', page = 1, size = 100) => {
+    const response = await api.get(`/chat/admin/reported-messages?status=${encodeURIComponent(status)}&page=${Math.max(1, page)}&size=${size}`);
+    return response.data;
+  },
+
+  resolveReportedMessage: async (messageId: string, status: 'REVIEWED' | 'DISMISSED') => {
+    const response = await api.patch(`/chat/admin/reported-messages/${messageId}/resolve`, { status });
+    return response.data;
+  },
+
+  getAuditLogs: async (page = 1, size = 50, filters: { action?: string; userId?: string; resource?: string; method?: string } = {}) => {
+    const validPage = Math.max(1, page);
+    const params = new URLSearchParams({ page: String(validPage), size: String(size) });
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const response = await api.get(`/users/admin/audit-logs?${params.toString()}`);
+    return response.data;
+  },
+
   // DLQ Monitoring
   getDlqEvents: async (page = 1, size = 20, status?: string) => {
     const validPage = Math.max(1, page);
@@ -170,6 +258,11 @@ export const adminService = {
 
   dismissDlqEvent: async (eventId: string) => {
     const response = await api.delete(`/notifications/dlq/${eventId}`);
+    return response.data;
+  },
+
+  sendComposedEmail: async (payload: { to: string; subject: string; body: string }) => {
+    const response = await api.post('/notifications/admin/email/compose', payload);
     return response.data;
   },
 };

@@ -11,12 +11,13 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 
 router.get('/me', authenticate, asyncHandler(userCtrl.getMyProfile));
 router.get('/by-student/:studentId', asyncHandler(userCtrl.getUserByStudentId));
-router.get('/:id', asyncHandler(userCtrl.getUserProfile));
+router.post('/me/student-verification', authenticate, asyncHandler(userCtrl.requestStudentVerification));
 router.put('/profile', authenticate, validate(updateProfileSchema), asyncHandler(userCtrl.updateProfile));
 router.patch('/me', authenticate, validate(updateProfileSchema), asyncHandler(userCtrl.updateProfile));
 router.post('/password', authenticate, validate(changePasswordSchema), asyncHandler(changePassword));
 router.get('/me/karma-history', authenticate, asyncHandler(getMyKarmaHistory));
 router.post('/avatar/presign', authenticate, validate(avatarPresignSchema), asyncHandler(userCtrl.getAvatarPresign));
 router.delete('/me', authenticate, asyncHandler(userCtrl.deleteAccount));
+router.get('/:id', asyncHandler(userCtrl.getUserProfile));
 
 export default router;

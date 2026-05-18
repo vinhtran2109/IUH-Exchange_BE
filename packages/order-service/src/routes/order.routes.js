@@ -43,6 +43,27 @@ export function createOrderRoutes(orderService) {
     controller.getMyOrders(req, res).catch(next);
   });
 
+  router.get('/admin/stats', (req, res, next) => {
+    controller.getAdminOrderStats(req, res).catch(next);
+  });
+
+  router.get('/admin', (req, res, next) => {
+    controller.getAdminOrders(req, res).catch(next);
+  });
+
+  /**
+   * GET /api/v1/orders/:id/receipt
+   * Get receipt data, status timeline, and transaction ledger.
+   * MUST be before /:id to avoid conflict.
+   */
+  router.get('/:id/receipt', (req, res, next) => {
+    controller.getReceipt(req, res).catch(next);
+  });
+
+  router.get('/:id/review-eligibility', (req, res, next) => {
+    controller.getReviewEligibility(req, res).catch(next);
+  });
+
   /**
    * GET /api/v1/orders/:id
    * Get a single order by ID.
@@ -75,6 +96,42 @@ export function createOrderRoutes(orderService) {
    */
   router.patch('/:id/cancel', (req, res, next) => {
     controller.cancelOrder(req, res).catch(next);
+  });
+
+  router.post('/:id/disputes', (req, res, next) => {
+    controller.openDispute(req, res).catch(next);
+  });
+
+  router.post('/:id/disputes/evidence', (req, res, next) => {
+    controller.addDisputeEvidence(req, res).catch(next);
+  });
+
+  router.patch('/:id/disputes/resolve', (req, res, next) => {
+    controller.resolveDispute(req, res).catch(next);
+  });
+
+  router.post('/:id/no-show', (req, res, next) => {
+    controller.reportNoShow(req, res).catch(next);
+  });
+
+  router.post('/:id/payment-issues', (req, res, next) => {
+    controller.openPaymentIssue(req, res).catch(next);
+  });
+
+  router.patch('/:id/payment-issues/resolve', (req, res, next) => {
+    controller.resolvePaymentIssue(req, res).catch(next);
+  });
+
+  router.post('/:id/handover/proposals', (req, res, next) => {
+    controller.proposeHandover(req, res).catch(next);
+  });
+
+  router.patch('/:id/handover/proposals/:proposalId', (req, res, next) => {
+    controller.respondHandover(req, res).catch(next);
+  });
+
+  router.patch('/:id/handover/confirm', (req, res, next) => {
+    controller.confirmHandover(req, res).catch(next);
   });
 
   return router;

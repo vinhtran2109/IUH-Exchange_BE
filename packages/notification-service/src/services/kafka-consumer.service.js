@@ -13,13 +13,26 @@ const TOPICS = [
   { topic: 'order.created', fromBeginning: false },
   { topic: 'order.completed', fromBeginning: false },
   { topic: 'order.cancelled', fromBeginning: false },
+  { topic: 'order.dispute.opened', fromBeginning: false },
+  { topic: 'order.dispute.evidence_added', fromBeginning: false },
+  { topic: 'order.refunded', fromBeginning: false },
+  { topic: 'order.handover.proposed', fromBeginning: false },
+  { topic: 'order.handover.responded', fromBeginning: false },
+  { topic: 'order.handover.confirmed', fromBeginning: false },
   { topic: 'product.reserved', fromBeginning: false },
+  { topic: 'product.reserve.expired', fromBeginning: false },
   { topic: 'product.approved', fromBeginning: false },
   { topic: 'product.rejected', fromBeginning: false },
+  { topic: 'offer.created', fromBeginning: false },
+  { topic: 'offer.resolved', fromBeginning: false },
   { topic: 'karma.updated', fromBeginning: false },
   { topic: 'report.created', fromBeginning: false },
   { topic: 'lostfound.analyzed', fromBeginning: false },
   { topic: 'lostfound.match', fromBeginning: false },
+  { topic: 'user.student_verification.requested', fromBeginning: false },
+  { topic: 'user.student_verification.reviewed', fromBeginning: false },
+  { topic: 'lostfound.claim.created', fromBeginning: false },
+  { topic: 'lostfound.claim.resolved', fromBeginning: false },
 ];
 
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
@@ -185,6 +198,86 @@ const eventHandlers = {
     }
   },
 
+  'order.dispute.opened': async (payload) => {
+    const { buyerId, sellerId, orderId, reason, openedBy } = payload;
+    const recipients = [buyerId, sellerId].filter(Boolean);
+    for (const recipientId of recipients) {
+      await sendNotification({
+        recipientId,
+        title: 'Tranh chấp đơn hàng',
+        message: `Đơn hàng ${orderId} vừa được mở tranh chấp${openedBy ? ` bởi ${openedBy}` : ''}${reason ? `: ${reason}` : ''}`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.refunded': async (payload) => {
+    const { buyerId, sellerId, orderId, amount } = payload;
+    const recipients = [buyerId, sellerId].filter(Boolean);
+    for (const recipientId of recipients) {
+      await sendNotification({
+        recipientId,
+        title: 'Hoàn tiền đơn hàng',
+        message: `Đơn hàng ${orderId} đã được hoàn tiền${amount ? ` ${Number(amount).toLocaleString('vi-VN')}đ` : ''}`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.dispute.evidence_added': async (payload) => {
+    const { buyerId, sellerId, orderId, submittedBy } = payload;
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(submittedBy))) {
+      await sendNotification({
+        recipientId,
+        title: 'Bằng chứng tranh chấp mới',
+        message: `Đơn hàng ${orderId} vừa có bằng chứng tranh chấp mới.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.handover.proposed': async (payload) => {
+    const { buyerId, sellerId, orderId, proposedBy, location } = payload;
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(proposedBy))) {
+      await sendNotification({
+        recipientId,
+        title: 'Lịch hẹn giao nhận mới',
+        message: `Đơn hàng ${orderId} có đề xuất hẹn tại ${location || 'IUH'}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.handover.responded': async (payload) => {
+    const { buyerId, sellerId, orderId, respondedBy, action } = payload;
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(respondedBy))) {
+      await sendNotification({
+        recipientId,
+        title: action === 'ACCEPT' ? 'Lịch hẹn đã được chấp nhận' : 'Lịch hẹn đã bị từ chối',
+        message: `Đề xuất giao nhận cho đơn ${orderId} đã được phản hồi.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.handover.confirmed': async (payload) => {
+    const { buyerId, sellerId, orderId, confirmedBy, handoverStatus } = payload;
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(confirmedBy))) {
+      await sendNotification({
+        recipientId,
+        title: handoverStatus === 'HANDED_OVER' ? 'Giao nhận đã hoàn tất' : 'Đối tác đã xác nhận giao nhận',
+        message: `Đơn hàng ${orderId} vừa cập nhật trạng thái giao nhận.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
   'product.reserved': async (payload) => {
     const { sellerId, productId, buyerName } = payload;
     await sendNotification({
@@ -193,6 +286,41 @@ const eventHandlers = {
       message: `Your product has been reserved${buyerName ? ` by ${buyerName}` : ''}`,
       type: 'ORDER',
       targetId: productId,
+    });
+  },
+
+  'product.reserve.expired': async (payload) => {
+    const { buyerId, sellerId, orderId, productId } = payload;
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Giữ chỗ đã hết hạn',
+        message: `Thời gian giữ chỗ cho sản phẩm ${productId || ''} đã hết hạn.`,
+        type: 'ORDER',
+        targetId: orderId || productId,
+      });
+    }
+  },
+
+  'offer.created': async (payload) => {
+    const { sellerId, offerId, productId, type, amount } = payload;
+    await sendNotification({
+      recipientId: sellerId,
+      title: type === 'TRADE' ? 'Đề xuất đổi đồ mới' : 'Đề xuất giá mới',
+      message: type === 'TRADE' ? 'Có người muốn đổi đồ với sản phẩm của bạn.' : `Có người trả giá ${Number(amount || 0).toLocaleString('vi-VN')}đ.`,
+      type: 'PRODUCT',
+      targetId: productId || offerId,
+    });
+  },
+
+  'offer.resolved': async (payload) => {
+    const { buyerId, offerId, productId, status } = payload;
+    await sendNotification({
+      recipientId: buyerId,
+      title: status === 'ACCEPTED' ? 'Đề xuất đã được chấp nhận' : status === 'COUNTERED' ? 'Người bán đã trả giá lại' : 'Đề xuất đã được phản hồi',
+      message: status === 'ACCEPTED' ? 'Bạn có thể tạo đơn hàng từ đề xuất đã chốt.' : `Trạng thái đề xuất: ${status}.`,
+      type: 'PRODUCT',
+      targetId: productId || offerId,
     });
   },
 
@@ -307,9 +435,8 @@ const eventHandlers = {
       targetId: itemId,
     });
 
-    // Also notify the owners of matched items
     const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
-    for (const match of matches.slice(0, 3)) { // Limit to top 3 to avoid spam
+    for (const match of matches.slice(0, 3)) {
       if (match.ownerId && match.ownerId !== userId) {
         const matchScore = Math.round((match.score || 0) * 100);
         await sendNotification({
@@ -321,6 +448,46 @@ const eventHandlers = {
         });
       }
     }
+  },
+
+  'user.student_verification.requested': async (payload) => {
+    await sendNotification({
+      recipientId: payload.userId,
+      title: 'Đã gửi xác minh MSSV',
+      message: 'Yêu cầu xác minh MSSV của bạn đang chờ admin duyệt.',
+      type: 'SYSTEM',
+      targetId: payload.userId,
+    });
+  },
+
+  'user.student_verification.reviewed': async (payload) => {
+    await sendNotification({
+      recipientId: payload.userId,
+      title: payload.status === 'VERIFIED' ? 'MSSV đã được xác minh' : 'Xác minh MSSV bị từ chối',
+      message: payload.adminNote || (payload.status === 'VERIFIED' ? 'Tài khoản của bạn đã được xác minh sinh viên.' : 'Vui lòng kiểm tra lại thông tin MSSV.'),
+      type: 'SYSTEM',
+      targetId: payload.userId,
+    });
+  },
+
+  'lostfound.claim.created': async (payload) => {
+    await sendNotification({
+      recipientId: payload.ownerId,
+      title: 'Có yêu cầu nhận đồ thất lạc',
+      message: `Bài "${payload.title || 'đồ thất lạc'}" vừa có claim mới cần xác minh.`,
+      type: 'SYSTEM',
+      targetId: payload.itemId,
+    });
+  },
+
+  'lostfound.claim.resolved': async (payload) => {
+    await sendNotification({
+      recipientId: payload.claimantId,
+      title: payload.status === 'APPROVED' ? 'Claim đã được duyệt' : 'Claim bị từ chối',
+      message: `Yêu cầu nhận "${payload.title || 'đồ thất lạc'}" đã được phản hồi.`,
+      type: 'SYSTEM',
+      targetId: payload.itemId,
+    });
   },
 };
 

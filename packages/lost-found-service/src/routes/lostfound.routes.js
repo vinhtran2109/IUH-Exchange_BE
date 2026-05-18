@@ -9,6 +9,7 @@ import {
   deleteItem,
   deleteItemAsAdmin,
   claimItem,
+  reviewClaim,
   getUploadUrl,
   getMatches,
   previewMatches,
@@ -49,5 +50,6 @@ router.get('/:id/matches', optionalAuth, getMatches);
 router.put('/:id', authenticate, updateItem);
 router.delete('/:id', authenticate, deleteItem);
 router.post('/:id/claim', authenticate, claimItem);
+router.patch('/:id/claims/:claimId', authenticate, reviewClaim);
 
 export default router;

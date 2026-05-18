@@ -75,7 +75,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         localStorage.removeItem("accessToken");
-        window.location.href = "/login";
+        window.location.href = window.location.pathname.startsWith("/admin") ? "/admin/login" : "/login";
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

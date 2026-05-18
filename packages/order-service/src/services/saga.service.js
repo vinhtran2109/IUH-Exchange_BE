@@ -4,8 +4,15 @@ const TOPICS = {
   ORDER_CREATED: 'order.created',
   ORDER_CANCELLED: 'order.cancelled',
   ORDER_COMPLETED: 'order.completed',
+  ORDER_DISPUTE_OPENED: 'order.dispute.opened',
+  ORDER_REFUNDED: 'order.refunded',
+  ORDER_HANDOVER_PROPOSED: 'order.handover.proposed',
+  ORDER_HANDOVER_RESPONDED: 'order.handover.responded',
+  ORDER_HANDOVER_CONFIRMED: 'order.handover.confirmed',
+  ORDER_DISPUTE_EVIDENCE_ADDED: 'order.dispute.evidence_added',
   PRODUCT_RESERVED: 'product.reserved',
   PRODUCT_RESERVE_FAILED: 'product.reserve.failed',
+  PRODUCT_RESERVE_EXPIRED: 'product.reserve.expired',
 };
 
 const CONSUMER_GROUP = 'order-service-group';
@@ -90,6 +97,42 @@ export async function publishOrderCompleted(event) {
   }
 }
 
+export async function publishOrderEvent(topic, event) {
+  try {
+    await producer.send({
+      topic,
+      messages: [{ key: event.orderId || event.id, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] ${topic} published: orderId=${event.orderId || event.id}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, ${topic} not published: ${err.message}`);
+  }
+}
+
+export async function publishOrderDisputeOpened(event) {
+  try {
+    await producer.send({
+      topic: TOPICS.ORDER_DISPUTE_OPENED,
+      messages: [{ key: event.orderId, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] OrderDisputeOpenedEvent published: orderId=${event.orderId}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, OrderDisputeOpenedEvent not published: ${err.message}`);
+  }
+}
+
+export async function publishOrderRefunded(event) {
+  try {
+    await producer.send({
+      topic: TOPICS.ORDER_REFUNDED,
+      messages: [{ key: event.orderId, value: JSON.stringify(event) }],
+    });
+    logger.info(`[Saga] OrderRefundedEvent published: orderId=${event.orderId}`);
+  } catch (err) {
+    logger.warn(`[Saga] Kafka unavailable, OrderRefundedEvent not published: ${err.message}`);
+  }
+}
+
 /**
  * Start Kafka consumer for saga events from Product Service.
  * Listens for product.reserved and product.reserve.failed.
@@ -100,6 +143,7 @@ export async function startSagaConsumer(orderService) {
   const consumer = await createConsumer(CONSUMER_GROUP, [
     { topic: TOPICS.PRODUCT_RESERVED },
     { topic: TOPICS.PRODUCT_RESERVE_FAILED },
+    { topic: TOPICS.PRODUCT_RESERVE_EXPIRED },
   ], 'order-service-consumer');
 
   await consumer.run({
@@ -127,6 +171,13 @@ export async function startSagaConsumer(orderService) {
             `[Saga] ProductReserveFailedEvent received: orderId=${orderId}, reason=${reason}`
           );
           await orderService.cancelOrder(orderId, reason || 'Sản phẩm không còn khả dụng');
+          break;
+        }
+
+        case TOPICS.PRODUCT_RESERVE_EXPIRED: {
+          const { orderId, reason } = payload;
+          logger.warn(`[Saga] ProductReserveExpiredEvent received: orderId=${orderId}`);
+          await orderService.cancelOrder(orderId, reason || 'Thời gian giữ chỗ đã hết hạn');
           break;
         }
 

@@ -10,6 +10,7 @@ export interface RegisterRequest {
 export interface LoginRequest {
   email: string;
   password?: string;
+  adminOtp?: string;
 }
 
 export interface AuthResponse {
@@ -27,6 +28,16 @@ export interface AuthResponse {
 export const authService = {
   login: async (data: LoginRequest) => {
     const response = await api.post("/auth/login", data);
+    return response.data;
+  },
+
+  adminLogin: async (data: LoginRequest) => {
+    const response = await api.post("/auth/login", data, {
+      headers: {
+        "X-Admin-Portal": "true",
+        ...(data.adminOtp ? { "X-Admin-Otp": data.adminOtp } : {}),
+      },
+    });
     return response.data;
   },
 

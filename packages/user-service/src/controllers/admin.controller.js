@@ -10,7 +10,9 @@ import {
   parsePagination,
   logger,
   hashPassword,
+  AuditLog,
 } from '@iuh-exchange/common';
+import { publishUserEvent } from '../services/kafka.service.js';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
 function escapeRegex(str) {
@@ -23,6 +25,7 @@ function mapToProfile(user) {
     email: user.email,
     name: user.name,
     studentId: user.studentId,
+    studentVerification: user.studentVerification || { status: 'UNSUBMITTED' },
     avatarUrl: user.avatarUrl,
     isVerified: user.isVerified,
     isActive: user.isActive,
@@ -112,7 +115,17 @@ export async function updateUserPermissions(req, res) {
   const { id } = req.params;
   const { permissions } = req.body;
 
-  const validPermissions = ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT', 'CAN_BAN', 'CAN_APPROVE_POST'];
+  const validPermissions = [
+    'CAN_POST',
+    'CAN_CHAT',
+    'CAN_REPORT',
+    'CAN_BAN',
+    'CAN_APPROVE_POST',
+    'CAN_VIEW_AUDIT',
+    'CAN_MANAGE_ORDERS',
+    'CAN_RESOLVE_DISPUTES',
+    'CAN_MANAGE_SYSTEM',
+  ];
   const invalid = permissions.filter((p) => !validPermissions.includes(p));
   if (invalid.length > 0) {
     throw new BadRequestException(`Permission không hợp lệ: ${invalid.join(', ')}`);
@@ -277,6 +290,83 @@ export async function getUserDetail(req, res) {
     ...mapToProfile(user),
     recentKarmaHistory: karmaHistory,
   }));
+}
+
+export async function reviewStudentVerification(req, res) {
+  const { id } = req.params;
+  const action = String(req.body?.action || '').toUpperCase();
+  const adminNote = String(req.body?.adminNote || '').trim();
+
+  if (!['APPROVE', 'REJECT'].includes(action)) {
+    throw new BadRequestException('action must be APPROVE or REJECT');
+  }
+
+  const user = await User.findById(id);
+  if (!user) throw new ResourceNotFoundException('User', id);
+  if (user.studentVerification?.status !== 'PENDING') {
+    throw new BadRequestException('Người dùng không có yêu cầu xác minh MSSV đang chờ');
+  }
+
+  if (action === 'APPROVE') {
+    const studentId = user.studentVerification.submittedStudentId;
+    const duplicate = await User.findOne({
+      _id: { $ne: id },
+      studentId,
+      isDeleted: { $ne: true },
+    }).lean();
+    if (duplicate) throw new BadRequestException('MSSV này đã được xác minh cho tài khoản khác');
+    user.studentId = studentId;
+    user.studentVerification.status = 'VERIFIED';
+  } else {
+    user.studentVerification.status = 'REJECTED';
+  }
+
+  user.studentVerification.adminNote = adminNote;
+  user.studentVerification.reviewedAt = new Date();
+  user.studentVerification.reviewedBy = req.user?.sub || null;
+  await user.save();
+  await publishUserEvent('user.student_verification.reviewed', {
+    id,
+    userId: id,
+    status: user.studentVerification.status,
+    studentId: user.studentId || user.studentVerification.submittedStudentId,
+    adminNote,
+  });
+
+  logger.info(`[Admin] Student verification ${action.toLowerCase()}: user=${user.email}`);
+  res.json(ApiResponse.ok(mapToProfile(user), 'Đã cập nhật xác minh MSSV'));
+}
+
+/**
+ * GET /api/v1/users/admin/audit-logs
+ * Search audit log entries for admin operations and security review.
+ */
+export async function listAuditLogs(req, res) {
+  const { page, size, skip } = parsePagination(req.query);
+  const { action, userId, resource, method, statusCode } = req.query;
+  const filter = {};
+
+  if (action) filter.action = action;
+  if (userId) filter.userId = userId;
+  if (resource) filter.resource = resource;
+  if (method) filter.method = String(method).toUpperCase();
+  if (statusCode) filter.statusCode = Number(statusCode);
+
+  const [logs, total] = await Promise.all([
+    AuditLog.find(filter).sort({ createdAt: -1 }).skip(skip).limit(size).lean(),
+    AuditLog.countDocuments(filter),
+  ]);
+
+  const pageResponse = new PageResponse({
+    content: logs,
+    page,
+    size,
+    totalElements: total,
+    totalPages: Math.ceil(total / size),
+    last: page * size >= total,
+  });
+
+  res.json(ApiResponse.ok(pageResponse));
 }
 
 /**

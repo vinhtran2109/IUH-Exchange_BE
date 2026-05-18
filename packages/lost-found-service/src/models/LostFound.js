@@ -1,5 +1,22 @@
 import mongoose from 'mongoose';
 
+const claimSchema = new mongoose.Schema(
+  {
+    claimantId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
+    answer: { type: String, required: true, trim: true },
+    evidenceUrls: [{ type: String }],
+    status: {
+      type: String,
+      enum: ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'],
+      default: 'PENDING',
+      index: true,
+    },
+    ownerNote: { type: String, default: '' },
+    reviewedAt: { type: Date, default: null },
+  },
+  { timestamps: true }
+);
+
 const lostFoundItemSchema = new mongoose.Schema(
   {
     userId: { type: mongoose.Schema.Types.ObjectId, required: true, index: true },
@@ -20,6 +37,9 @@ const lostFoundItemSchema = new mongoose.Schema(
       index: true,
     },
     tags: [{ type: String, trim: true, lowercase: true }],
+    verificationQuestion: { type: String, default: '', maxlength: 300 },
+    claims: { type: [claimSchema], default: [] },
+    approvedClaimId: { type: mongoose.Schema.Types.ObjectId, default: null },
     status: {
       type: String,
       enum: ['OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED'],
