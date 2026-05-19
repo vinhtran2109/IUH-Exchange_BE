@@ -39,6 +39,11 @@ vi.mock('../services/s3.service.js', () => ({
   deleteFileByUrl: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../services/matching.service.js', () => ({
+  findMatches: vi.fn().mockResolvedValue([]),
+  autoMatchOnCreate: vi.fn().mockResolvedValue([]),
+}));
+
 vi.mock('@iuh-exchange/common', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -158,6 +163,26 @@ describe('lostfound.controller', () => {
       await lfController.createItem(req, res, next);
 
       expect(mockLFModel.create).toHaveBeenCalled();
+    });
+
+    it('should return matches in response', async () => {
+      const { autoMatchOnCreate } = await import('../services/matching.service.js');
+      autoMatchOnCreate.mockResolvedValue([
+        { item: { ...mockLostFoundItem }, score: 0.75 },
+      ]);
+      mockLFModel.create.mockResolvedValue({ ...mockLostFoundItem });
+
+      const { req, res, next } = mockReqRes({
+        type: 'LOST',
+        title: 'Mất ví da',
+      });
+      await lfController.createItem(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      const response = res.json.mock.calls[0][0];
+      expect(response.data.matches).toBeDefined();
+      expect(response.data.matches.length).toBe(1);
+      expect(response.data.matches[0].score).toBe(0.75);
     });
   });
 

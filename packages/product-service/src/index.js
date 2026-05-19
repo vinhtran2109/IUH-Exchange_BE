@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
 import productRoutes from './routes/product.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import wishlistRoutes from './routes/wishlist.routes.js';
@@ -15,6 +15,7 @@ const MONGODB_URI = process.env.PRODUCT_SERVICE_MONGO_URI || process.env.MONGODB
 
 // ── Middleware ──
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // ── Health ──
 app.get('/health', async (req, res) => {
@@ -31,6 +32,9 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ── Prometheus Metrics ──
+app.get('/metrics', metricsHandler);
 
 // ── Routes ──
 app.use('/api/v1/products', offerRoutes);

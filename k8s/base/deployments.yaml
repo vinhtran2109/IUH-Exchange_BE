@@ -18,6 +18,25 @@ spec:
           image: ghcr.io/your-org/iuh-exchange-frontend:latest
           ports:
             - containerPort: 80
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,6 +61,27 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -66,6 +106,25 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3007
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3007
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -90,6 +149,30 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: user-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -114,6 +197,28 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: product-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3002
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -138,6 +243,28 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: order-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3003
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -162,6 +289,28 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: notification-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3004
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -186,6 +335,28 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: chat-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3005
+            initialDelaySeconds: 10
+            periodSeconds: 10
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -210,3 +381,27 @@ spec:
           envFrom:
             - configMapRef:
                 name: iuh-exchange-config
+          env:
+            - name: SERVICE_NAME
+              value: lost-found-service
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3006
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3

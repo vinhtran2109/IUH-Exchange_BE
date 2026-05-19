@@ -403,6 +403,32 @@ services:
       start_period: 10s
 
   # ─────────────────────────────────────────────
+  # NGINX Load Balancer (Staging)
+  # Start with: docker compose --profile lb up -d
+  # ─────────────────────────────────────────────
+  nginx-lb:
+    image: nginx:1.25-alpine
+    container_name: iuh-nginx-lb
+    restart: unless-stopped
+    profiles:
+      - lb
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - api-gateway
+      - ws-gateway
+    networks:
+      - iuh-exchange-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/nginx-health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ─────────────────────────────────────────────
   # Prometheus (Metrics Collection)
   # ─────────────────────────────────────────────
   prometheus:

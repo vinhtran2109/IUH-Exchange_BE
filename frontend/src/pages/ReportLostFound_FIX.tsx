@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { 
-  ArrowLeft, 
-  Type, 
-  MapPin, 
-  MessageCircle, 
+import {
+  ArrowLeft,
+  Type,
+  MapPin,
+  MessageCircle,
   Info,
   Send,
   Plus,
   AlertCircle,
-
   Clock,
-  Camera
+  Camera,
+  ShieldCheck,
+  ScanLine,
+  BadgeCheck
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 
@@ -28,6 +30,17 @@ const ReportLostFound: React.FC = () => {
     location: '',
     contactInfo: '',
   });
+
+  // Consent checkboxes for AI analysis
+  const [consentImageAnalysis, setConsentImageAnalysis] = useState(false);
+  const [consentMssvExtraction, setConsentMssvExtraction] = useState(false);
+
+  // AI analysis result after submission
+  const [analysisResult, setAnalysisResult] = useState<{
+    detectedType?: string;
+    studentId?: string;
+    confidence?: number;
+  } | null>(null);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -71,15 +84,25 @@ const ReportLostFound: React.FC = () => {
 
       const response = await lostFoundService.createItem({
         ...formData,
-        imageUrls: finalImageUrl ? [finalImageUrl] : []
+        imageUrls: finalImageUrl ? [finalImageUrl] : [],
+        consentImageAnalysis,
+        consentMssvExtraction,
       });
 
       if (response.success) {
+        // Show AI analysis results if available
+        const data = response.data;
+        if (data?.detectedType || data?.matches?.length > 0) {
+          setAnalysisResult({
+            detectedType: data.detectedType,
+            studentId: data.studentId,
+            confidence: data.confidence,
+          });
+        }
         alert("Đăng tin thành công! Hy vọng bạn sớm tìm thấy đồ.");
         navigate('/lost-found');
       }
     } catch (err: any) {
-
       setError(err.response?.data?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.');
     } finally {
       setLoading(false);
@@ -88,7 +111,7 @@ const ReportLostFound: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
-      <button 
+      <button
         onClick={() => navigate('/lost-found')}
         className="flex items-center gap-2 text-slate-500 hover:text-indigo-600 font-medium mb-8 transition-colors group"
       >
@@ -204,7 +227,7 @@ const ReportLostFound: React.FC = () => {
                 <Camera size={16} className="text-indigo-500" />
                 Hình ảnh minh họa (nếu có)
               </label>
-              
+
               <div className="flex items-center gap-4">
                 <label className="cursor-pointer flex flex-col items-center justify-center w-32 h-32 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl hover:border-indigo-400 hover:bg-indigo-50 transition-all group">
                   <Plus size={24} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
@@ -215,7 +238,7 @@ const ReportLostFound: React.FC = () => {
                 {imagePreview && (
                   <div className="relative w-32 h-32 rounded-3xl overflow-hidden shadow-md border border-slate-100">
                     <img src={imagePreview} className="w-full h-full object-cover" alt="Preview" />
-                    <button 
+                    <button
                       type="button"
                       onClick={() => {setImageFile(null); setImagePreview(null);}}
                       className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-rose-600 transition-colors"
@@ -226,11 +249,92 @@ const ReportLostFound: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* AI Consent Checkboxes */}
+            {imageFile && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="space-y-3 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <ScanLine size={18} className="text-indigo-500" />
+                  <span className="text-sm font-black text-indigo-700 uppercase tracking-wider">Phân tích AI (tùy chọn)</span>
+                </div>
+
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={consentImageAnalysis}
+                    onChange={(e) => {
+                      setConsentImageAnalysis(e.target.checked);
+                      if (!e.target.checked) setConsentMssvExtraction(false);
+                    }}
+                    className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                      <ShieldCheck size={14} />
+                      Cho phép nhận diện đồ vật bằng AI
+                    </span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Hệ thống sẽ phân tích ảnh để tự động phân loại đồ vật và gợi ý khớp với tin đối chiếu.
+                    </p>
+                  </div>
+                </label>
+
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={consentMssvExtraction}
+                    onChange={(e) => setConsentMssvExtraction(e.target.checked)}
+                    disabled={!consentImageAnalysis}
+                    className="mt-1 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 disabled:opacity-40"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-700 group-hover:text-indigo-600 transition-colors flex items-center gap-1.5">
+                      <BadgeCheck size={14} />
+                      Cho phép trích xuất MSSV từ ảnh
+                    </span>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Nếu ảnh chứa thẻ sinh viên, hệ thống sẽ OCR để tìm MSSV và tự động thông báo cho chủ nhân.
+                    </p>
+                  </div>
+                </label>
+              </motion.div>
+            )}
           </div>
 
+          {/* AI Analysis Result Preview */}
+          {analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2"
+            >
+              <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase">
+                <ScanLine size={16} />
+                Kết quả phân tích AI
+              </div>
+              {analysisResult.detectedType && analysisResult.detectedType !== 'unknown' && (
+                <p className="text-sm text-slate-700">
+                  <span className="font-bold">Loại đồ vật:</span> {analysisResult.detectedType}
+                  {analysisResult.confidence && (
+                    <span className="ml-2 text-xs text-slate-500">({Math.round(analysisResult.confidence * 100)}% tin cậy)</span>
+                  )}
+                </p>
+              )}
+              {analysisResult.studentId && (
+                <p className="text-sm text-slate-700">
+                  <span className="font-bold">MSSV phát hiện:</span>{' '}
+                  <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded">{analysisResult.studentId}</span>
+                </p>
+              )}
+            </motion.div>
+          )}
 
           {error && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               className="p-4 bg-rose-50 text-rose-600 rounded-2xl text-sm font-bold flex items-center gap-3 border border-rose-100"

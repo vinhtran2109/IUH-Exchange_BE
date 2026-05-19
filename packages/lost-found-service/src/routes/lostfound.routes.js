@@ -11,7 +11,12 @@ import {
   claimItem,
   reviewClaim,
   getUploadUrl,
+  getMatches,
+  previewMatches,
+  getHeatmapData,
+  bulkModerate,
 } from '../controllers/lostfound.controller.js';
+import { ocrRateLimit } from '../middleware/ocr-rate-limit.js';
 
 const router = Router();
 
@@ -27,16 +32,24 @@ router.get('/', optionalAuth, listItems);
 
 // Admin: list/delete all items
 router.get('/admin', authenticate, adminOnly, listAdminItems);
+router.get('/admin/heatmap', authenticate, adminOnly, getHeatmapData);
+router.post('/admin/bulk-moderate', authenticate, adminOnly, bulkModerate);
 router.delete('/admin/:id', authenticate, adminOnly, deleteItemAsAdmin);
 
 // Protected: mutations require authentication
-router.post('/', authenticate, createItem);
+router.post('/', authenticate, ocrRateLimit, createItem);
 
 // Upload presigned URL (must be before /:id)
 router.post('/upload-url', authenticate, getUploadUrl);
 
+// Match preview (before creating) — must be before /:id
+router.post('/match-preview', optionalAuth, previewMatches);
+
 // Public: view single item
 router.get('/:id', optionalAuth, getItemById);
+
+// Find matches for an existing item
+router.get('/:id/matches', optionalAuth, getMatches);
 
 // Protected: update/delete/claim
 router.put('/:id', authenticate, updateItem);

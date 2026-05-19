@@ -53,6 +53,11 @@ curl http://localhost:8080/health/live
 
 # Readiness probe
 curl http://localhost:8080/health/ready
+
+# Prometheus metrics (available on all services)
+curl http://localhost:8080/metrics
+curl http://localhost:3001/metrics
+curl http://localhost:3006/metrics
 ```
 
 ---
@@ -248,4 +253,122 @@ IUH-Exchange_BE/
 
 ---
 
-*Last updated: 2026-05-09*
+## NGINX Load Balancer (Staging)
+
+For staging/production, use the built-in NGINX load balancer:
+
+```bash
+# Start with LB (includes frontend static files)
+docker compose --profile lb up -d
+
+# The LB will be available on port 80
+# API requests are proxied to api-gateway
+# WebSocket connections are proxied to ws-gateway (sticky sessions)
+```
+
+**Configuration:** `infra/nginx/nginx.conf`
+
+Features:
+- Least-conn load balancing for API Gateway
+- IP-hash sticky sessions for WebSocket
+- Gzip compression
+- Security headers (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection)
+- Rate limiting (30 req/s with burst of 50)
+- Static file caching (7 days for JS/CSS/images)
+
+To add more API Gateway instances for scaling:
+```yaml
+# In docker-compose.yml, add replicas or separate instances:
+api-gateway-2:
+  # ... same config as api-gateway
+  # Then update infra/nginx/nginx.conf upstream block
+```
+
+---
+
+## AI Image Analysis (Lost & Found)
+
+The Lost & Found service supports AI-powered image analysis:
+
+### Features
+- **Object detection**: Auto-classify uploaded items (wallet, phone, keys, etc.)
+- **OCR**: Extract student ID (MSSV) from student card images
+- **Auto-matching**: Match LOST ↔ FOUND items using text similarity + AI labels
+- **Auto-notification**: Notify users when their MSSV is detected in a FOUND item
+
+### Configuration
+
+```env
+# Image analysis provider
+IMAGE_ANALYSIS_PROVIDER=mock  # 'mock' | 'google-vision' | 'aws-rekognition' | 'tesseract'
+
+# Match threshold (0-1)
+MATCH_THRESHOLD=0.3
+
+# OCR rate limiting
+OCR_RATE_LIMIT_MAX=20        # Max requests per user per window
+OCR_RATE_LIMIT_WINDOW=60     # Window in minutes
+```
+
+### Privacy & Consent
+
+Users must explicitly consent before AI analysis:
+- `consentImageAnalysis`: Allow AI to analyze uploaded images
+- `consentMssvExtraction`: Allow OCR to extract MSSV from images
+- All consent is logged in `ConsentLog` collection for audit
+
+---
+
+---
+
+## Load Testing with JMeter
+
+Test plan location: `infra/jmeter/load-test.jmx`
+
+### Prerequisites
+
+```bash
+# Install JMeter (Windows)
+scoop install jmeter
+# Or download from https://jmeter.apache.org/download_jmeter.cgi
+```
+
+### Run Load Test
+
+```bash
+# Start services first
+docker compose up -d
+
+# Run from CLI (non-GUI mode)
+jmeter -n -t infra/jmeter/load-test.jmx -l infra/jmeter/results/results.jtl -e -o infra/jmeter/results/report
+
+# Or run with custom parameters
+jmeter -n -t infra/jmeter/load-test.jmx \
+  -JBASE_URL=localhost \
+  -JBASE_PORT=8080 \
+  -l results.jtl \
+  -e -o report/
+```
+
+### Test Scenarios
+
+| Thread Group | Users | Duration | Target |
+|---|---|---|---|
+| Health Check Smoke | 10 | 30s | All service health endpoints |
+| Lost & Found CRUD | 20 | 60s | GET /api/v1/lost-found |
+| Product Listing | 30 | 60s | GET /api/v1/products |
+| Prometheus Metrics | 5 | 30s | GET /metrics |
+
+### View Results
+
+```bash
+# Open results in JMeter GUI
+jmeter -t infra/jmeter/load-test.jmx
+
+# Or generate HTML report from results.jtl
+jmeter -g results.jtl -o report/
+```
+
+---
+
+*Last updated: 2026-05-19*

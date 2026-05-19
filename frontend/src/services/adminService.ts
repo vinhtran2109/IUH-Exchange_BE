@@ -187,6 +187,16 @@ export const adminService = {
     return response.data;
   },
 
+  getLostFoundHeatmap: async (days = 30) => {
+    const response = await api.get(`/lost-found/admin/heatmap?days=${days}`);
+    return response.data;
+  },
+
+  bulkModerateLostFound: async (ids: string[], action: 'DELETE' | 'CLOSE') => {
+    const response = await api.post('/lost-found/admin/bulk-moderate', { ids, action });
+    return response.data;
+  },
+
   // Stats
   getUserStats: async () => {
     const response = await api.get('/users/admin/stats');
