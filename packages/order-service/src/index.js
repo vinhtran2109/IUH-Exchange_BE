@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, logger, connectMongo, errorHandler, getRedis } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, getRedis, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
 import { OrderService } from './services/order.service.js';
 import { initProducer, startSagaConsumer } from './services/saga.service.js';
 import { createOrderRoutes } from './routes/order.routes.js';
@@ -23,11 +23,15 @@ await startSagaConsumer(orderService);
 // ── Express app ──────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'order-service', timestamp: new Date().toISOString() });
 });
+
+// Prometheus Metrics
+app.get('/metrics', metricsHandler);
 
 // Mount order routes
 app.use('/api/v1/orders', createOrderRoutes(orderService));

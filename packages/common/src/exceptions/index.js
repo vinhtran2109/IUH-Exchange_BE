@@ -4,3 +4,4 @@ export { UnauthorizedException } from './UnauthorizedException.js';
 export { ForbiddenException } from './ForbiddenException.js';
 export { ResourceNotFoundException } from './ResourceNotFoundException.js';
 export { ConflictException } from './ConflictException.js';
+export { TooManyRequestsException } from './TooManyRequestsException.js';

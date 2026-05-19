@@ -230,6 +230,10 @@ const AdminDashboard: React.FC = () => {
   const [lostFoundDetail, setLostFoundDetail] = useState<any>(null);
   const [lostFoundDetailLoading, setLostFoundDetailLoading] = useState(false);
 
+  // Heatmap data for lost-found analytics
+  const [heatmapData, setHeatmapData] = useState<any>(null);
+  const [heatmapLoading, setHeatmapLoading] = useState(false);
+
   useEffect(() => {
     if (isLoading) return;
     if (!user || user.role !== 'ADMIN') {
@@ -303,6 +307,15 @@ const AdminDashboard: React.FC = () => {
       if (activeTab === 'lostFound') {
         const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, 100);
         setLostFoundItems(lostFoundRes.data?.content || []);
+        // Fetch heatmap data
+        if (!heatmapData) {
+          setHeatmapLoading(true);
+          try {
+            const heatmapRes = await adminService.getLostFoundHeatmap(30);
+            if (heatmapRes.success) setHeatmapData(heatmapRes.data);
+          } catch { /* non-fatal */ }
+          setHeatmapLoading(false);
+        }
         return;
       }
 
@@ -1043,6 +1056,126 @@ const AdminDashboard: React.FC = () => {
 
   const renderLostFound = () => (
     <div className="space-y-6">
+      {/* Heatmap Analytics Section */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">Bản đồ nhiệt & Phân tích</h3>
+            <p className="text-sm text-slate-500 mt-1">Thống kê đồ thất lạc theo khu vực và thời gian (30 ngày gần nhất).</p>
+          </div>
+          <button
+            onClick={async () => {
+              setHeatmapLoading(true);
+              try {
+                const res = await adminService.getLostFoundHeatmap(30);
+                if (res.success) setHeatmapData(res.data);
+              } catch { /* ignore */ }
+              setHeatmapLoading(false);
+            }}
+            className="px-3 py-1.5 text-xs font-bold text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition-all"
+          >
+            <RefreshCw size={12} className="inline mr-1" /> Làm mới
+          </button>
+        </div>
+
+        {heatmapLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="w-6 h-6 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : heatmapData ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Location Stats */}
+            <div>
+              <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Khu vực nhiều đồ thất lạc nhất</h4>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {(heatmapData.locations || []).slice(0, 10).map((loc: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
+                    <div className="flex-1">
+                      <div className="text-sm font-bold text-slate-800">{loc.location}</div>
+                      <div className="flex gap-3 mt-1">
+                        <span className="text-xs font-bold text-rose-500">Mất: {loc.lost}</span>
+                        <span className="text-xs font-bold text-sky-500">Nhặt: {loc.found}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-black text-slate-900">{loc.total}</div>
+                      <div className="text-[10px] text-slate-400 uppercase">tổng</div>
+                    </div>
+                    {/* Bar visualization */}
+                    <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-indigo-500 rounded-full"
+                        style={{ width: `${Math.min(100, (loc.total / (heatmapData.locations?.[0]?.total || 1)) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                {(!heatmapData.locations || heatmapData.locations.length === 0) && (
+                  <p className="text-sm text-slate-400 text-center py-4">Chưa có dữ liệu</p>
+                )}
+              </div>
+            </div>
+
+            {/* Analysis Stats */}
+            <div>
+              <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Trạng thái phân tích AI</h4>
+              <div className="grid grid-cols-2 gap-3">
+                {(heatmapData.analysisStats || []).map((stat: any, idx: number) => {
+                  const colors: Record<string, string> = {
+                    COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                    PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
+                    PROCESSING: 'bg-blue-50 text-blue-700 border-blue-200',
+                    FAILED: 'bg-rose-50 text-rose-700 border-rose-200',
+                    SKIPPED: 'bg-slate-50 text-slate-500 border-slate-200',
+                  };
+                  const labels: Record<string, string> = {
+                    COMPLETED: 'Hoàn thành',
+                    PENDING: 'Chờ xử lý',
+                    PROCESSING: 'Đang xử lý',
+                    FAILED: 'Thất bại',
+                    SKIPPED: 'Bỏ qua',
+                  };
+                  return (
+                    <div key={idx} className={`p-4 rounded-2xl border ${colors[stat.status] || 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                      <div className="text-2xl font-black">{stat.count}</div>
+                      <div className="text-xs font-bold uppercase mt-1">{labels[stat.status] || stat.status}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Timeline mini-chart */}
+              {heatmapData.timeline && heatmapData.timeline.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Xu hướng theo ngày</h4>
+                  <div className="flex items-end gap-1 h-20">
+                    {heatmapData.timeline.slice(-14).map((day: any, idx: number) => {
+                      const maxVal = Math.max(...heatmapData.timeline.slice(-14).map((d: any) => d.lost + d.found), 1);
+                      const height = ((day.lost + day.found) / maxVal) * 100;
+                      return (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-0.5" title={`${day.date}: Mất ${day.lost}, Nhặt ${day.found}`}>
+                          <div className="w-full flex flex-col items-stretch" style={{ height: '64px' }}>
+                            <div className="flex-1" />
+                            <div
+                              className="bg-indigo-400 rounded-t-sm min-h-[2px]"
+                              style={{ height: `${height}%` }}
+                            />
+                          </div>
+                          <span className="text-[8px] text-slate-400">{day.date.slice(5)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400 text-center py-4">Nhấn "Làm mới" để tải dữ liệu phân tích</p>
+        )}
+      </div>
+
+      {/* Filter & Table */}
       <div className="flex gap-2 flex-wrap">
         {['ALL', 'LOST', 'FOUND'].map((type) => (
           <button

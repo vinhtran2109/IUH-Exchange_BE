@@ -29,6 +29,17 @@ export interface LostFoundItem {
   status: ItemStatus;
   imageUrls: string[];
   createdAt: string;
+  // AI analysis fields
+  analysisStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'SKIPPED';
+  detectedType?: string;
+  analysisConfidence?: number;
+  extracted?: {
+    studentId?: string;
+    text?: string;
+  };
+  // Consent flags
+  consentImageAnalysis?: boolean;
+  consentMssvExtraction?: boolean;
 }
 
 

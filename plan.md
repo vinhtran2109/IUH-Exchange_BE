@@ -3,20 +3,20 @@
 TL;DR: Tối ưu hóa lộ trình theo nguyên tắc incremental, low-risk first: (1) thêm worker xử lý ảnh bất đồng bộ (image-processor) để phân loại + OCR, (2) publish event Kafka `lostfound.analyzed` / `lostfound.match`, (3) mở rộng `notification-service` để tiêu thụ event và gửi in-app/push/email, (4) bổ sung endpoint lookup MSSV ở `user-service`, (5) cải tiến Admin UI và infra (Redis/Kafka/ LB). Giữ gateway Node hiện tại (circuit-breaker, rate-limit) — chuyển sang Spring Cloud/Resilience4j là migration lớn và được tách riêng.
 
 **Steps (phased, priorities & estimates)**
-1. Phase A — Core (high, 3–5 days)
-   1.1. Add `image-processor` scaffold in `lost-found-service` to run async analysis (S3 event / job queue). (*depends: presigned-upload exists*)
-   1.2. Persist `detectedType`, `extracted.studentId`, `analysisConfidence` on `LostFoundItem` and mark `analysisStatus`.
-   1.3. Publish `lostfound.analyzed` (analysis done) and `lostfound.match` (if auto-match score >= threshold) to Kafka.
-2. Phase B — Notifications & Lookup (high, 2–4 days) *parallel with Phase A step 1.2*
-   2.1. Extend `packages/notification-service/src/services/kafka-consumer.service.js` to subscribe to `lostfound.analyzed`/`lostfound.match` and call existing `sendNotification` flow.
-   2.2. Add `GET /api/v1/users/by-student/:studentId` in `user-service` (rate-limited) to resolve MSSV → userId/email.
-3. Phase C — UX, Admin, Privacy (medium, 3 days)
-   3.1. Frontend `ReportLostFound_FIX.tsx`: show detected label/MSSV, consent checkbox, allow user confirmation/overwrite.
-   3.2. Admin: add heatmap endpoint `/admin/lost-found/heatmap` and a lightweight frontend chart; add bulk-moderation endpoints for admin (batch approve/reject).
-4. Phase D — Ops & Hardening (medium, ongoing)
-   4.1. Document LB placement in front of gateway; add NGINX staging LB config and health checks in `docker-compose` (optional for local).
-   4.2. Add monitoring alerts for DLQ growth and OCR failure rate; ensure DLQ handling in notification-service exists (it does).
-   4.3. Add rate-limit/quotas for OCR per-user and consent logging for privacy.
+1. Phase A — Core (high, 3–5 days) ✅
+   1.1. Add `image-processor` scaffold in `lost-found-service` to run async analysis (S3 event / job queue). ✅
+   1.2. Persist `detectedType`, `extracted.studentId`, `analysisConfidence` on `LostFoundItem` and mark `analysisStatus`. ✅
+   1.3. Publish `lostfound.analyzed` (analysis done) and `lostfound.match` (if auto-match score >= threshold) to Kafka. ✅
+2. Phase B — Notifications & Lookup (high, 2–4 days) ✅
+   2.1. Extend `packages/notification-service/src/services/kafka-consumer.service.js` to subscribe to `lostfound.analyzed`/`lostfound.match` and call existing `sendNotification` flow. ✅
+   2.2. Add `GET /api/v1/users/by-student/:studentId` in `user-service` (rate-limited) to resolve MSSV → userId/email. ✅
+3. Phase C — UX, Admin, Privacy (medium, 3 days) ✅
+   3.1. Frontend `ReportLostFound_FIX.tsx`: show detected label/MSSV, consent checkbox, allow user confirmation/overwrite. ✅
+   3.2. Admin: add heatmap endpoint `/admin/lost-found/heatmap` and a lightweight frontend chart; add bulk-moderation endpoints for admin (batch approve/reject). ✅
+4. Phase D — Ops & Hardening (medium, ongoing) ✅
+   4.1. Document LB placement in front of gateway; add NGINX staging LB config and health checks in `docker-compose`. ✅
+   4.2. Add monitoring alerts for DLQ growth and OCR failure rate; ensure DLQ handling in notification-service exists (it does). ✅
+   4.3. Add rate-limit/quotas for OCR per-user and consent logging for privacy. ✅
 5. Phase E — Optional (large)
    - Evaluate cloud Vision API vs Tesseract (accuracy/cost). Start with cloud vendor PoC for MSSV OCR.
    - If organization requires Spring Cloud + Resilience4j, plan standalone migration project (non-blocking for features above).
@@ -55,5 +55,37 @@ TL;DR: Tối ưu hóa lộ trình theo nguyên tắc incremental, low-risk first
 **Next actions (pick one)**
 - I: Generate scaffolds only (image-processor + notification handler) — I'll produce file templates and TODOs.
 - II: Produce a PR skeleton with changes across services and tests (bigger, I will stage changes and include run commands).
+
+---
+
+## ✅ Implementation Progress (Updated 2026-05-19)
+
+### Phase A — Core ✅
+- `image-processor.service.js` with mock provider, object detection, OCR
+- `LostFound.js` model with `analysisStatus`, `detectedType`, `analysisConfidence`, `extracted.studentId`
+- `kafka.service.js` with `publishLostFoundAnalyzed` and `publishLostFoundMatch`
+
+### Phase B — Notifications & Lookup ✅
+- `notification-service/kafka-consumer.service.js` with handlers for `lostfound.analyzed`, `lostfound.match`
+- `user.controller.js` with `getUserByStudentId` + route
+- `matching.service.js` fully implemented (Jaccard, Vietnamese text normalization)
+
+### Phase C — UX, Admin, Privacy ✅
+- `ReportLostFound_FIX.tsx`: consent checkboxes + AI results display
+- Admin heatmap endpoint + UI (location stats, analysis stats, timeline)
+- Bulk moderation endpoint (batch DELETE/CLOSE)
+
+### Phase D — Ops & Hardening ✅
+- NGINX LB config (`infra/nginx/nginx.conf`) + docker compose profile
+- OCR rate-limit middleware (20 req/user/window)
+- ConsentLog model for privacy audit
+- TooManyRequestsException in common package
+- Prometheus `/metrics` endpoint on ALL services (was only on gateway)
+- JMeter load test plan (`infra/jmeter/load-test.jmx`)
+
+### Remaining
+- [x] K8s manifests production-ready (health probes, resource limits, HPA, PDB)
+- [ ] Actual cloud deployment (needs kubeconfig + cluster access)
+- [ ] Cloud Vision API PoC (Phase E, optional)
 
 ---

@@ -8,6 +8,7 @@ export {
   ForbiddenException,
   ResourceNotFoundException,
   ConflictException,
+  TooManyRequestsException,
 } from './exceptions/index.js';
 
 export { errorHandler } from './middleware/errorHandler.js';

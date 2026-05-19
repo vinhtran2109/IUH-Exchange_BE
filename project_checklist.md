@@ -66,9 +66,24 @@ Trọng tâm: Hoàn thiện tính năng cộng đồng sinh viên.
 
 ## Phase 8: Logging, Monitoring & Deployment (Tuần 7)
 Trọng tâm: Đóng gói và mang lên Cloud thả rông.
-- [ ] Code Elasticsearch Pipeline (ELK) để bắt log phân tán các Server.
-- [ ] Tích hợp Prometheus metrics cho JVM và thiết lập Grafana Dashboard.
+- [x] Code Elasticsearch Pipeline (ELK) để bắt log phân tán các Server.
+- [x] Tích hợp Prometheus metrics cho JVM và thiết lập Grafana Dashboard.
 - [x] Viết `Dockerfile` cho từng Service và Frontend Nginx.
-- [ ] Tạo GitHub Actions tự build Docker Image trên Main Branch và Push về Hub.
-- [ ] Chạy Cụm Cloud Cluster (Deploying Kubernetes cơ bản hoặc dùng Cụm Amazon EC2 LoadBalancer + MongoDB Atlas / ElastiCache).
-- [ ] Chạy Test Load/Stress bằng JMeter đánh dấu chịu tải API.
+- [x] Tạo GitHub Actions tự build Docker Image trên Main Branch và Push về Hub.
+- [x] Viết K8s manifests (deployments, services, HPA, PDB, ingress) — sẵn sàng deploy.
+- [ ] Chạy Cụm Cloud Cluster (cần kubeconfig + cluster access để apply).
+- [x] Chạy Test Load/Stress bằng JMeter đánh dấu chịu tải API.
+
+## Phase 9: AI Image Recognition & Auto-matching (Tuần 8)
+Trọng tâm: Tính năng nâng cao cho Lost & Found.
+- [x] Tạo `image-processor.service.js` scaffold với provider adapter pattern (mock, Google Vision, AWS Rekognition, Tesseract).
+- [x] Thêm field `analysisStatus`, `detectedType`, `analysisConfidence`, `extracted.studentId` vào model `LostFoundItem`.
+- [x] Publish Kafka events `lostfound.analyzed` / `lostfound.match` từ lost-found-service.
+- [x] Notification-service tiêu thụ `lostfound.analyzed`/`lostfound.match` và gửi thông báo.
+- [x] Thêm endpoint `GET /api/v1/users/by-student/:studentId` trong user-service để lookup MSSV.
+- [x] Frontend `ReportLostFound_FIX.tsx`: hiển thị kết quả AI, consent checkbox cho image analysis và MSSV extraction.
+- [x] Admin dashboard: thêm heatmap endpoint `/admin/lost-found/heatmap` và UI biểu đồ phân tích.
+- [x] Admin dashboard: thêm bulk moderation endpoint `/admin/bulk-moderate` (batch delete/close).
+- [x] OCR rate-limit middleware (20 req/user/window) và consent logging (`ConsentLog` model).
+- [x] NGINX load balancer config cho staging (docker compose --profile lb).
+- [x] Cập nhật `DOCKER_SETUP.md` với hướng dẫn LB và AI features.

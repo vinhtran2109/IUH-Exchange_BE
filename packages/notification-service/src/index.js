@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { config, logger, connectMongo, errorHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
 import { initNotificationSocket } from './services/socket.service.js';
 import { startKafkaConsumer } from './services/kafka-consumer.service.js';
 import notificationRoutes from './routes/notification.routes.js';
@@ -16,11 +16,15 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_no
 
 // ── Body parsing ──
 app.use(express.json());
+app.use(metricsMiddleware);
 
 // ── Health check ──
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'notification-service', timestamp: new Date().toISOString() });
 });
+
+// ── Prometheus Metrics ──
+app.get('/metrics', metricsHandler);
 
 // ── REST API routes ──
 app.use('/api/v1/notifications/dlq', dlqRoutes);

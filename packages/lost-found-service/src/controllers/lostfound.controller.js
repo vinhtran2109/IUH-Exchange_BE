@@ -9,6 +9,7 @@ import {
   logger,
 } from '@iuh-exchange/common';
 import { LostFoundItem } from '../models/LostFound.js';
+import { ConsentLog } from '../models/ConsentLog.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
 import { findMatches, autoMatchOnCreate } from '../services/matching.service.js';
 import { queueAnalysis } from '../services/image-processor.service.js';
@@ -28,6 +29,9 @@ const createItemSchema = z.object({
   category: z.enum(CATEGORY_ENUM).optional().default('OTHER'),
   tags: z.array(z.string().max(50).trim().toLowerCase()).max(10).optional().default([]),
   verificationQuestion: z.string().max(300).optional().default(''),
+  // Consent flags for AI analysis
+  consentImageAnalysis: z.boolean().optional().default(false),
+  consentMssvExtraction: z.boolean().optional().default(false),
 });
 
 const updateItemSchema = z.object({
@@ -202,8 +206,36 @@ export async function createItem(req, res, next) {
 
     logger.info(`LostFoundItem created: ${item._id} by user ${req.user.sub}`);
 
-    // Trigger async image analysis (non-blocking)
-    if (hasImages) {
+    // Log consent if granted
+    if (data.consentImageAnalysis || data.consentMssvExtraction) {
+      const consentEntries = [];
+      if (data.consentImageAnalysis) {
+        consentEntries.push({
+          userId: req.user.sub,
+          itemId: item._id,
+          consentType: 'IMAGE_ANALYSIS',
+          granted: true,
+          ipAddress: req.ip || '',
+          userAgent: req.headers['user-agent'] || '',
+        });
+      }
+      if (data.consentMssvExtraction) {
+        consentEntries.push({
+          userId: req.user.sub,
+          itemId: item._id,
+          consentType: 'MSSV_EXTRACTION',
+          granted: true,
+          ipAddress: req.ip || '',
+          userAgent: req.headers['user-agent'] || '',
+        });
+      }
+      ConsentLog.insertMany(consentEntries).catch((err) =>
+        logger.warn(`Failed to log consent: ${err.message}`),
+      );
+    }
+
+    // Trigger async image analysis (non-blocking, only if consented)
+    if (hasImages && data.consentImageAnalysis) {
       queueAnalysis(item._id.toString());
     }
 
@@ -432,6 +464,188 @@ export async function getMatches(req, res, next) {
           score: m.score,
         })),
         totalMatches: matches.length,
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/lost-found/admin/heatmap
+ * Returns aggregated location data for admin heatmap visualization.
+ * Groups items by location and counts LOST vs FOUND.
+ */
+export async function getHeatmapData(req, res, next) {
+  try {
+    const days = Math.min(parseInt(req.query.days) || 30, 365);
+    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+    const pipeline = [
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: {
+            location: { $ifNull: ['$location', 'Unknown'] },
+            type: '$type',
+          },
+          count: { $sum: 1 },
+          items: {
+            $push: {
+              id: '$_id',
+              title: '$title',
+              status: '$status',
+              createdAt: '$createdAt',
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: '$_id.location',
+          lost: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'LOST'] }, '$count', 0],
+            },
+          },
+          found: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'FOUND'] }, '$count', 0],
+            },
+          },
+          total: { $sum: '$count' },
+        },
+      },
+      { $sort: { total: -1 } },
+      { $limit: 50 },
+      {
+        $project: {
+          _id: 0,
+          location: '$_id',
+          lost: 1,
+          found: 1,
+          total: 1,
+        },
+      },
+    ];
+
+    // Time-series data: items per day
+    const timePipeline = [
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: {
+            date: {
+              $dateToString: { format: '%Y-%m-%d', date: '$createdAt' },
+            },
+            type: '$type',
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $group: {
+          _id: '$_id.date',
+          lost: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'LOST'] }, '$count', 0],
+            },
+          },
+          found: {
+            $sum: {
+              $cond: [{ $eq: ['$_id.type', 'FOUND'] }, '$count', 0],
+            },
+          },
+        },
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          date: '$_id',
+          lost: 1,
+          found: 1,
+        },
+      },
+    ];
+
+    // Analysis stats
+    const analysisPipeline = [
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id: '$analysisStatus',
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          status: '$_id',
+          count: 1,
+        },
+      },
+    ];
+
+    const [locationData, timeData, analysisData] = await Promise.all([
+      LostFoundItem.aggregate(pipeline),
+      LostFoundItem.aggregate(timePipeline),
+      LostFoundItem.aggregate(analysisPipeline),
+    ]);
+
+    res.json(
+      ApiResponse.ok({
+        locations: locationData,
+        timeline: timeData,
+        analysisStats: analysisData,
+        period: { days, since: since.toISOString() },
+      }),
+    );
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/lost-found/admin/bulk-moderate
+ * Batch approve/reject/delete multiple lost-found items.
+ * Body: { ids: string[], action: 'DELETE' | 'CLOSE' }
+ */
+export async function bulkModerate(req, res, next) {
+  try {
+    const { ids, action } = req.body;
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      throw new BadRequestException('ids must be a non-empty array');
+    }
+    if (ids.length > 50) {
+      throw new BadRequestException('Maximum 50 items per batch');
+    }
+    if (!['DELETE', 'CLOSE'].includes(action)) {
+      throw new BadRequestException('action must be DELETE or CLOSE');
+    }
+
+    const items = await LostFoundItem.find({ _id: { $in: ids } });
+
+    if (action === 'DELETE') {
+      // Clean up S3 images before deleting
+      const deletePromises = items.flatMap((item) =>
+        (item.images || []).map((url) => deleteFileByUrl(url)),
+      );
+      await Promise.allSettled(deletePromises);
+      await LostFoundItem.deleteMany({ _id: { $in: ids } });
+    } else if (action === 'CLOSE') {
+      await LostFoundItem.updateMany(
+        { _id: { $in: ids }, status: { $ne: 'CLOSED' } },
+        { $set: { status: 'CLOSED' } },
+      );
+    }
+
+    logger.info(`Bulk ${action}: ${items.length} items by admin ${req.user.sub}`);
+    res.json(
+      ApiResponse.ok({
+        processed: items.length,
+        action,
       }),
     );
   } catch (err) {

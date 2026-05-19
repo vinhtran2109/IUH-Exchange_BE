@@ -5,6 +5,8 @@ import {
   connectMongo,
   errorHandler,
   auditLog,
+  metricsMiddleware,
+  metricsHandler,
 } from '@iuh-exchange/common';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -17,6 +19,7 @@ const MONGODB_URI = process.env.USER_SERVICE_MONGO_URI || process.env.MONGODB_UR
 
 // ── Middleware ──
 app.use(express.json());
+app.use(metricsMiddleware);
 app.use(auditLog());
 
 // ── Health ──
@@ -34,6 +37,9 @@ app.get('/health', async (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ── Prometheus Metrics ──
+app.get('/metrics', metricsHandler);
 
 // ── Routes ──
 app.use('/api/v1/auth', authRoutes);
