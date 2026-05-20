@@ -23,6 +23,9 @@ import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
 import ReviewSection from '../components/ReviewSection';
 import { wishlistService } from '../services/wishlistService';
+import { useToast } from '../components/Toast';
+import { useConfirm, usePrompt } from '../components/Dialogs';
+import { conditionLabel, categoryLabel, offerStatusLabel, offerStatusClass } from '../utils/enums';
 
 type PaymentChoice = 'BANK_TRANSFER' | 'CASH';
 
@@ -30,6 +33,9 @@ const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore() as any;
+  const { success: toastSuccess, error: toastError } = useToast();
+  const { confirm } = useConfirm();
+  const { prompt } = usePrompt();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -142,13 +148,14 @@ const ProductDetail: React.FC = () => {
   }, [id, user]);
 
   const sellerLabel = useMemo(() => {
+    if (sellerProfile?.name) return sellerProfile.name;
     if (!product?.sellerId) return 'người bán';
     return `người bán ${String(product.sellerId).substring(0, 6)}`;
-  }, [product?.sellerId]);
+  }, [sellerProfile, product?.sellerId]);
 
   const handleToggleWishlist = async () => {
     if (!user) {
-      alert('Bạn cần đăng nhập!');
+      toastError('Bạn cần đăng nhập để lưu sản phẩm!');
       return;
     }
     try {
@@ -160,16 +167,24 @@ const ProductDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (!id || !window.confirm('Bạn có chắc chắn muốn gỡ bài đăng này?')) return;
+    if (!id) return;
+    const confirmed = await confirm({
+      title: 'Gỡ bài đăng',
+      message: 'Bạn có chắc chắn muốn gỡ bài đăng này? Hành động này không thể hoàn tác.',
+      confirmText: 'Gỡ bài',
+      cancelText: 'Hủy',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       setDeleting(true);
       const response = await productService.deleteProduct(id);
       if (response.success) {
-        alert('Gỡ bài thành công!');
+        toastSuccess('Gỡ bài đăng thành công!');
         navigate('/');
       }
     } catch {
-      alert('Lỗi khi xóa bài.');
+      toastError('Lỗi khi xóa bài.');
     } finally {
       setDeleting(false);
     }
@@ -177,23 +192,30 @@ const ProductDetail: React.FC = () => {
 
   const handleReport = async () => {
     if (!user) {
-      alert('Bạn cần đăng nhập để tố cáo!');
+      toastError('Bạn cần đăng nhập để tố cáo!');
       return;
     }
-    const reason = prompt('Lý do tố cáo sản phẩm này:');
-    if (!reason || reason.length < 5) return;
+    const reason = await prompt({
+      title: 'Tố cáo sản phẩm',
+      message: 'Vui lòng cho chúng tôi biết lý do tố cáo sản phẩm này.',
+      placeholder: 'Nhập lý do tố cáo (ít nhất 5 ký tự)...',
+      confirmText: 'Gửi tố cáo',
+      minLength: 5,
+      rows: 3,
+    });
+    if (!reason) return;
     try {
       await api.post('/reports', { targetType: 'PRODUCT', targetId: id, reason });
-      alert('Đã gửi tố cáo. Admin sẽ xem xét sớm.');
+      toastSuccess('Đã gửi tố cáo. Admin sẽ xem xét sớm.');
     } catch (err: any) {
-      alert('Lỗi: ' + (err.response?.data?.message || 'Không thể gửi tố cáo'));
+      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể gửi tố cáo'));
     }
   };
 
   const openPurchaseFlow = () => {
     if (!product) return;
     if (!user) {
-      alert('Bạn cần đăng nhập!');
+      toastError('Bạn cần đăng nhập để mua hàng!');
       navigate('/login');
       return;
     }
@@ -263,7 +285,7 @@ const ProductDetail: React.FC = () => {
         await loadOffers();
       }
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Không thể gửi đề xuất lúc này.');
+      toastError(error.response?.data?.message || 'Không thể gửi đề xuất lúc này.');
     } finally {
       setOfferBusy(false);
     }
@@ -275,7 +297,7 @@ const ProductDetail: React.FC = () => {
       const res = await productService.resolveOffer(offerId, action);
       if (res.success) await loadOffers();
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Không thể xử lý đề xuất.');
+      toastError(error.response?.data?.message || 'Không thể xử lý đề xuất.');
     } finally {
       setOfferBusy(false);
     }
@@ -296,7 +318,7 @@ const ProductDetail: React.FC = () => {
       const orderId = orderResponse.data?.id || orderResponse.data?._id;
       navigate(`/orders/${orderId}`);
     } catch (error: any) {
-      alert(error.response?.data?.message || 'Không thể tạo đơn từ đề xuất.');
+      toastError(error.response?.data?.message || 'Không thể tạo đơn từ đề xuất.');
     } finally {
       setOfferBusy(false);
     }
@@ -327,10 +349,10 @@ const ProductDetail: React.FC = () => {
   return (
     <>
       <div className="mx-auto max-w-5xl px-4 py-8">
-        <Link to="/" className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
+        <button onClick={() => navigate(-1)} className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
           <ArrowLeft size={16} />
           Quay lại
-        </Link>
+        </button>
 
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
@@ -356,8 +378,8 @@ const ProductDetail: React.FC = () => {
           </motion.div>
 
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
-            <span className="mb-3 w-fit rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-              {product.category}
+            <span className="mb-3 w-fit rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+              {categoryLabel(product.category)}
             </span>
 
             <h1 className="mb-3 text-2xl font-bold leading-tight text-slate-900">{product.title}</h1>
@@ -372,7 +394,7 @@ const ProductDetail: React.FC = () => {
             )}
 
             <div className="mb-5 flex items-center gap-3">
-              <span className="rounded border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{product.condition}</span>
+              <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{conditionLabel(product.condition)}</span>
               <span className="text-xs text-slate-400">{new Date(product.createdAt).toLocaleDateString()}</span>
             </div>
 
@@ -420,7 +442,7 @@ const ProductDetail: React.FC = () => {
                         <div className="font-bold text-slate-800">
                           {offer.type === 'TRADE' ? `Đổi: ${offer.tradeItemTitle}` : `${Number(offer.amount || 0).toLocaleString()}đ`}
                         </div>
-                        <span className="rounded-full bg-white px-2 py-1 text-xs font-bold text-slate-600">{offer.status}</span>
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${offerStatusClass(offer.status)}`}>{offerStatusLabel(offer.status)}</span>
                       </div>
                       {offer.message && <div className="mt-1 text-xs text-slate-500">{offer.message}</div>}
                       {user?.id === product.sellerId && offer.status === 'PENDING' && (
@@ -548,9 +570,9 @@ const ProductDetail: React.FC = () => {
       </div>
 
       {purchaseOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 px-4 py-6">
+          <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5 shrink-0">
 
               <div>
                 <h2 className="text-lg font-semibold text-slate-900">Xác nhận mua sản phẩm</h2>
@@ -561,7 +583,7 @@ const ProductDetail: React.FC = () => {
               </button>
             </div>
 
-            <div className="space-y-5 px-6 py-5">
+            <div className="space-y-5 px-6 py-5 overflow-y-auto flex-1">
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-1 text-sm font-semibold text-slate-900">{product.title}</div>
                 <div className="text-sm text-slate-500">Người bán: {sellerLabel}</div>
@@ -664,7 +686,7 @@ const ProductDetail: React.FC = () => {
               )}
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-5 sm:flex-row">
+            <div className="flex flex-col gap-3 border-t border-slate-100 px-6 py-5 sm:flex-row shrink-0">
               <button
                 type="button"
                 onClick={() => setPurchaseOpen(false)}

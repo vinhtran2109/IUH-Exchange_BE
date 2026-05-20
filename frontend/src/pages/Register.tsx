@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { useToast } from '../components/Toast';
 
 const Register: React.FC = () => {
   const [step, setStep] = useState(0);
@@ -13,7 +14,7 @@ const Register: React.FC = () => {
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  
+  const { success: toastSuccess } = useToast();
   const navigate = useNavigate();
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -43,7 +44,7 @@ const Register: React.FC = () => {
     try {
       const response = await authService.verifyOtp(formData.email, otp);
       if (response.success) {
-        alert('Xác thực thành công! Hãy đăng nhập ngay.');
+        toastSuccess('Xác thực thành công! Hãy đăng nhập ngay.');
         navigate('/login');
       } else {
         setError(response.message || 'Mã OTP không đúng');
