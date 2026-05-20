@@ -3,6 +3,7 @@ import {
   config,
   logger,
   connectMongo,
+  pingSupabase,
   errorHandler,
   auditLog,
   metricsMiddleware,
@@ -15,7 +16,7 @@ import { initKafkaProducer } from './services/kafka.service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const MONGODB_URI = process.env.USER_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27018/iuh_users';
+const AUDIT_MONGODB_URI = process.env.MONGODB_URI || process.env.USER_SERVICE_MONGO_URI;
 
 // ── Middleware ──
 app.use(express.json());
@@ -24,15 +25,18 @@ app.use(auditLog());
 
 // ── Health ──
 app.get('/health', async (req, res) => {
-  const mongoose = await import('mongoose');
-  const dbState = mongoose.default.connection.readyState; // 0=disconnected, 1=connected, 2=connecting, 3=disconnecting
-  const dbOk = dbState === 1;
+  let dbOk = true;
+  try {
+    await pingSupabase();
+  } catch {
+    dbOk = false;
+  }
 
   res.status(dbOk ? 200 : 503).json({
     status: dbOk ? 'ok' : 'degraded',
     service: 'user-service',
     dependencies: {
-      mongodb: dbOk ? 'connected' : 'disconnected',
+      supabase: dbOk ? 'connected' : 'disconnected',
     },
     timestamp: new Date().toISOString(),
   });
@@ -53,7 +57,10 @@ app.use('/api/v1/users', userRoutes);
 app.use(errorHandler);
 
 // ── Start ──
-await connectMongo(MONGODB_URI);
+if (AUDIT_MONGODB_URI) {
+  await connectMongo(AUDIT_MONGODB_URI);
+}
+await pingSupabase();
 await initKafkaProducer();
 
 app.listen(PORT, () => {

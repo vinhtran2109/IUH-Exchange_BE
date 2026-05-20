@@ -1,265 +1,75 @@
-import mongoose from 'mongoose';
+import { SupabaseModel, baseRow, valueOrNull } from '@iuh-exchange/common';
+import { ObjectId } from 'mongodb';
 
-const statusHistorySchema = new mongoose.Schema(
-  {
-    from: { type: String, default: null },
-    to: { type: String, required: true },
-    changedBy: { type: String, default: 'system' },
-    actorRole: {
-      type: String,
-      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
-      default: 'SYSTEM',
-    },
-    reason: { type: String, default: '' },
-    metadata: { type: Object, default: {} },
-    changedAt: { type: Date, default: Date.now },
-  },
-  { _id: false }
-);
+function withNestedIds(items = []) {
+  return items.map((item) => ({
+    _id: item._id || new ObjectId().toHexString(),
+    ...item,
+  }));
+}
 
-const transactionSchema = new mongoose.Schema(
-  {
-    type: {
-      type: String,
-      enum: ['PAYMENT_CREATED', 'PAYMENT_CAPTURED', 'PAYMENT_FAILED', 'REFUND_CREATED', 'TRANSFER_REPORTED', 'TRANSFER_CONFIRMED'],
-      required: true,
-    },
-    transactionId: { type: String, default: null },
-    amount: { type: Number, required: true, min: 0 },
-    method: {
-      type: String,
-      enum: ['VNPAY_MOCK', 'BANK_TRANSFER', 'CASH', 'NONE'],
-      default: 'NONE',
-    },
-    status: {
-      type: String,
-      enum: ['PENDING', 'REPORTED', 'SUCCESS', 'FAILED', 'REFUNDED'],
-      default: 'PENDING',
-    },
-    note: { type: String, default: '' },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: false }
-);
+function mapOrderToRow(order) {
+  return {
+    ...baseRow(order),
+    buyer_id: order.buyerId,
+    seller_id: order.sellerId,
+    product_id: order.productId,
+    offer_id: valueOrNull(order.offerId),
+    price: Number(order.price ?? 0),
+    listing_type: order.listingType || 'SELL',
+    trade_item_title: order.tradeItemTitle || '',
+    trade_item_description: order.tradeItemDescription || '',
+    status: order.status || 'PENDING',
+    buyer_note: order.buyerNote || '',
+    handover_location: order.handoverLocation || '',
+    handover_time: valueOrNull(order.handoverTime),
+    handover_status: order.handoverStatus || 'NOT_SCHEDULED',
+    meeting_proposals: withNestedIds(order.meetingProposals || []),
+    handover_code: valueOrNull(order.handoverCode),
+    handover_code_expires_at: valueOrNull(order.handoverCodeExpiresAt),
+    handover_proofs: withNestedIds(order.handoverProofs || []),
+    buyer_handover_confirmed_at: valueOrNull(order.buyerHandoverConfirmedAt),
+    seller_handover_confirmed_at: valueOrNull(order.sellerHandoverConfirmedAt),
+    no_show_reports: withNestedIds(order.noShowReports || []),
+    cancellation_reason: order.cancellationReason || '',
+    cancellation_category: valueOrNull(order.cancellationCategory),
+    cancelled_by: valueOrNull(order.cancelledBy),
+    cancelled_at: valueOrNull(order.cancelledAt),
+    dispute_status: order.disputeStatus || 'NONE',
+    dispute_reason: order.disputeReason || '',
+    dispute_opened_by: valueOrNull(order.disputeOpenedBy),
+    dispute_opened_at: valueOrNull(order.disputeOpenedAt),
+    dispute_resolved_by: valueOrNull(order.disputeResolvedBy),
+    dispute_resolved_at: valueOrNull(order.disputeResolvedAt),
+    dispute_resolution: order.disputeResolution || '',
+    dispute_evidence: withNestedIds(order.disputeEvidence || []),
+    dispute_timeline: withNestedIds(order.disputeTimeline || []),
+    idempotency_key: valueOrNull(order.idempotencyKey),
+    payment_status: order.paymentStatus || 'UNPAID',
+    payment_method: order.paymentMethod || 'NONE',
+    payment_transaction_id: valueOrNull(order.paymentTransactionId),
+    transfer_proof_url: order.transferProofUrl || '',
+    transfer_reported_at: valueOrNull(order.transferReportedAt),
+    transfer_confirmed_at: valueOrNull(order.transferConfirmedAt),
+    transfer_confirmed_by: valueOrNull(order.transferConfirmedBy),
+    payment_provider_status: order.paymentProviderStatus || 'MOCK_PENDING',
+    payment_webhook_verified: Boolean(order.paymentWebhookVerified),
+    payment_issue_status: order.paymentIssueStatus || 'NONE',
+    payment_issue_reason: order.paymentIssueReason || '',
+    payment_issue_opened_by: valueOrNull(order.paymentIssueOpenedBy),
+    payment_issue_opened_at: valueOrNull(order.paymentIssueOpenedAt),
+    payment_issue_resolved_by: valueOrNull(order.paymentIssueResolvedBy),
+    payment_issue_resolved_at: valueOrNull(order.paymentIssueResolvedAt),
+    payment_issue_resolution: order.paymentIssueResolution || '',
+    payment_issue_timeline: withNestedIds(order.paymentIssueTimeline || []),
+    reconciliation_status: order.reconciliationStatus || 'NOT_REQUIRED',
+    paid_at: valueOrNull(order.paidAt),
+    refunded_at: valueOrNull(order.refundedAt),
+    completed_at: valueOrNull(order.completedAt),
+    receipt_number: valueOrNull(order.receiptNumber),
+    status_history: order.statusHistory || [],
+    transactions: order.transactions || [],
+  };
+}
 
-const meetingProposalSchema = new mongoose.Schema(
-  {
-    location: { type: String, required: true, trim: true, maxlength: 300 },
-    time: { type: Date, required: true },
-    note: { type: String, default: '', maxlength: 1000 },
-    proposedBy: { type: String, required: true },
-    status: {
-      type: String,
-      enum: ['PENDING', 'ACCEPTED', 'REJECTED', 'COUNTERED', 'CANCELLED'],
-      default: 'PENDING',
-    },
-    respondedBy: { type: String, default: null },
-    respondedAt: { type: Date, default: null },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const disputeEvidenceSchema = new mongoose.Schema(
-  {
-    submittedBy: { type: String, required: true },
-    type: {
-      type: String,
-      enum: ['IMAGE', 'CHAT_SCREENSHOT', 'RECEIPT', 'OTHER'],
-      default: 'OTHER',
-    },
-    url: { type: String, required: true },
-    note: { type: String, default: '', maxlength: 1000 },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const disputeTimelineSchema = new mongoose.Schema(
-  {
-    action: {
-      type: String,
-      enum: ['OPENED', 'EVIDENCE_ADDED', 'ADMIN_NOTE', 'RESOLVED', 'REJECTED'],
-      required: true,
-    },
-    actorId: { type: String, required: true },
-    actorRole: {
-      type: String,
-      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
-      default: 'SYSTEM',
-    },
-    note: { type: String, default: '', maxlength: 2000 },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const noShowReportSchema = new mongoose.Schema(
-  {
-    reportedBy: { type: String, required: true },
-    actorRole: {
-      type: String,
-      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
-      default: 'SYSTEM',
-    },
-    reason: { type: String, default: '', maxlength: 1000 },
-    evidenceUrl: { type: String, default: '' },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const handoverProofSchema = new mongoose.Schema(
-  {
-    confirmedBy: { type: String, required: true },
-    actorRole: {
-      type: String,
-      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
-      default: 'SYSTEM',
-    },
-    codeUsed: { type: String, default: '' },
-    evidenceUrl: { type: String, default: '' },
-    note: { type: String, default: '', maxlength: 1000 },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const paymentIssueTimelineSchema = new mongoose.Schema(
-  {
-    action: {
-      type: String,
-      enum: ['OPENED', 'EVIDENCE_ADDED', 'RESOLVED', 'REJECTED'],
-      required: true,
-    },
-    actorId: { type: String, required: true },
-    actorRole: {
-      type: String,
-      enum: ['BUYER', 'SELLER', 'ADMIN', 'SYSTEM'],
-      default: 'SYSTEM',
-    },
-    note: { type: String, default: '', maxlength: 2000 },
-    createdAt: { type: Date, default: Date.now },
-  },
-  { _id: true }
-);
-
-const orderSchema = new mongoose.Schema(
-  {
-    buyerId: { type: String, required: true, index: true },
-    sellerId: { type: String, required: true, index: true },
-    productId: { type: String, required: true },
-    offerId: { type: String, default: null, index: true },
-    price: { type: Number, required: true, min: 0 },
-    listingType: {
-      type: String,
-      enum: ['SELL', 'GIVE_AWAY', 'TRADE'],
-      default: 'SELL',
-    },
-    tradeItemTitle: { type: String, default: '' },
-    tradeItemDescription: { type: String, default: '' },
-    status: {
-      type: String,
-      // NOTE: PENDING here means "buyer placed an order, awaiting product reservation"
-      // This is different from Product.status PENDING which means "awaiting admin approval"
-      // See also: AWAITING_SELLER (formerly CONFIRMED) = product reserved, waiting for seller
-      enum: ['PENDING', 'AWAITING_SELLER', 'COMPLETED', 'CANCELLED'],
-      default: 'PENDING',
-      index: true,
-    },
-    buyerNote: { type: String, default: '' },
-    handoverLocation: { type: String, default: '' },
-    handoverTime: { type: Date, default: null },
-    handoverStatus: {
-      type: String,
-      enum: ['NOT_SCHEDULED', 'PROPOSED', 'SCHEDULED', 'BUYER_CONFIRMED', 'SELLER_CONFIRMED', 'HANDED_OVER', 'CANCELLED'],
-      default: 'NOT_SCHEDULED',
-      index: true,
-    },
-    meetingProposals: { type: [meetingProposalSchema], default: [] },
-    handoverCode: { type: String, default: null },
-    handoverCodeExpiresAt: { type: Date, default: null },
-    handoverProofs: { type: [handoverProofSchema], default: [] },
-    buyerHandoverConfirmedAt: { type: Date, default: null },
-    sellerHandoverConfirmedAt: { type: Date, default: null },
-    noShowReports: { type: [noShowReportSchema], default: [] },
-    cancellationReason: { type: String, default: '' },
-    cancellationCategory: {
-      type: String,
-      enum: ['BUYER_CANCELLED', 'SELLER_REJECTED', 'NO_SHOW', 'PAYMENT_ISSUE', 'ADMIN_CANCELLED', 'OTHER'],
-      default: null,
-    },
-    cancelledBy: { type: String, default: null },
-    cancelledAt: { type: Date, default: null },
-    disputeStatus: {
-      type: String,
-      enum: ['NONE', 'OPEN', 'RESOLVED', 'REJECTED'],
-      default: 'NONE',
-      index: true,
-    },
-    disputeReason: { type: String, default: '' },
-    disputeOpenedBy: { type: String, default: null },
-    disputeOpenedAt: { type: Date, default: null },
-    disputeResolvedBy: { type: String, default: null },
-    disputeResolvedAt: { type: Date, default: null },
-    disputeResolution: { type: String, default: '' },
-    disputeEvidence: { type: [disputeEvidenceSchema], default: [] },
-    disputeTimeline: { type: [disputeTimelineSchema], default: [] },
-    idempotencyKey: { type: String, unique: true, sparse: true, index: true },
-    paymentStatus: {
-      type: String,
-      enum: ['UNPAID', 'PAID', 'REFUNDED'],
-      default: 'UNPAID',
-      index: true,
-    },
-    paymentMethod: {
-      type: String,
-      enum: ['VNPAY_MOCK', 'BANK_TRANSFER', 'CASH', 'NONE'],
-      default: 'NONE',
-    },
-    paymentTransactionId: { type: String, default: null },
-    transferProofUrl: { type: String, default: '' },
-    transferReportedAt: { type: Date, default: null },
-    transferConfirmedAt: { type: Date, default: null },
-    transferConfirmedBy: { type: String, default: null },
-    paymentProviderStatus: { type: String, default: 'MOCK_PENDING' },
-    paymentWebhookVerified: { type: Boolean, default: false },
-    paymentIssueStatus: {
-      type: String,
-      enum: ['NONE', 'OPEN', 'RESOLVED', 'REJECTED'],
-      default: 'NONE',
-      index: true,
-    },
-    paymentIssueReason: { type: String, default: '' },
-    paymentIssueOpenedBy: { type: String, default: null },
-    paymentIssueOpenedAt: { type: Date, default: null },
-    paymentIssueResolvedBy: { type: String, default: null },
-    paymentIssueResolvedAt: { type: Date, default: null },
-    paymentIssueResolution: { type: String, default: '' },
-    paymentIssueTimeline: { type: [paymentIssueTimelineSchema], default: [] },
-    reconciliationStatus: {
-      type: String,
-      enum: ['NOT_REQUIRED', 'PENDING', 'MATCHED', 'MISMATCHED'],
-      default: 'NOT_REQUIRED',
-      index: true,
-    },
-    paidAt: { type: Date, default: null },
-    refundedAt: { type: Date, default: null },
-    completedAt: { type: Date, default: null },
-    receiptNumber: { type: String, unique: true, sparse: true, index: true },
-    statusHistory: { type: [statusHistorySchema], default: [] },
-    transactions: { type: [transactionSchema], default: [] },
-  },
-  { timestamps: true }
-);
-
-// Composite unique: prevent duplicate pending orders for same buyer+product.
-// This ensures a buyer can only have ONE active PENDING order per product.
-// If the previous order was CANCELLED or COMPLETED, a new order is allowed
-// (partialFilterExpression only applies to status: 'PENDING').
-orderSchema.index(
-  { buyerId: 1, productId: 1, status: 1 },
-  { unique: true, partialFilterExpression: { status: 'PENDING' } }
-);
-
-export const Order = mongoose.model('Order', orderSchema);
+export const Order = new SupabaseModel('orders', mapOrderToRow);

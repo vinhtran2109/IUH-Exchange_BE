@@ -23,8 +23,13 @@ let producer = null;
  * Initialize Kafka producer.
  */
 export async function initProducer() {
-  producer = await createProducer('order-service');
-  logger.info('[Saga] Kafka producer ready');
+  try {
+    producer = await createProducer('order-service');
+    logger.info('[Saga] Kafka producer ready');
+  } catch (err) {
+    producer = null;
+    logger.warn(`[Saga] Kafka producer init failed (non-fatal): ${err.message}`);
+  }
 }
 
 /**
@@ -140,11 +145,17 @@ export async function publishOrderRefunded(event) {
  * @param {import('./order.service.js').OrderService} orderService
  */
 export async function startSagaConsumer(orderService) {
-  const consumer = await createConsumer(CONSUMER_GROUP, [
-    { topic: TOPICS.PRODUCT_RESERVED },
-    { topic: TOPICS.PRODUCT_RESERVE_FAILED },
-    { topic: TOPICS.PRODUCT_RESERVE_EXPIRED },
-  ], 'order-service-consumer');
+  let consumer;
+  try {
+    consumer = await createConsumer(CONSUMER_GROUP, [
+      { topic: TOPICS.PRODUCT_RESERVED },
+      { topic: TOPICS.PRODUCT_RESERVE_FAILED },
+      { topic: TOPICS.PRODUCT_RESERVE_EXPIRED },
+    ], 'order-service-consumer');
+  } catch (err) {
+    logger.warn(`[Saga] Kafka consumer init failed (non-fatal): ${err.message}`);
+    return;
+  }
 
   await consumer.run({
     eachMessage: async ({ topic, message }) => {

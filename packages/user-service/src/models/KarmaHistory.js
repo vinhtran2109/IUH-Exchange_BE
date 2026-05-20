@@ -1,40 +1,22 @@
-import mongoose from 'mongoose';
+import { SupabaseModel, baseRow, valueOrNull } from '@iuh-exchange/common';
 
-const karmaHistorySchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true,
-    index: true,
-  },
-  amount: {
-    type: Number,
-    required: true,
-  },
-  previousKarma: {
-    type: Number,
-    required: true,
-  },
-  newKarma: {
-    type: Number,
-    required: true,
-  },
-  reason: {
-    type: String,
-    default: '',
-  },
-  performedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    default: null,
-  },
-  source: {
-    type: String,
-    enum: ['ADMIN', 'ORDER', 'REPORT', 'SYSTEM'],
-    default: 'ADMIN',
-  },
-}, {
-  timestamps: true,
-});
+function mapKarmaHistoryToRow(item) {
+  return {
+    ...baseRow(item),
+    user_id: String(item.userId),
+    type: item.type || item.source || null,
+    points: item.points ?? item.amount ?? null,
+    reason: item.reason || '',
+    related_id: valueOrNull(item.relatedId),
+    metadata: {
+      amount: item.amount,
+      previousKarma: item.previousKarma,
+      newKarma: item.newKarma,
+      performedBy: item.performedBy,
+      source: item.source,
+      ...(item.metadata || {}),
+    },
+  };
+}
 
-karmaHistorySchema.index({ userId: 1, createdAt: -1 });
-
-export const KarmaHistory = mongoose.model('KarmaHistory', karmaHistorySchema);
+export const KarmaHistory = new SupabaseModel('karma_histories', mapKarmaHistoryToRow);

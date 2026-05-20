@@ -7,7 +7,8 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "docker compose up -d mongodb redis kafka elasticsearch && npm run dev:services",
+    "dev": "docker compose up -d redis kafka elasticsearch && npm run dev:services",
+    "dev:local": "docker compose --profile local-db up -d mongodb redis kafka elasticsearch && npm run dev:services",
     "dev:services": "concurrently \"npm run dev --workspace=packages/api-gateway\" \"npm run dev --workspace=packages/user-service\" \"npm run dev --workspace=packages/product-service\" \"npm run dev --workspace=packages/order-service\" \"npm run dev --workspace=packages/notification-service\" \"npm run dev --workspace=packages/chat-service\" \"npm run dev --workspace=packages/lost-found-service\"",
     "dev:gateway": "npm run dev --workspace=packages/api-gateway",
     "dev:user": "npm run dev --workspace=packages/user-service",
@@ -16,6 +17,7 @@
     "dev:chat": "npm run dev --workspace=packages/chat-service",
     "dev:notification": "npm run dev --workspace=packages/notification-service",
     "dev:lostfound": "npm run dev --workspace=packages/lost-found-service",
+    "migrate:supabase:users-orders": "node --env-file=.env scripts/migrate-users-orders-to-supabase.mjs",
     "lint": "eslint packages/*/src",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -28,5 +30,8 @@
     "@vitest/coverage-v8": "^4.1.5",
     "concurrently": "^9.2.1",
     "vitest": "^4.1.5"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.106.0"
   }
 }
