@@ -147,7 +147,7 @@ const Login: React.FC = () => {
                   }`}>
                     {rememberMe && (
                       <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
-                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="2"/>
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                       </svg>
                     )}
                   </div>
