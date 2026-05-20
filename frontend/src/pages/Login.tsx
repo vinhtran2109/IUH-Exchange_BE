@@ -1,18 +1,29 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, LogIn, ArrowRight, ShieldCheck, User as UserIcon } from 'lucide-react';
+import { Lock, LogIn, ArrowRight, ShieldCheck, Mail, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { authService } from '../services/authService';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
   const navigate = useNavigate();
   const { login } = useAuthStore();
+
+  // Load saved email on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('iuh_remembered_email');
+    if (saved) {
+      setEmail(saved);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,6 +43,12 @@ const Login: React.FC = () => {
           }
           setError('Tài khoản quản trị vui lòng đăng nhập tại /admin/login.');
           return;
+        }
+        // Save or clear remembered email
+        if (rememberMe) {
+          localStorage.setItem('iuh_remembered_email', email);
+        } else {
+          localStorage.removeItem('iuh_remembered_email');
         }
         login({ id: d.userId || d.user?.id, email: d.email || d.user?.email, name: d.name || d.user?.name, role, studentId: d.studentId || d.user?.studentId || '', karmaPoint: d.karmaPoint || d.user?.karmaPoint || 0 }, d.accessToken);
         navigate('/');
@@ -68,15 +85,15 @@ const Login: React.FC = () => {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1.5 block">Tài khoản</label>
+              <label className="text-xs font-medium text-slate-600 mb-1.5 block">Email</label>
               <div className="relative">
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                  <UserIcon size={16} />
+                  <Mail size={16} />
                 </div>
                 <input 
-                  type="text" 
+                  type="email" 
                   required
-                  placeholder="Email hoặc Mã số SV"
+                  placeholder="email@student.iuh.edu.vn"
                   className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-slate-400 focus:outline-none transition-all text-sm placeholder:text-slate-300"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -88,7 +105,7 @@ const Login: React.FC = () => {
               <div className="flex justify-between items-center mb-1.5">
                 <label className="text-xs font-medium text-slate-600">Mật khẩu</label>
                 <Link to="/forgot-password" className="text-xs font-medium text-slate-500 hover:text-slate-900 transition-colors">
-                  Quên?
+                  Quên mật khẩu?
                 </Link>
               </div>
               <div className="relative">
@@ -96,14 +113,47 @@ const Login: React.FC = () => {
                   <Lock size={16} />
                 </div>
                 <input 
-                  type="password" 
+                  type={showPassword ? 'text' : 'password'}
                   required
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-4 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-slate-400 focus:outline-none transition-all text-sm placeholder:text-slate-300"
+                  className="w-full pl-9 pr-10 py-2.5 rounded-lg border border-slate-200 bg-white focus:border-slate-400 focus:outline-none transition-all text-sm placeholder:text-slate-300"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(prev => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                  aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
+            </div>
+
+            {/* Remember me */}
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    id="remember-me"
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="sr-only"
+                  />
+                  <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
+                    rememberMe ? 'bg-slate-900 border-slate-900' : 'border-slate-300 bg-white'
+                  }`}>
+                    {rememberMe && (
+                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 12 12">
+                        <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </div>
+                </div>
+                <span className="text-xs text-slate-600">Ghi nhớ đăng nhập</span>
+              </label>
             </div>
 
             <AnimatePresence mode="wait">

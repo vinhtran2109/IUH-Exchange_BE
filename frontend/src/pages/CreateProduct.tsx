@@ -4,6 +4,7 @@ import { Package, Camera, Send, ArrowLeft, Loader2, X, GripVertical, Save } from
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { productService } from '../services/productService';
 import type { ProductPayload } from '../services/productService';
+import { useToast } from '../components/Toast';
 
 const MAX_IMAGES = 5;
 
@@ -18,6 +19,7 @@ const CreateProduct: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const isEditMode = Boolean(id);
+  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(isEditMode);
   const [formData, setFormData] = useState({
@@ -62,7 +64,7 @@ const CreateProduct: React.FC = () => {
           }))
         );
       } catch {
-        alert('Không thể tải tin đăng để chỉnh sửa.');
+        toastError('Không thể tải tin đăng để chỉnh sửa.');
         navigate(id ? `/products/${id}` : '/');
       } finally {
         setInitialLoading(false);
@@ -88,7 +90,7 @@ const CreateProduct: React.FC = () => {
     if (!e.target.files) return;
     const newFiles = Array.from(e.target.files);
     if (imageItems.length + newFiles.length > MAX_IMAGES) {
-      alert(`Tối đa ${MAX_IMAGES} ảnh.`);
+      toastWarning(`Tối đa ${MAX_IMAGES} ảnh. Vui lòng chọn lại.`);
       return;
     }
 
@@ -144,7 +146,7 @@ const CreateProduct: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (imageItems.length === 0) {
-      alert('Vui lòng chọn ít nhất 1 ảnh');
+      toastWarning('Vui lòng chọn ít nhất 1 ảnh cho sản phẩm.');
       return;
     }
 
@@ -175,11 +177,11 @@ const CreateProduct: React.FC = () => {
         : await productService.createProduct(payload);
 
       if (response.success) {
-        alert(isEditMode ? 'Cập nhật tin đăng thành công!' : 'Đăng bán thành công!');
+        toastSuccess(isEditMode ? 'Cập nhật tin đăng thành công!' : 'Đăng bán thành công! Tin đăng đang chờ duyệt.');
         navigate(isEditMode && id ? `/products/${id}` : '/');
       }
     } catch (error: any) {
-      alert('Lỗi: ' + (error.response?.data?.message || error.message || 'Không thể lưu tin đăng.'));
+      toastError('Lỗi: ' + (error.response?.data?.message || error.message || 'Không thể lưu tin đăng.'));
     } finally {
       setLoading(false);
     }
@@ -258,15 +260,23 @@ const CreateProduct: React.FC = () => {
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1.5 block">Giá (VNĐ)</label>
                   <input required type="number" name="price" placeholder="0" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:border-slate-400 focus:outline-none text-sm font-medium" value={formData.price} onChange={handleChange} />
+                  {formData.price && Number(formData.price) > 0 && (
+                    <p className="mt-1 text-xs text-indigo-600 font-medium">
+                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(formData.price))}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="text-xs font-medium text-slate-500 mb-1.5 block">Danh mục</label>
                   <select name="category" className="w-full px-3 py-2.5 border border-slate-200 rounded-lg focus:border-slate-400 focus:outline-none text-sm" value={formData.category} onChange={handleChange}>
-                    <option value="ELECTRONICS">Điện tử</option>
-                    <option value="BOOKS">Sách & Tài liệu</option>
-                    <option value="FASHION">Thời trang</option>
-                    <option value="TOOLS">Đồ dùng học tập</option>
-                    <option value="OTHERS">Khác</option>
+                    <option value="ELECTRONICS">Điện tử &amp; Công nghệ</option>
+                    <option value="BOOKS">Sách &amp; Tài liệu</option>
+                    <option value="CLOTHING">Thời trang</option>
+                    <option value="FURNITURE">Nội thất &amp; Đồ gia dụng</option>
+                    <option value="SPORTS">Thể thao</option>
+                    <option value="MUSIC">Nhạc cụ</option>
+                    <option value="FOOD">Đồ ăn &amp; Đồ uống</option>
+                    <option value="OTHER">Khác</option>
                   </select>
                 </div>
               </div>

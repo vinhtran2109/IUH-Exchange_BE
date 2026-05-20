@@ -17,9 +17,11 @@ import {
   BadgeCheck
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
+import { useToast } from '../components/Toast';
 
 const ReportLostFound: React.FC = () => {
   const navigate = useNavigate();
+  const { success: toastSuccess } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,7 +101,7 @@ const ReportLostFound: React.FC = () => {
             confidence: data.confidence,
           });
         }
-        alert("Đăng tin thành công! Hy vọng bạn sớm tìm thấy đồ.");
+        toastSuccess('Đăng tin thành công! Hy vọng bạn sớm tìm thấy đồ.');
         navigate('/lost-found');
       }
     } catch (err: any) {

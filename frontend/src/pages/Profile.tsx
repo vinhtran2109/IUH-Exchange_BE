@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
+  Bookmark,
   Camera,
   Check,
   CheckCircle2,
   Clock,
   Flag,
   Pencil,
+  Phone,
   Save,
   ShieldCheck,
   ShoppingBag,
@@ -24,10 +26,14 @@ import type { Product } from '../services/productService';
 import { orderService } from '../services/orderService';
 import { wishlistService } from '../services/wishlistService';
 import type { User as ProfileUser } from '../types/api';
+import { useToast } from '../components/Toast';
+import { useConfirm } from '../components/Dialogs';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
   const navigate = useNavigate();
+  const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
+  const { confirm } = useConfirm();
 
   const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
@@ -38,6 +44,7 @@ const Profile: React.FC = () => {
   const [accountNumber, setAccountNumber] = useState('');
   const [accountHolder, setAccountHolder] = useState('');
   const [qrCodeUrl, setQrCodeUrl] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -76,6 +83,7 @@ const Profile: React.FC = () => {
         setAccountNumber((currentProfile as any).bankInfo?.accountNumber || '');
         setAccountHolder((currentProfile as any).bankInfo?.accountHolder || '');
         setQrCodeUrl((currentProfile as any).bankInfo?.qrCodeUrl || '');
+        setPhoneNumber((currentProfile as any).phoneNumber || '');
         updateUser(currentProfile);
       }
     } catch (error) {
@@ -128,12 +136,20 @@ const Profile: React.FC = () => {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!window.confirm('Bạn có chắc muốn gỡ bài đăng này?')) return;
+    const confirmed = await confirm({
+      title: 'Gỡ bài đăng',
+      message: 'Bạn có chắc muốn gỡ bài đăng này khỏi danh sách?',
+      confirmText: 'Gỡ bài',
+      cancelText: 'Hủy',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       await productService.deleteProduct(id);
+      toastSuccess('Gỡ bài đăng thành công.');
       fetchMyProducts();
     } catch {
-      alert('Lỗi khi xóa sản phẩm');
+      toastError('Lỗi khi xóa sản phẩm. Vui lòng thử lại.');
     }
   };
 
@@ -143,11 +159,11 @@ const Profile: React.FC = () => {
 
     const maxAvatarSize = 5 * 1024 * 1024;
     if (file.size > maxAvatarSize) {
-      alert('Kích thước ảnh không được vượt quá 5MB');
+      toastWarning('Kích thước ảnh không được vượt quá 5MB.');
       return;
     }
     if (!file.type.startsWith('image/')) {
-      alert('Vui lòng chọn file ảnh');
+      toastWarning('Vui lòng chọn đúng định dạng file ảnh (jpg, png, webp...).');
       return;
     }
 
@@ -169,9 +185,10 @@ const Profile: React.FC = () => {
         setAvatarUrl(publicUrl);
         setProfile((prev) => (prev ? { ...prev, avatarUrl: publicUrl } : prev));
         updateUser({ avatarUrl: publicUrl });
+        toastSuccess('Ảnh đại diện đã được cập nhật!');
       }
     } catch (err: any) {
-      alert('Lỗi upload ảnh: ' + (err.message || 'Vui lòng thử lại'));
+      toastError('Lỗi upload ảnh: ' + (err.message || 'Vui lòng thử lại'));
     } finally {
       setUploadingAvatar(false);
     }
@@ -186,6 +203,7 @@ const Profile: React.FC = () => {
 
       if (trimmedName) payload.name = trimmedName;
       if (avatarUrl && /^https?:\/\//.test(avatarUrl)) payload.avatarUrl = avatarUrl;
+      if (phoneNumber.trim()) payload.phoneNumber = phoneNumber.trim();
       payload.bankInfo = {
         bankName: bankName.trim(),
         accountNumber: accountNumber.trim(),
@@ -255,7 +273,7 @@ const Profile: React.FC = () => {
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
             { id: 'products', label: 'Món đồ đang bán', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
-            { id: 'wishlist', label: 'Đã lưu', icon: Flag },
+            { id: 'wishlist', label: 'Đã lưu', icon: Bookmark },
             { id: 'history', label: 'Đã xem', icon: Clock },
             { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
             { id: 'password', label: 'Bảo mật', icon: ShieldCheck },
@@ -350,6 +368,18 @@ const Profile: React.FC = () => {
                       value={profile?.studentId || user?.studentId || ''}
                       disabled
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-slate-500 flex items-center gap-1">
+                      <Phone size={12} /> Số điện thoại <span className="text-slate-300">(tùy chọn)</span>
+                    </label>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="VD: 0901234567"
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm transition-all focus:border-slate-400 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -464,7 +494,10 @@ const Profile: React.FC = () => {
                           <div className="min-w-0">
                             <div className="text-[11px] font-medium text-slate-400">#{String(o?.id || o?._id || '').substring(0, 8) || '--------'}</div>
                             <div className="mt-1 truncate text-sm font-semibold text-slate-800">
-                              {typeof o?.productId === 'string' ? o.productId : o?.productId?.title || o?.productId?.id || o?.productId?._id || 'Không rõ sản phẩm'}
+                              {/* Show product title if populated, otherwise show a friendly ID */}
+                              {typeof o?.productId === 'object' && o?.productId?.title
+                                ? o.productId.title
+                                : o?.productTitle || o?.product?.title || `Sản phẩm #${String(o?.productId || '').slice(-6) || '--'}`}
                             </div>
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                               <span className="flex items-center gap-1">

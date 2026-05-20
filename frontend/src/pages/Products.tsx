@@ -9,19 +9,21 @@ import ProductCard from '../components/ProductCard';
 const CATEGORIES = [
   { label: 'Tất cả', value: '' },
   { label: 'Sách & Tài liệu', value: 'BOOKS' },
-  { label: 'Điện tử', value: 'ELECTRONICS' },
-  { label: 'Thời trang', value: 'FASHION' },
-  { label: 'Đồ dùng học tập', value: 'TOOLS' },
+  { label: 'Điện tử & Công nghệ', value: 'ELECTRONICS' },
+  { label: 'Thời trang', value: 'CLOTHING' },
+  { label: 'Nội thất & Gia dụng', value: 'FURNITURE' },
   { label: 'Nhạc cụ', value: 'MUSIC' },
   { label: 'Thể thao', value: 'SPORTS' },
-  { label: 'Khác', value: 'OTHERS' },
+  { label: 'Đồ ăn', value: 'FOOD' },
+  { label: 'Khác', value: 'OTHER' },
 ];
 const CONDITIONS = [
   { label: 'Tất cả', value: '' },
   { label: 'Mới', value: 'NEW' },
   { label: 'Như mới', value: 'LIKE_NEW' },
-  { label: 'Tốt', value: 'GOOD' },
-  { label: 'Còn dùng được', value: 'FAIR' },
+  { label: 'Còn tốt', value: 'GOOD' },
+  { label: 'Trung bình', value: 'FAIR' },
+  { label: 'Cũ / Hỏng nhẹ', value: 'POOR' },
 ];
 const SORT_OPTIONS = [
   { label: 'Mới nhất', value: 'createdAt:desc' },
@@ -29,16 +31,21 @@ const SORT_OPTIONS = [
   { label: 'Giá cao nhất', value: 'price:desc' },
 ];
 
-const PAGE_SIZE = 12;
+const PAGE_SIZE = 20;
 
 const CATEGORY_MAP: Record<string, string> = {
-  'BOOKS': 'Sách & Tài liệu',
-  'ELECTRONICS': 'Điện tử',
-  'FASHION': 'Thời trang',
-  'TOOLS': 'Đồ dùng học tập',
-  'MUSIC': 'Nhạc cụ',
-  'SPORTS': 'Thể thao',
-  'OTHERS': 'Khác',
+  'BOOKS':       'Sách & Tài liệu',
+  'ELECTRONICS': 'Điện tử & Công nghệ',
+  'CLOTHING':    'Thời trang',
+  'FURNITURE':   'Nội thất & Gia dụng',
+  'MUSIC':       'Nhạc cụ',
+  'SPORTS':      'Thể thao',
+  'FOOD':        'Đồ ăn',
+  'OTHER':       'Khác',
+  // legacy values kept for backward compat
+  'FASHION':     'Thời trang',
+  'TOOLS':       'Đồ dùng học tập',
+  'OTHERS':      'Khác',
 };
 
 const Products: React.FC = () => {
@@ -75,16 +82,14 @@ const Products: React.FC = () => {
     setLoading(true);
     try {
       let response;
+      const condition = selectedCondition || undefined;
       if (debouncedSearch) {
-        response = await productService.searchProducts(debouncedSearch, page, PAGE_SIZE);
+        response = await productService.searchProducts(debouncedSearch, page, PAGE_SIZE, condition);
       } else {
-        response = await productService.getProducts(page, PAGE_SIZE, selectedCategory || undefined, sortBy);
+        response = await productService.getProducts(page, PAGE_SIZE, selectedCategory || undefined, sortBy, condition);
       }
       if (response.success) {
-        let data: Product[] = response.data.content || [];
-        if (selectedCondition && !debouncedSearch) {
-          data = data.filter(p => p.condition === selectedCondition);
-        }
+        const data: Product[] = response.data.content || [];
         setProducts(data);
         setTotalPages(response.data.totalPages || 1);
       }
@@ -226,7 +231,7 @@ const Products: React.FC = () => {
 
       {/* Results */}
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {[...Array(PAGE_SIZE)].map((_, i) => (
             <div key={i} className="bg-white rounded-xl border border-slate-200 overflow-hidden animate-pulse">
               <div className="aspect-square bg-slate-100" />
@@ -250,7 +255,7 @@ const Products: React.FC = () => {
       ) : (
         <>
           <p className="text-xs text-slate-400 font-medium mb-3">{products.length} sản phẩm</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {products.map((product, i) => (
               <motion.div
                 key={product.id}

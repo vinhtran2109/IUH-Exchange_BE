@@ -39,10 +39,11 @@ export interface OfferPayload {
 }
 
 export const productService = {
-  getProducts: async (page = 1, size = 20, category?: string, sort?: string) => {
+  getProducts: async (page = 1, size = 20, category?: string, sort?: string, condition?: string) => {
     let url = `/products?page=${page}&size=${size}`;
     if (category) url += `&category=${encodeURIComponent(category)}`;
     if (sort) url += `&sort=${encodeURIComponent(sort)}`;
+    if (condition) url += `&condition=${encodeURIComponent(condition)}`;
     const response = await api.get(url);
     return response.data;
   },
@@ -52,8 +53,10 @@ export const productService = {
     return response.data;
   },
 
-  searchProducts: async (keyword: string, page = 1, size = 20) => {
-    const response = await api.get(`/products/search?keyword=${encodeURIComponent(keyword)}&page=${page}&size=${size}`);
+  searchProducts: async (keyword: string, page = 1, size = 20, condition?: string) => {
+    let url = `/products/search?keyword=${encodeURIComponent(keyword)}&page=${page}&size=${size}`;
+    if (condition) url += `&condition=${encodeURIComponent(condition)}`;
+    const response = await api.get(url);
     return response.data;
   },
 

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-
 import { 
   ArrowLeft, 
   MapPin, 
@@ -17,14 +16,16 @@ import { lostFoundService, ItemType } from '../services/lostFoundService';
 import type { LostFoundItem } from '../services/lostFoundService';
 import { chatService } from '../services/chatService';
 import api from '../services/api';
-
 import { useAuthStore } from '../store/authStore';
-
-
+import { useToast } from '../components/Toast';
+import { useConfirm, usePrompt } from '../components/Dialogs';
 const LostFoundDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuthStore() as any;
+  const { success: toastSuccess, error: toastError } = useToast();
+  const { confirm } = useConfirm();
+  const { prompt } = usePrompt();
   
   const [item, setItem] = useState<LostFoundItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,17 +53,23 @@ const LostFoundDetail: React.FC = () => {
 
   const handleDelete = async () => {
     if (!item) return;
-    if (!window.confirm("Bạn có chắc chắn muốn gỡ bài đăng này không?")) return;
-
+    const confirmed = await confirm({
+      title: 'Gỡ bài đăng',
+      message: 'Bạn có chắc chắn muốn gỡ bài đăng này không?',
+      confirmText: 'Gỡ bài',
+      cancelText: 'Hủy',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
     try {
       setDeleting(true);
       const response = await lostFoundService.deleteItem(item.id);
       if (response.success) {
-        alert("Đã gỡ bài đăng thành công.");
+        toastSuccess('Đã gỡ bài đăng thành công.');
         navigate('/lost-found');
       }
     } catch (error) {
-      alert("Gỡ bài thất bại. Vui lòng thử lại.");
+      toastError('Gỡ bài thất bại. Vui lòng thử lại.');
     } finally {
       setDeleting(false);
     }
@@ -70,30 +77,44 @@ const LostFoundDetail: React.FC = () => {
 
   const handleClaim = async () => {
     if (!item || !user) return;
-    if (!window.confirm("Xác nhận bạn đã tìm thấy đồ vật này?")) return;
+    const confirmed = await confirm({
+      title: 'Xác nhận tìm thấy',
+      message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
+      confirmText: 'Xác nhận',
+      cancelText: 'Hủy',
+      variant: 'default',
+    });
+    if (!confirmed) return;
     try {
       setClaiming(true);
       const res = await lostFoundService.claimItem(item.id);
       if (res.success) {
         setItem({ ...item, status: 'CLAIMED' as any });
-        alert("Đã xác nhận tìm thấy đồ vật!");
+        toastSuccess('Đã xác nhận tìm thấy đồ vật!');
       }
     } catch (err: any) {
-      alert("Lỗi: " + (err.response?.data?.message || "Không thể xác nhận"));
+      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể xác nhận'));
     } finally {
       setClaiming(false);
     }
   };
 
   const handleReport = async () => {
-    if (!user) { alert("Bạn cần đăng nhập để tố cáo!"); return; }
-    const reason = prompt("Lý do tố cáo:");
-    if (!reason || reason.length < 5) return;
+    if (!user) { toastError('Bạn cần đăng nhập để tố cáo!'); return; }
+    const reason = await prompt({
+      title: 'Tố cáo bài đăng',
+      message: 'Vui lòng cho chúng tôi biết lý do tố cáo bài đăng này.',
+      placeholder: 'Nhập lý do tố cáo (ít nhất 5 ký tự)...',
+      confirmText: 'Gửi tố cáo',
+      minLength: 5,
+      rows: 3,
+    });
+    if (!reason) return;
     try {
       await api.post('/reports', { targetType: 'LOST_FOUND', targetId: id, reason });
-      alert("Đã gửi tố cáo. Admin sẽ xem xét sớm.");
+      toastSuccess('Đã gửi tố cáo. Admin sẽ xem xét sớm.');
     } catch (err: any) {
-      alert("Lỗi: " + (err.response?.data?.message || "Không thể gửi tố cáo"));
+      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể gửi tố cáo'));
     }
   };
 

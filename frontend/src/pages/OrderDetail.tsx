@@ -18,6 +18,8 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { orderService } from '../services/orderService';
 import { productService } from '../services/productService';
+import { useToast } from '../components/Toast';
+import { usePrompt } from '../components/Dialogs';
 
 type OrderStatusKey = 'PENDING' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED';
 type PaymentStatusKey = 'UNPAID' | 'PAID' | 'REFUNDED';
@@ -28,6 +30,8 @@ const OrderDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const { error: toastError } = useToast();
+  const { prompt } = usePrompt();
 
   const [order, setOrder] = useState<any>(null);
   const [product, setProduct] = useState<any>(null);
@@ -100,7 +104,7 @@ const OrderDetail: React.FC = () => {
       const res = await orderService.confirmOrder(order.id || order._id);
       if (res.success) await fetchDetail(true);
     } catch {
-      alert('Không thể xác nhận đơn hàng lúc này.');
+      toastError('Không thể xác nhận đơn hàng lúc này.');
     } finally {
       setActing(false);
     }
@@ -108,13 +112,19 @@ const OrderDetail: React.FC = () => {
 
   const handleReject = async () => {
     if (!order) return;
-    const reason = prompt('Lý do từ chối đơn hàng?') || 'Người bán từ chối đơn hàng';
+    const reason = await prompt({
+      title: 'Từ chối đơn hàng',
+      message: 'Vui lòng cho biết lý do từ chối.',
+      placeholder: 'Lý do từ chối...',
+      confirmText: 'Từ chối đơn',
+    });
+    const rejectReason = reason || 'Người bán từ chối đơn hàng';
     try {
       setActing(true);
-      const res = await orderService.rejectOrder(order.id || order._id, reason);
+      const res = await orderService.rejectOrder(order.id || order._id, rejectReason);
       if (res.success) await fetchDetail(true);
     } catch {
-      alert('Không thể từ chối đơn hàng lúc này.');
+      toastError('Không thể từ chối đơn hàng lúc này.');
     } finally {
       setActing(false);
     }
@@ -122,13 +132,19 @@ const OrderDetail: React.FC = () => {
 
   const handleCancel = async () => {
     if (!order) return;
-    const reason = prompt('Lý do hủy đơn hàng?') || 'Người mua hủy đơn hàng';
+    const reason = await prompt({
+      title: 'Hủy đơn hàng',
+      message: 'Vui lòng cho biết lý do hủy.',
+      placeholder: 'Lý do hủy...',
+      confirmText: 'Hủy đơn',
+    });
+    const cancelReason = reason || 'Người mua hủy đơn hàng';
     try {
       setActing(true);
-      const res = await orderService.cancelOrder(order.id || order._id, reason);
+      const res = await orderService.cancelOrder(order.id || order._id, cancelReason);
       if (res.success) await fetchDetail(true);
     } catch {
-      alert('Không thể hủy đơn hàng lúc này.');
+      toastError('Không thể hủy đơn hàng lúc này.');
     } finally {
       setActing(false);
     }
@@ -146,7 +162,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể báo đã chuyển khoản lúc này.');
+      toastError(error?.response?.data?.message || 'Không thể báo đã chuyển khoản lúc này.');
     } finally {
       setActing(false);
     }
@@ -164,7 +180,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể xác nhận nhận tiền lúc này.');
+      toastError(error?.response?.data?.message || 'Không thể xác nhận nhận tiền lúc này.');
     } finally {
       setActing(false);
     }
@@ -186,7 +202,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể đề xuất lịch hẹn.');
+      toastError(error?.response?.data?.message || 'Không thể đề xuất lịch hẹn.');
     } finally {
       setActing(false);
     }
@@ -199,7 +215,7 @@ const OrderDetail: React.FC = () => {
       const res = await orderService.respondHandover(order.id || order._id, proposalId, action);
       if (res.success) await fetchDetail(true);
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể phản hồi lịch hẹn.');
+      toastError(error?.response?.data?.message || 'Không thể phản hồi lịch hẹn.');
     } finally {
       setActing(false);
     }
@@ -221,7 +237,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể xác nhận giao nhận.');
+      toastError(error?.response?.data?.message || 'Không thể xác nhận giao nhận.');
     } finally {
       setActing(false);
     }
@@ -243,7 +259,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể báo không đến lúc này.');
+      toastError(error?.response?.data?.message || 'Không thể báo không đến lúc này.');
     } finally {
       setActing(false);
     }
@@ -260,7 +276,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể mở khiếu nại thanh toán.');
+      toastError(error?.response?.data?.message || 'Không thể mở khiếu nại thanh toán.');
     } finally {
       setActing(false);
     }
@@ -276,7 +292,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể hoàn tiền lúc này.');
+      toastError(error?.response?.data?.message || 'Không thể hoàn tiền lúc này.');
     } finally {
       setActing(false);
     }
@@ -292,7 +308,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể mở tranh chấp.');
+      toastError(error?.response?.data?.message || 'Không thể mở tranh chấp.');
     } finally {
       setActing(false);
     }
@@ -313,7 +329,7 @@ const OrderDetail: React.FC = () => {
         await fetchDetail(true);
       }
     } catch (error: any) {
-      alert(error?.response?.data?.message || 'Không thể thêm bằng chứng.');
+      toastError(error?.response?.data?.message || 'Không thể thêm bằng chứng.');
     } finally {
       setActing(false);
     }
