@@ -12,7 +12,7 @@ const app = express();
 const httpServer = createServer(app);
 
 const PORT = process.env.PORT || 3004;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_notifications';
+const MONGODB_URI = process.env.NOTIFICATION_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_notifications';
 
 // ── Body parsing ──
 app.use(express.json());

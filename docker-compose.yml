@@ -25,6 +25,8 @@ services:
   mongodb:
     image: mongo:7.0
     container_name: iuh-mongodb
+    profiles:
+      - local-db
     restart: unless-stopped
     ports:
       - "27018:27017"
@@ -220,7 +222,6 @@ services:
       SERVICE_NAME: user-service
       MONGODB_URI: ${USER_SERVICE_MONGO_URI}
     depends_on:
-      - mongodb
       - redis
     networks:
       - iuh-exchange-net
@@ -248,7 +249,6 @@ services:
       SERVICE_NAME: product-service
       MONGODB_URI: ${PRODUCT_SERVICE_MONGO_URI}
     depends_on:
-      - mongodb
       - elasticsearch
     networks:
       - iuh-exchange-net
@@ -276,7 +276,6 @@ services:
       SERVICE_NAME: order-service
       MONGODB_URI: ${ORDER_SERVICE_MONGO_URI}
     depends_on:
-      - mongodb
       - redis
       - kafka
     networks:
@@ -308,7 +307,6 @@ services:
     volumes:
       - ./iuhexchange-firebase-adminsdk-fbsvc-6dede7d24b.json:/app/firebase-service-account.json:ro
     depends_on:
-      - mongodb
       - kafka
     networks:
       - iuh-exchange-net
@@ -336,7 +334,6 @@ services:
       SERVICE_NAME: chat-service
       MONGODB_URI: ${CHAT_SERVICE_MONGO_URI}
     depends_on:
-      - mongodb
       - redis
     networks:
       - iuh-exchange-net
@@ -363,8 +360,6 @@ services:
       PORT: "3006"
       SERVICE_NAME: lost-found-service
       MONGODB_URI: ${LOSTFOUND_SERVICE_MONGO_URI}
-    depends_on:
-      - mongodb
     networks:
       - iuh-exchange-net
     healthcheck:

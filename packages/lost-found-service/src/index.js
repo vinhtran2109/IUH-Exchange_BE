@@ -6,7 +6,7 @@ import { initKafka } from './services/kafka.service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3006;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_lostfound';
+const MONGODB_URI = process.env.LOSTFOUND_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_lostfound';
 
 app.use(express.json());
 app.use(metricsMiddleware);

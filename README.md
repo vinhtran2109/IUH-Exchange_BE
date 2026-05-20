@@ -173,16 +173,17 @@ Các biến môi trường chính:
 ```env
 # MongoDB
 MONGO_ROOT_USERNAME=root
-MONGO_ROOT_PASSWORD=iuh_exchange_root
-USER_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_users?authSource=admin
-PRODUCT_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_products?authSource=admin
-ORDER_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_orders?authSource=admin
-NOTIFICATION_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_notifications?authSource=admin
-CHAT_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_chat?authSource=admin
-LOSTFOUND_SERVICE_MONGO_URI=mongodb://root:iuh_exchange_root@localhost:27018/iuh_exchange_lostfound?authSource=admin
+MONGO_ROOT_PASSWORD=
+MONGODB_URI=
+USER_SERVICE_MONGO_URI=
+PRODUCT_SERVICE_MONGO_URI=
+ORDER_SERVICE_MONGO_URI=
+NOTIFICATION_SERVICE_MONGO_URI=
+CHAT_SERVICE_MONGO_URI=
+LOSTFOUND_SERVICE_MONGO_URI=
 
 # Redis
-REDIS_URL=redis://:iuh_exchange_redis@localhost:6379
+REDIS_URL=
 
 # JWT
 JWT_SECRET=your-super-secret-jwt-key
@@ -215,7 +216,10 @@ CORS_ORIGIN=http://localhost:5173
 
 ```bash
 # Khởi động tất cả infrastructure services
-docker compose up -d mongodb redis kafka zookeeper elasticsearch logstash kibana prometheus grafana
+docker compose up -d redis kafka zookeeper elasticsearch logstash kibana prometheus grafana
+
+# Optional: start local MongoDB instead of Atlas
+docker compose --profile local-db up -d mongodb redis kafka zookeeper elasticsearch logstash kibana prometheus grafana
 
 # Kiểm tra trạng thái
 docker compose ps

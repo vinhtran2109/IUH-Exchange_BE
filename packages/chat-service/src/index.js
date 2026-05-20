@@ -9,7 +9,7 @@ const app = express();
 const httpServer = createServer(app);
 
 const PORT = process.env.PORT || 3005;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_chat';
+const MONGODB_URI = process.env.CHAT_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_chat';
 
 // ── Body parsing ──
 app.use(express.json());

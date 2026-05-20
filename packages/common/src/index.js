@@ -21,6 +21,7 @@ export { config } from './config/index.js';
 export { logger } from './utils/logger.js';
 export { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, verifyToken, parsePagination, hashToken, compareToken } from './utils/helpers.js';
 export { connectMongo } from './utils/mongo.js';
+export { getSupabase, pingSupabase, SupabaseModel, baseRow, valueOrNull } from './utils/supabaseModel.js';
 export { createRedis, getRedis } from './utils/redis.js';
 export { cache } from './utils/cache.js';
 export { metricsMiddleware, metricsHandler, incrementCacheHit, incrementCacheMiss, setWsConnections } from './utils/metrics.js';

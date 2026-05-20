@@ -1,12 +1,11 @@
 import express from 'express';
-import { config, logger, connectMongo, errorHandler, getRedis, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, pingSupabase, errorHandler, getRedis, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
 import { OrderService } from './services/order.service.js';
 import { initProducer, startSagaConsumer } from './services/saga.service.js';
 import { createOrderRoutes } from './routes/order.routes.js';
 import paymentRoutes from './routes/payment.routes.js';
 
 const PORT = process.env.PORT || 3003;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/iuh_orders';
 
 // ── Initialize dependencies ──────────────────────────────────────────
 const redis = getRedis();
@@ -26,8 +25,22 @@ app.use(express.json());
 app.use(metricsMiddleware);
 
 // Health check
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'order-service', timestamp: new Date().toISOString() });
+app.get('/health', async (req, res) => {
+  let dbOk = true;
+  try {
+    await pingSupabase();
+  } catch {
+    dbOk = false;
+  }
+
+  res.status(dbOk ? 200 : 503).json({
+    status: dbOk ? 'ok' : 'degraded',
+    service: 'order-service',
+    dependencies: {
+      supabase: dbOk ? 'connected' : 'disconnected',
+    },
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Prometheus Metrics
@@ -43,7 +56,7 @@ app.use('/api/v1/orders', paymentRoutes);
 app.use(errorHandler);
 
 // ── Connect DB and start server ──────────────────────────────────────
-await connectMongo(MONGODB_URI);
+await pingSupabase();
 
 app.listen(PORT, () => {
   logger.info(`🚀 Order Service running on port ${PORT}`);
