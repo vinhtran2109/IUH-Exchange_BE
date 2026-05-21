@@ -29,6 +29,7 @@ export const OFFER_STATUS_LABEL: Record<string, string> = {
   COUNTERED:  'Đã phản hồi',
   CANCELLED:  'Đã hủy',
   EXPIRED:    'Hết hạn',
+  WITHDRAWN:  'Đã ẩn',
 };
 
 export const offerStatusLabel = (v?: string) =>
@@ -42,6 +43,7 @@ export const OFFER_STATUS_CLASS: Record<string, string> = {
   COUNTERED: 'bg-blue-50 text-blue-700',
   CANCELLED: 'bg-slate-100 text-slate-500',
   EXPIRED:   'bg-slate-100 text-slate-400',
+  WITHDRAWN: 'bg-slate-100 text-slate-500',
 };
 
 export const offerStatusClass = (v?: string) =>

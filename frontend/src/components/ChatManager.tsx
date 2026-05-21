@@ -3,13 +3,14 @@ import { AnimatePresence } from 'framer-motion';
 import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
 import { chatService } from '../services/chatService';
-import type { ChatMessage } from '../services/chatService';
+import type { ChatMessage, ProductContext } from '../services/chatService';
 import { useAuthStore } from '../store/authStore';
 
 const ChatManager: React.FC = () => {
   const [activeChat, setActiveChat] = useState<{
     recipientId: string;
     recipientName: string;
+    productContext?: ProductContext;
   } | null>(null);
   const [showList, setShowList] = useState(false);
   const { user } = useAuthStore() as any;
@@ -20,7 +21,6 @@ const ChatManager: React.FC = () => {
       return;
     }
 
-    console.log('[ChatManager] Global listener started for user:', user.id);
     chatService.connect();
 
     const removeMsgListener = chatService.addListener((msg: ChatMessage) => {
@@ -29,7 +29,7 @@ const ChatManager: React.FC = () => {
       }
     });
 
-    const removeOpenChatListener = chatService.onOpenChat((id: string, name: string) => {
+    const removeOpenChatListener = chatService.onOpenChat((id: string, name: string, product?: ProductContext) => {
       if (id === 'list') {
         setShowList(true);
         setActiveChat(null);
@@ -39,6 +39,7 @@ const ChatManager: React.FC = () => {
       setActiveChat({
         recipientId: id,
         recipientName: name,
+        productContext: product,
       });
       setShowList(false);
     });
@@ -68,6 +69,7 @@ const ChatManager: React.FC = () => {
         <ChatWindow
           recipientId={activeChat.recipientId}
           recipientName={activeChat.recipientName}
+          productContext={activeChat.productContext}
           onClose={() => setActiveChat(null)}
           onBack={() => {
             setActiveChat(null);

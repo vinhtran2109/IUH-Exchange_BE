@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
+  BadgeCheck,
   Bookmark,
   Camera,
   Check,
@@ -13,10 +14,13 @@ import {
   Save,
   ShieldCheck,
   ShoppingBag,
+  Star,
   Store,
   Trash2,
+  TrendingUp,
   User,
   UserCircle,
+  Users,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -54,6 +58,7 @@ const Profile: React.FC = () => {
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
   const [viewHistory, setViewHistory] = useState<any[]>([]);
+  const [sellerTrust, setSellerTrust] = useState<any>(null);
 
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -68,6 +73,12 @@ const Profile: React.FC = () => {
     fetchMyOrders();
     fetchWishlist();
     fetchHistory();
+    // Fetch seller trust sau khi có user id
+    if (user?.id) {
+      productService.getSellerTrust(user.id)
+        .then((res) => { if (res.success) setSellerTrust(res.data); })
+        .catch(() => {});
+    }
   }, []);
 
   const fetchProfile = async () => {
@@ -319,6 +330,8 @@ const Profile: React.FC = () => {
 
             {activeTab === 'info' && (
               <form onSubmit={handleUpdateProfile} className="space-y-6">
+
+                {/* === AVATAR + TÊN — ĐẶT LÊN ĐẦU === */}
                 <div className="flex flex-col items-center gap-3">
                   <div className="relative">
                     <div className="h-24 w-24 overflow-hidden rounded-full border-2 border-slate-200 bg-slate-100">
@@ -352,6 +365,90 @@ const Profile: React.FC = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* === CHỈ SỐ UY TÍN (xuống sau avatar) === */}
+                {sellerTrust && (
+                  <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                      <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500">
+                        <ShieldCheck size={13} className="text-emerald-500" />
+                        Uy tín của bạn
+                      </div>
+                      {sellerTrust.badge && (
+                        <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+                          {sellerTrust.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-0 divide-x divide-slate-100 sm:grid-cols-4">
+                      <div className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Star size={14} className="fill-amber-400 text-amber-400" />
+                          <span className="text-lg font-black text-slate-900">{(sellerTrust.avgRating || 0).toFixed(1)}</span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">Đánh giá TB</div>
+                      </div>
+                      <div className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <ShoppingBag size={14} className="text-slate-600" />
+                          <span className="text-lg font-black text-slate-900">{sellerTrust.soldCount || 0}</span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">Giao dịch</div>
+                      </div>
+                      <div className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <TrendingUp size={14} className="text-emerald-600" />
+                          <span className="text-lg font-black text-slate-900">{sellerTrust.trustScore || 0}</span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">Uy tín/100</div>
+                      </div>
+                      <div className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
+                          <Users size={14} className="text-slate-600" />
+                          <span className="text-lg font-black text-slate-900">{sellerTrust.followerCount || 0}</span>
+                        </div>
+                        <div className="mt-0.5 text-[10px] font-medium text-slate-400">Theo dõi</div>
+                      </div>
+                    </div>
+
+                    {sellerTrust.reviewCount > 0 && (
+                      <div className="border-t border-slate-100 px-4 py-3">
+                        <p className="mb-2 text-xs font-semibold text-slate-600">Phân phối sao đánh giá</p>
+                        <div className="space-y-1.5">
+                          {[5, 4, 3, 2, 1].map((star) => {
+                            const count = sellerTrust[`star${star}Count`] || 0;
+                            const pct = sellerTrust.reviewCount > 0 ? (count / sellerTrust.reviewCount) * 100 : 0;
+                            return (
+                              <div key={star} className="flex items-center gap-2 text-xs">
+                                <div className="flex w-8 shrink-0 items-center gap-0.5 justify-end">
+                                  <span className="text-slate-500">{star}</span>
+                                  <Star size={10} className="fill-amber-400 text-amber-400" />
+                                </div>
+                                <div className="flex-1 overflow-hidden rounded-full bg-slate-100 h-1.5">
+                                  <div
+                                    className="h-full rounded-full bg-amber-400 transition-all"
+                                    style={{ width: `${pct}%` }}
+                                  />
+                                </div>
+                                <span className="w-6 shrink-0 text-right text-[10px] text-slate-400">{count}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-end border-t border-slate-100 px-4 py-3">
+                      <div className="flex items-center gap-1 text-xs">
+                        <BadgeCheck size={13} className="text-emerald-500" />
+                        <span className="font-medium text-emerald-700">Tài khoản sinh viên IUH</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* === END CHỈ SỐ UY TÍN === */}
+
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>

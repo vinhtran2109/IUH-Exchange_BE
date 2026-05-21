@@ -118,11 +118,14 @@ const OrderDetail: React.FC = () => {
       placeholder: 'Lý do từ chối...',
       confirmText: 'Từ chối đơn',
     });
-    const rejectReason = reason || 'Người bán từ chối đơn hàng';
+    // Nếu người dùng thoát dialog (bấm Hủy), reason === null => dừng lại
+    if (reason === null) return;
     try {
       setActing(true);
-      const res = await orderService.rejectOrder(order.id || order._id, rejectReason);
-      if (res.success) await fetchDetail(true);
+      const res = await orderService.rejectOrder(order.id || order._id, reason.trim() || 'Người bán từ chối đơn hàng');
+      if (res.success) {
+        await fetchDetail(true);
+      }
     } catch {
       toastError('Không thể từ chối đơn hàng lúc này.');
     } finally {
@@ -134,15 +137,19 @@ const OrderDetail: React.FC = () => {
     if (!order) return;
     const reason = await prompt({
       title: 'Hủy đơn hàng',
-      message: 'Vui lòng cho biết lý do hủy.',
-      placeholder: 'Lý do hủy...',
+      message: 'Vui lòng cho biết lý do hủy đơn hàng này.',
+      placeholder: 'Nhập lý do hủy (ví dụ: Không còn nhu cầu, đổi ý...)...',
       confirmText: 'Hủy đơn',
     });
-    const cancelReason = reason || 'Người mua hủy đơn hàng';
+    // Nếu người dùng thoát dialog (bấm Hủy / nhấn ngoài), reason === null => không hủy đơn
+    if (reason === null) return;
     try {
       setActing(true);
-      const res = await orderService.cancelOrder(order.id || order._id, cancelReason);
-      if (res.success) await fetchDetail(true);
+      const res = await orderService.cancelOrder(order.id || order._id, reason.trim() || 'Người mua hủy đơn hàng');
+      if (res.success) {
+        // Refetch để cập nhật trạng thái sản phẩm về Available
+        await fetchDetail(true);
+      }
     } catch {
       toastError('Không thể hủy đơn hàng lúc này.');
     } finally {
