@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronLeft, Image as ImageIcon, Loader2, Send, User, X } from 'lucide-react';
+import { ChevronLeft, ExternalLink, Image as ImageIcon, Loader2, Send, ShoppingBag, User, X } from 'lucide-react';
 import { chatService } from '../services/chatService';
-import type { ChatMessage } from '../services/chatService';
+import type { ChatMessage, ProductContext } from '../services/chatService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
 
@@ -11,16 +11,21 @@ interface ChatWindowProps {
   recipientName: string;
   onClose: () => void;
   onBack?: () => void;
+  productContext?: ProductContext;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onClose, onBack }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onClose, onBack, productContext }) => {
   const { user } = useAuthStore() as any;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [uploading, setUploading] = useState(false);
   const [recipientInfo, setRecipientInfo] = useState<{ name: string; avatarUrl?: string } | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Đánh dấu đã pre-fill draft một lần — tránh chạy lại khi messages thay đổi
+  const draftApplied = useRef(false);
 
   const conversationId = useMemo(() => {
     if (!user?.id) return '';
@@ -59,7 +64,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       }
     };
 
-    fetchHistory();
+    fetchHistory().finally(() => setHistoryLoaded(true));
 
     const removeQueueListener = chatService.addListener((msg) => {
       const messageRecipientId = (msg as any).recipientId || (msg as any).receiverId;
@@ -109,6 +114,31 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       ignore = true;
     };
   }, [recipientId, recipientName]);
+
+  // Gửi tin nhắn ngữ cảnh sản phẩm khi mở chat từ trang sản phẩm (có productContext)
+  // Chỉ gửi khi: chưa có lịch sử hội thoại (conversation mới), và chỉ gửi đúng 1 lần
+  useEffect(() => {
+    if (!productContext || !historyLoaded || draftApplied.current) return;
+    // Nếu đã có lịch sử thì không gửi lại (tránh spam)
+    if (messages.length > 0) {
+      draftApplied.current = true;
+      return;
+    }
+    draftApplied.current = true;
+    if (!user?.id) return;
+    const contextMsg = `🛒 Hỏi về sản phẩm: "${productContext.title}"
+💰 Giá: ${productContext.price.toLocaleString('vi-VN')}đ
+Xin chào! Mình đang quan tâm đến sản phẩm này, bạn có thể tư vấn thêm không?`;
+    chatService.sendMessage({
+      senderId: user.id,
+      recipientId,
+      content: contextMsg,
+      timestamp: new Date().toISOString(),
+      ...(conversationId ? { conversationId } : {}),
+    } as any);
+    // Focus input sau khi gửi
+    setTimeout(() => inputRef.current?.focus(), 200);
+  }, [productContext, historyLoaded, messages.length]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -202,6 +232,29 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
         </button>
       </div>
 
+      {/* Product Card banner - hiển thị khi chat từ trang sản phẩm */}
+      {productContext && (
+        <a
+          href={`/products/${productContext.id}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 border-b border-emerald-100 bg-emerald-50 px-4 py-2.5 transition-colors hover:bg-emerald-100"
+        >
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-emerald-200 bg-white">
+            {productContext.imageUrl ? (
+              <img src={productContext.imageUrl} alt={productContext.title} className="h-full w-full object-cover" />
+            ) : (
+              <ShoppingBag size={16} className="text-emerald-600" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-emerald-900">{productContext.title}</p>
+            <p className="text-xs font-bold text-emerald-700">{productContext.price.toLocaleString('vi-VN')}đ</p>
+          </div>
+          <ExternalLink size={12} className="shrink-0 text-emerald-500" />
+        </a>
+      )}
+
       <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-4 py-4">
         {(Array.isArray(messages) ? messages : []).map((msg, index) => {
           const isMe = msg.senderId === user?.id;
@@ -265,6 +318,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <ImageIcon size={18} />}
           </button>
           <input
+            ref={inputRef}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}

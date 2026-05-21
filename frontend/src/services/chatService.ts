@@ -35,9 +35,16 @@ const inferredSocketUrl =
     : 'http://localhost:8080/ws';
 
 const socketUrl = import.meta.env.VITE_WS_URL || inferredSocketUrl;
+export interface ProductContext {
+  id: string;
+  title: string;
+  price: number;
+  imageUrl?: string;
+}
+
 let listeners: Array<(msg: ChatMessage) => void> = [];
 let notificationListeners: Array<(notif: any) => void> = [];
-let openChatListeners: Array<(recipientId: string, recipientName: string) => void> = [];
+let openChatListeners: Array<(recipientId: string, recipientName: string, product?: ProductContext) => void> = [];
 let connectedListeners: Array<() => void> = [];
 
 const clearReconnectTimer = () => {
@@ -72,15 +79,15 @@ export const chatService = {
     };
   },
 
-  onOpenChat: (callback: (id: string, name: string) => void) => {
+  onOpenChat: (callback: (id: string, name: string, product?: ProductContext) => void) => {
     openChatListeners.push(callback);
     return () => {
       openChatListeners = openChatListeners.filter((l) => l !== callback);
     };
   },
 
-  triggerOpenChat: (id: string, name: string) => {
-    openChatListeners.forEach((l) => l(id, name));
+  triggerOpenChat: (id: string, name: string, product?: ProductContext) => {
+    openChatListeners.forEach((l) => l(id, name, product));
   },
 
   buildConversationId: (userA: string, userB: string) => {
