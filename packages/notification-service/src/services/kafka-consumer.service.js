@@ -235,7 +235,7 @@ const eventHandlers = {
           await sendOrderEmail(recipient.email, {
             subject: 'Giao dịch thành công',
             title: 'Giao dịch hoàn tất!',
-            body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
+            body: `Đơn hàng #${String(orderId).substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
             orderId,
             status: 'Hoàn tất',
             orderDetails,
@@ -267,7 +267,7 @@ const eventHandlers = {
           await sendOrderEmail(recipient.email, {
             subject: 'Đơn hàng đã bị hủy',
             title: 'Đơn hàng bị hủy',
-            body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
+            body: `Đơn hàng #${String(orderId).substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
             orderId,
             status: 'Đã hủy',
             orderDetails,
