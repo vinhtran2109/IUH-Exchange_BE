@@ -46,6 +46,59 @@ function buildSortOption(sortParam) {
   return sort;
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildSearchSortOption(sortParam) {
+  switch (sortParam) {
+    case 'price_asc':
+      return { price: 1, createdAt: -1 };
+    case 'price_desc':
+      return { price: -1, createdAt: -1 };
+    case 'date_asc':
+      return { createdAt: 1 };
+    case 'date_desc':
+    default:
+      return { createdAt: -1 };
+  }
+}
+
+async function searchProductsInMongo(keyword, page, size, filters = {}) {
+  const skip = (page - 1) * size;
+  const filter = { status: 'AVAILABLE' };
+
+  if (keyword && keyword.trim()) {
+    const regex = { $regex: escapeRegex(keyword.trim()), $options: 'i' };
+    filter.$or = [
+      { title: regex },
+      { description: regex },
+      { category: regex },
+      { location: regex },
+    ];
+  }
+
+  if (filters.category) filter.category = filters.category;
+  if (filters.condition) filter.condition = filters.condition;
+  if (filters.location) filter.location = { $regex: escapeRegex(filters.location), $options: 'i' };
+
+  if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+    filter.price = {};
+    if (filters.minPrice !== undefined) filter.price.$gte = filters.minPrice;
+    if (filters.maxPrice !== undefined) filter.price.$lte = filters.maxPrice;
+  }
+
+  const [products, total] = await Promise.all([
+    Product.find(filter).sort(buildSearchSortOption(filters.sort)).skip(skip).limit(size).lean(),
+    Product.countDocuments(filter),
+  ]);
+
+  return {
+    hits: products.map(toResponse),
+    total,
+  };
+}
+
 // ── Controllers ──
 
 /**
@@ -108,7 +161,10 @@ export async function searchProductsHandler(req, res) {
   if (req.query.location) filters.location = req.query.location;
   if (req.query.sort) filters.sort = req.query.sort;
 
-  const result = await searchProducts(keyword, page, size, filters);
+  let result = await searchProducts(keyword, page, size, filters);
+  if (!result.total) {
+    result = await searchProductsInMongo(keyword, page, size, filters);
+  }
 
   const pageResponse = new PageResponse({
     content: result.hits,

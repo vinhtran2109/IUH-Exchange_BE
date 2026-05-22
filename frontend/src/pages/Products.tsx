@@ -64,6 +64,21 @@ const Products: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
+    const nextSearch = searchParams.get('search') || '';
+    const nextCategory = searchParams.get('category') || '';
+    const nextCondition = searchParams.get('condition') || '';
+    const nextSort = searchParams.get('sort') || 'createdAt:desc';
+    const nextPage = parseInt(searchParams.get('page') || '0', 10);
+
+    if (nextSearch !== search) setSearch(nextSearch);
+    if (nextSearch !== debouncedSearch) setDebouncedSearch(nextSearch);
+    if (nextCategory !== selectedCategory) setSelectedCategory(nextCategory);
+    if (nextCondition !== selectedCondition) setSelectedCondition(nextCondition);
+    if (nextSort !== sortBy) setSortBy(nextSort);
+    if (nextPage !== page) setPage(nextPage);
+  }, [searchParams]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
     if (debouncedSearch) params.set('search', debouncedSearch);
     if (selectedCategory) params.set('category', selectedCategory);

@@ -276,6 +276,33 @@ describe('product.controller', () => {
       const response = res.json.mock.calls[0][0];
       expect(response.data.content).toHaveLength(1);
     });
+
+    it('should fall back to MongoDB when ElasticSearch has no results', async () => {
+      const { searchProducts } = await import('../services/elasticsearch.service.js');
+      searchProducts.mockResolvedValue({ hits: [], total: 0 });
+      const products = [{ ...mockProduct, title: 'Giáo trình kỹ thuật đo điện' }];
+      mockProductModel.find.mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          skip: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              lean: vi.fn().mockResolvedValue(products),
+            }),
+          }),
+        }),
+      });
+      mockProductModel.countDocuments.mockResolvedValue(1);
+
+      const { req, res } = mockReqRes({}, {}, { keyword: 'Giáo', page: '1', size: '20' });
+      await productController.searchProductsHandler(req, res);
+
+      expect(mockProductModel.find).toHaveBeenCalledWith(expect.objectContaining({
+        status: 'AVAILABLE',
+        $or: expect.any(Array),
+      }));
+      const response = res.json.mock.calls[0][0];
+      expect(response.data.content).toHaveLength(1);
+      expect(response.data.content[0].title).toBe('Giáo trình kỹ thuật đo điện');
+    });
   });
 
   describe('getUploadUrl', () => {
