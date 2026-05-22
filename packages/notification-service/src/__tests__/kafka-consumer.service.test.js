@@ -198,6 +198,51 @@ describe('kafka-consumer.service', () => {
       );
     });
 
+    it('should notify seller when buyer reports a bank transfer without exposing ids', async () => {
+      await simulateKafkaMessage('order.payment.reported', {
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        productId: 'prod-1',
+        orderId: 'order-123',
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'seller-1',
+          title: 'Người mua đã báo chuyển khoản',
+          message: expect.stringContaining('Nguyễn Văn Buyer'),
+          targetId: 'order-123',
+        })
+      );
+      const message = Notification.create.mock.calls[0][0].message;
+      expect(message).toContain('Giáo trình kỹ thuật đo điện');
+      expect(message).not.toContain('order-123');
+      expect(message).not.toContain('prod-1');
+    });
+
+    it('should notify buyer when seller confirms payment without exposing ids', async () => {
+      await simulateKafkaMessage('order.payment.confirmed', {
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        productId: 'prod-1',
+        orderId: 'order-123',
+        paymentMethod: 'BANK_TRANSFER',
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'buyer-1',
+          title: 'Thanh toán thành công',
+          message: expect.stringContaining('Trần Thị Seller'),
+          targetId: 'order-123',
+        })
+      );
+      const message = Notification.create.mock.calls[0][0].message;
+      expect(message).toContain('Giáo trình kỹ thuật đo điện');
+      expect(message).not.toContain('order-123');
+      expect(message).not.toContain('seller-1');
+    });
+
     it('should handle order.refunded event', async () => {
       await simulateKafkaMessage('order.refunded', {
         buyerId: 'buyer-1',

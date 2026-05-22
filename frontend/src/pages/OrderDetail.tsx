@@ -18,6 +18,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { orderService } from '../services/orderService';
 import { productService } from '../services/productService';
+import { chatService } from '../services/chatService';
 import { useToast } from '../components/Toast';
 import { usePrompt } from '../components/Dialogs';
 
@@ -119,6 +120,19 @@ const OrderDetail: React.FC = () => {
 
     return () => window.clearInterval(interval);
   }, [order?.status, id]);
+
+  useEffect(() => {
+    if (!id) return;
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const isCurrentOrder = String(notification?.targetId || '') === String(id);
+      const isOrderNotification = String(notification?.type || '').toUpperCase().includes('ORDER');
+      if (isCurrentOrder && isOrderNotification) {
+        fetchDetail(true);
+      }
+    });
+    return removeListener;
+  }, [id]);
 
   const handleConfirm = async () => {
     if (!order) return;

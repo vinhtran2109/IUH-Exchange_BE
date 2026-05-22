@@ -34,6 +34,14 @@ vi.mock('@iuh-exchange/common', async (importOriginal) => {
   };
 });
 
+const mockPublishOrderEvent = vi.fn().mockResolvedValue(true);
+const mockPublishOrderRefunded = vi.fn().mockResolvedValue(true);
+
+vi.mock('../services/saga.service.js', () => ({
+  publishOrderEvent: (...args) => mockPublishOrderEvent(...args),
+  publishOrderRefunded: (...args) => mockPublishOrderRefunded(...args),
+}));
+
 const paymentController = await import('../controllers/payment.controller.js');
 
 function mockReqRes(body = {}, params = {}, headers = {}) {
@@ -129,6 +137,15 @@ describe('payment.controller', () => {
       expect(order.paymentStatus).toBe('PAID');
       expect(order.paidAt).toBeDefined();
       expect(order.save).toHaveBeenCalled();
+      expect(mockPublishOrderEvent).toHaveBeenCalledWith(
+        'order.payment.confirmed',
+        expect.objectContaining({
+          orderId: 'order123',
+          buyerId: 'buyer123',
+          sellerId: 'seller123',
+          productId: 'prod123',
+        })
+      );
     });
 
     it('should reject duplicate payment', async () => {
@@ -178,6 +195,15 @@ describe('payment.controller', () => {
         method: 'BANK_TRANSFER',
         status: 'REPORTED',
       });
+      expect(mockPublishOrderEvent).toHaveBeenCalledWith(
+        'order.payment.reported',
+        expect.objectContaining({
+          orderId: 'order123',
+          buyerId: 'buyer123',
+          sellerId: 'seller123',
+          productId: 'prod123',
+        })
+      );
       expect(res.json).toHaveBeenCalled();
     });
 
@@ -213,6 +239,15 @@ describe('payment.controller', () => {
         method: 'BANK_TRANSFER',
         status: 'SUCCESS',
       });
+      expect(mockPublishOrderEvent).toHaveBeenCalledWith(
+        'order.payment.confirmed',
+        expect.objectContaining({
+          orderId: 'order123',
+          buyerId: 'buyer123',
+          sellerId: 'seller123',
+          productId: 'prod123',
+        })
+      );
       expect(res.json).toHaveBeenCalled();
     });
 
