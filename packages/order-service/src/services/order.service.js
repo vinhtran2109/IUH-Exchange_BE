@@ -60,6 +60,32 @@ async function getAcceptedOfferCheckout(offerId, buyerId) {
   return body.data;
 }
 
+async function getProductCheckoutSnapshot(productId, buyerId) {
+  const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`, {
+    headers: buildGatewayHeaders(buyerId),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body?.success) {
+    throw new BadRequestException(body?.message || body?.error || 'Không thể lấy thông tin sản phẩm để tạo đơn');
+  }
+
+  const product = body.data;
+  if (!product) {
+    throw new BadRequestException('Sản phẩm không tồn tại');
+  }
+  if (product.status !== 'AVAILABLE') {
+    throw new BadRequestException('Sản phẩm hiện không còn khả dụng để đặt mua');
+  }
+
+  return {
+    productId: product.id || product._id || productId,
+    sellerId: product.sellerId,
+    price: Number(product.price || 0),
+    listingType: product.listingType || 'SELL',
+    productTitle: product.title || '',
+  };
+}
+
 function appendStatusHistory(order, nextStatus, {
   changedBy = 'system',
   actorRole = 'SYSTEM',
@@ -95,6 +121,28 @@ function buildReceiptNumber(order) {
 
 function generateHandoverCode() {
   return String(crypto.randomInt(100000, 1000000));
+}
+
+function disputeKarmaAdjustments(order, { status, outcome, adminId, resolution }) {
+  if (status === 'REJECTED') {
+    return [{ userId: order.disputeOpenedBy, amount: -5, reason: 'Tranh chấp bị từ chối do không đủ căn cứ', source: 'DISPUTE_REJECTED', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome: 'REJECTED', resolution } }];
+  }
+  if (outcome === 'SELLER_FAULT') {
+    return [
+      { userId: order.sellerId, amount: -15, reason: 'Admin xác định người bán có lỗi trong tranh chấp', source: 'DISPUTE_SELLER_FAULT', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome, resolution } },
+      { userId: order.buyerId, amount: 3, reason: 'Tranh chấp được xử lý có lợi cho người mua', source: 'DISPUTE_BUYER_PROTECTED', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome, resolution } },
+    ];
+  }
+  if (outcome === 'BUYER_FAULT') {
+    return [{ userId: order.buyerId, amount: -10, reason: 'Admin xác định người mua có lỗi trong tranh chấp', source: 'DISPUTE_BUYER_FAULT', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome, resolution } }];
+  }
+  if (outcome === 'BOTH_FAULT') {
+    return [
+      { userId: order.buyerId, amount: -5, reason: 'Admin xác định cả hai bên cùng có lỗi trong tranh chấp', source: 'DISPUTE_BOTH_FAULT_BUYER', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome, resolution } },
+      { userId: order.sellerId, amount: -5, reason: 'Admin xác định cả hai bên cùng có lỗi trong tranh chấp', source: 'DISPUTE_BOTH_FAULT_SELLER', relatedId: order._id.toString(), performedBy: adminId, metadata: { outcome, resolution } },
+    ];
+  }
+  return [];
 }
 
 /**
@@ -163,6 +211,14 @@ export class OrderService {
           listingType: checkout.listingType,
           tradeItemTitle: checkout.tradeItemTitle,
           tradeItemDescription: checkout.tradeItemDescription,
+        };
+      } else {
+        const checkout = await getProductCheckoutSnapshot(request.productId, buyerId);
+        request.productId = checkout.productId;
+        request.sellerId = checkout.sellerId;
+        request.price = checkout.price;
+        request.tradeMetadata = {
+          listingType: checkout.listingType,
         };
       }
 
@@ -267,6 +323,16 @@ export class OrderService {
     });
     await order.save();
     logger.info(`[SAGA Step 2] Order awaiting seller confirmation: orderId=${orderId}`);
+
+    await publishOrderEvent('order.updated', {
+      orderId: order._id.toString(),
+      productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      reason: 'Product reserved successfully',
+    });
   }
 
   /**
@@ -581,10 +647,17 @@ export class OrderService {
    * @param {string} orderId
    * @returns {object} Order
    */
-  async getOrderById(orderId) {
+  async getOrderById(orderId, userId, role = 'STUDENT') {
     const order = await Order.findById(orderId).lean();
     if (!order) {
       throw new ResourceNotFoundException('Order', orderId);
+    }
+    const canView =
+      role === 'ADMIN' ||
+      String(order.buyerId) === String(userId) ||
+      String(order.sellerId) === String(userId);
+    if (!canView) {
+      throw new ForbiddenException('Bạn không có quyền xem đơn hàng này');
     }
     return order;
   }
@@ -598,7 +671,10 @@ export class OrderService {
     const eligible =
       String(order.buyerId) === String(userId) &&
       order.status === 'COMPLETED' &&
-      order.disputeStatus !== 'OPEN';
+      order.disputeStatus !== 'OPEN' &&
+      order.paymentIssueStatus !== 'OPEN' &&
+      order.paymentStatus !== 'REFUNDED' &&
+      order.disputeOutcome !== 'BUYER_FAULT';
 
     return {
       eligible,
@@ -619,7 +695,7 @@ export class OrderService {
       throw new ForbiddenException('Bạn không có quyền mở tranh chấp cho đơn hàng này');
     }
 
-    if (order.status !== 'COMPLETED' && order.paymentStatus !== 'PAID') {
+    if (order.status !== 'COMPLETED') {
       throw new BadRequestException('Chỉ có thể mở tranh chấp cho đơn đã hoàn tất hoặc đã thanh toán');
     }
 
@@ -799,7 +875,7 @@ export class OrderService {
     return order.toObject();
   }
 
-  async resolveDispute(orderId, adminId, { status, resolution }) {
+  async resolveDispute(orderId, adminId, { status, resolution, outcome = 'NO_FAULT', remedy = 'NONE' }) {
     const order = await Order.findById(orderId);
     if (!order) throw new ResourceNotFoundException('Order', orderId);
     if (order.disputeStatus !== 'OPEN') {
@@ -807,17 +883,50 @@ export class OrderService {
     }
 
     order.disputeStatus = status === 'REJECTED' ? 'REJECTED' : 'RESOLVED';
+    order.disputeOutcome = status === 'REJECTED' ? 'REJECTED' : outcome;
+    order.disputeRemedy = remedy;
     order.disputeResolution = resolution || '';
     order.disputeResolvedBy = adminId;
     order.disputeResolvedAt = new Date();
+    if (remedy === 'REFUND' && order.paymentStatus === 'PAID') {
+      order.paymentStatus = 'REFUNDED';
+      order.paymentProviderStatus = 'DISPUTE_REFUNDED';
+      order.reconciliationStatus = 'MATCHED';
+      order.refundedAt = new Date();
+      order.transactions = order.transactions || [];
+      order.transactions.push({
+        type: 'REFUND_CREATED',
+        transactionId: order.paymentTransactionId,
+        amount: order.price,
+        method: order.paymentMethod || 'DISPUTE',
+        status: 'REFUNDED',
+        note: resolution || 'Admin hoàn tiền sau tranh chấp',
+      });
+    }
     order.disputeTimeline = order.disputeTimeline || [];
     order.disputeTimeline.push({
       action: order.disputeStatus,
       actorId: adminId,
       actorRole: 'ADMIN',
       note: resolution || '',
+      metadata: { outcome: order.disputeOutcome, remedy },
     });
     await order.save();
+
+    await publishOrderEvent('order.dispute.resolved', {
+      orderId: order._id.toString(),
+      productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      status: order.disputeStatus,
+      outcome: order.disputeOutcome,
+      remedy,
+      resolution,
+    });
+
+    for (const adjustment of disputeKarmaAdjustments(order, { status: order.disputeStatus, outcome: order.disputeOutcome, adminId, resolution })) {
+      await publishOrderEvent('karma.adjustment.requested', adjustment);
+    }
 
     return order.toObject();
   }

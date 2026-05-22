@@ -1,8 +1,35 @@
-import { createConsumer, logger } from '@iuh-exchange/common';
+import { cache, createConsumer, logger } from '@iuh-exchange/common';
 import { Product } from '../models/Product.js';
 import { publishProductEvent } from './kafka.service.js';
 
 const RESERVATION_TTL_MINUTES = Number(process.env.PRODUCT_RESERVATION_TTL_MINUTES || 30);
+
+function productStatusEvent(product) {
+  return {
+    id: product._id.toString(),
+    title: product.title,
+    description: product.description,
+    price: product.price,
+    category: product.category,
+    location: product.location || '',
+    condition: product.condition,
+    status: product.status,
+    createdAt: product.createdAt,
+  };
+}
+
+async function invalidateProductCaches(productId) {
+  await Promise.all([
+    cache.del(`products:detail:${productId}`),
+    cache.delPattern('products:list:*'),
+    cache.del('products:admin:stats'),
+  ]);
+}
+
+async function publishProductStatusChanged(product) {
+  await invalidateProductCaches(product._id.toString());
+  await publishProductEvent('product.updated', productStatusEvent(product));
+}
 
 /**
  * Saga listener: handles order lifecycle events that affect product status.
@@ -90,6 +117,7 @@ async function handleOrderCreated(payload) {
     return;
   }
   logger.info(`[SAGA] Product reserved: ${productId}`);
+  await publishProductStatusChanged(reserved);
 
   await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: reserved.sellerId, buyerId });
 }
@@ -113,6 +141,7 @@ async function handleOrderCompleted(payload) {
     product.reservedAt = null;
     product.reservationExpiresAt = null;
     await product.save();
+    await publishProductStatusChanged(product);
     logger.info(`[SAGA] Product marked as SOLD: ${productId}`);
   }
 }
@@ -132,6 +161,7 @@ async function handleOrderCancelled(payload) {
     product.reservedAt = null;
     product.reservationExpiresAt = null;
     await product.save();
+    await publishProductStatusChanged(product);
     logger.info(`[SAGA] Product released: ${productId}, reason=${reason}`);
   }
 }
@@ -152,6 +182,7 @@ export async function releaseExpiredReservations(now = new Date()) {
     product.reservedAt = null;
     product.reservationExpiresAt = null;
     await product.save();
+    await publishProductStatusChanged(product);
 
     if (orderId) {
       await publishProductEvent('product.reserve.expired', {

@@ -11,11 +11,13 @@ const GROUP_ID = 'notification-service-group';
 
 const TOPICS = [
   { topic: 'order.created', fromBeginning: false },
+  { topic: 'order.updated', fromBeginning: false },
   { topic: 'order.completed', fromBeginning: false },
   { topic: 'order.cancelled', fromBeginning: false },
   { topic: 'order.payment.reported', fromBeginning: false },
   { topic: 'order.payment.confirmed', fromBeginning: false },
   { topic: 'order.dispute.opened', fromBeginning: false },
+  { topic: 'order.dispute.resolved', fromBeginning: false },
   { topic: 'order.dispute.evidence_added', fromBeginning: false },
   { topic: 'order.refunded', fromBeginning: false },
   { topic: 'order.handover.proposed', fromBeginning: false },
@@ -41,6 +43,7 @@ const TOPICS = [
 
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
+const INTERNAL_SERVICE_TOKEN = process.env.INTERNAL_SERVICE_TOKEN || process.env.GATEWAY_SECRET || process.env.JWT_SECRET || 'dev-secret';
 
 /**
  * Fetch user profile from user-service (internal call).
@@ -71,7 +74,12 @@ async function getUserProfile(userId) {
 async function getProductInfo(productId) {
   if (!productId) return null;
   try {
-    const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`);
+    const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`, {
+      headers: {
+        'x-internal-service': 'notification-service',
+        'x-internal-token': INTERNAL_SERVICE_TOKEN,
+      },
+    });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const product = data?.data;
@@ -227,6 +235,21 @@ const eventHandlers = {
     }
   },
 
+  'order.updated': async (payload) => {
+    const { buyerId, sellerId, orderId, status } = payload;
+    const statusLabel = status === 'AWAITING_SELLER' ? 'Chờ người bán xác nhận' : 'Đã cập nhật';
+    const orderDetails = await buildOrderEmailDetails(payload, statusLabel);
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Đơn hàng đã cập nhật',
+        message: `Đơn ${orderProductLabel(orderDetails)} đã chuyển sang trạng thái ${statusLabel}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
   'order.completed': async (payload) => {
     const { buyerId, sellerId, orderId } = payload;
     const orderDetails = await buildOrderEmailDetails(payload, 'Hoàn tất');
@@ -334,6 +357,28 @@ const eventHandlers = {
         recipientId,
         title: 'Tranh chấp đơn hàng',
         message: `Đơn ${orderProductLabel(orderDetails)} vừa được mở tranh chấp${openedBy ? ' bởi một bên trong giao dịch' : ''}${reason ? `: ${reason}` : ''}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.dispute.resolved': async (payload) => {
+    const { buyerId, sellerId, orderId, outcome, remedy, resolution } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý tranh chấp');
+    const outcomeLabel = outcome === 'SELLER_FAULT'
+      ? 'người bán có lỗi'
+      : outcome === 'BUYER_FAULT'
+        ? 'người mua có lỗi'
+        : outcome === 'BOTH_FAULT'
+          ? 'cả hai bên cùng có lỗi'
+          : 'không xác định lỗi rõ ràng';
+
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Tranh chấp đã được xử lý',
+        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -448,13 +493,13 @@ const eventHandlers = {
   },
 
   'product.reserved': async (payload) => {
-    const { sellerId, productId, buyerName, productTitle } = payload;
+    const { sellerId, productId, orderId, buyerName, productTitle } = payload;
     await sendNotification({
       recipientId: sellerId,
       title: 'Sản phẩm đã được giữ chỗ',
       message: `${buyerName || 'Người mua'} vừa giữ chỗ "${productTitle || 'sản phẩm của bạn'}".`,
       type: 'ORDER',
-      targetId: productId,
+      targetId: orderId || productId,
     });
   },
 

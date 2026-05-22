@@ -327,9 +327,21 @@ export async function processRefund(req, res) {
  * Get payment details for an order.
  */
 export async function getPaymentDetails(req, res) {
+  const userId = req.user?.sub || req.headers['x-user-id'];
+  const role = req.user?.role || req.headers['x-user-role'] || 'STUDENT';
+  if (!userId) throw new BadRequestException('Missing X-User-Id header');
+
   const orderId = req.params.id;
   const order = await Order.findById(orderId).lean();
   if (!order) throw new ResourceNotFoundException('Order', orderId);
+
+  const canView =
+    role === 'ADMIN' ||
+    String(order.buyerId) === String(userId) ||
+    String(order.sellerId) === String(userId);
+  if (!canView) {
+    throw new ForbiddenException('Bạn không có quyền xem thông tin thanh toán của đơn này');
+  }
 
   res.json(ApiResponse.ok({
     orderId,

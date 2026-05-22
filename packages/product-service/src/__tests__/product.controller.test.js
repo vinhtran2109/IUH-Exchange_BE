@@ -37,6 +37,7 @@ vi.mock('../models/Product.js', () => ({
 
 vi.mock('../services/elasticsearch.service.js', () => ({
   searchProducts: vi.fn().mockResolvedValue({ hits: [], total: 0 }),
+  suggestProducts: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('../services/kafka.service.js', () => ({
@@ -201,6 +202,15 @@ describe('product.controller', () => {
       const { req, res } = mockReqRes({}, { id: 'nonexistent' });
       await expect(productController.getProductById(req, res)).rejects.toThrow();
     });
+
+    it('should hide non-available product from unrelated public viewer', async () => {
+      mockProductModel.findById.mockReturnValue({
+        lean: vi.fn().mockResolvedValue({ ...mockProduct, status: 'PENDING_APPROVAL', sellerId: 'owner123' }),
+      });
+
+      const { req, res } = mockReqRes({}, { id: 'prod123' }, {}, null);
+      await expect(productController.getProductById(req, res)).rejects.toThrow();
+    });
   });
 
   describe('updateProduct', () => {
@@ -235,6 +245,18 @@ describe('product.controller', () => {
       );
       await expect(productController.updateProduct(req, res)).rejects.toThrow("permission");
     });
+
+    it('should reject update for reserved product', async () => {
+      mockProductModel.findById.mockResolvedValue({ ...mockProduct, sellerId: 'user123', status: 'RESERVED' });
+
+      const { req, res } = mockReqRes(
+        { title: 'Updated Title' },
+        { id: 'prod123' },
+        {},
+        { sub: 'user123' }
+      );
+      await expect(productController.updateProduct(req, res)).rejects.toThrow('Không thể chỉnh sửa');
+    });
   });
 
   describe('deleteProduct', () => {
@@ -258,6 +280,13 @@ describe('product.controller', () => {
 
       const { req, res } = mockReqRes({}, { id: 'prod123' }, {}, { sub: 'other-user' });
       await expect(productController.deleteProduct(req, res)).rejects.toThrow("permission");
+    });
+
+    it('should reject delete for sold product', async () => {
+      mockProductModel.findById.mockResolvedValue({ ...mockProduct, sellerId: 'user123', status: 'SOLD' });
+
+      const { req, res } = mockReqRes({}, { id: 'prod123' }, {}, { sub: 'user123' });
+      await expect(productController.deleteProduct(req, res)).rejects.toThrow('Không thể xóa');
     });
   });
 
