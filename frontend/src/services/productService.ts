@@ -38,6 +38,21 @@ export interface OfferPayload {
   message?: string;
 }
 
+const toSearchSortParam = (sort?: string) => {
+  switch (sort) {
+    case 'price:asc':
+      return 'price_asc';
+    case 'price:desc':
+      return 'price_desc';
+    case 'createdAt:asc':
+      return 'date_asc';
+    case 'createdAt:desc':
+      return 'date_desc';
+    default:
+      return undefined;
+  }
+};
+
 export const productService = {
   getProducts: async (page = 1, size = 20, category?: string, sort?: string, condition?: string) => {
     let url = `/products?page=${page}&size=${size}`;
@@ -53,9 +68,12 @@ export const productService = {
     return response.data;
   },
 
-  searchProducts: async (keyword: string, page = 1, size = 20, condition?: string) => {
+  searchProducts: async (keyword: string, page = 1, size = 20, condition?: string, category?: string, sort?: string) => {
     let url = `/products/search?keyword=${encodeURIComponent(keyword)}&page=${page}&size=${size}`;
     if (condition) url += `&condition=${encodeURIComponent(condition)}`;
+    if (category) url += `&category=${encodeURIComponent(category)}`;
+    const searchSort = toSearchSortParam(sort);
+    if (searchSort) url += `&sort=${encodeURIComponent(searchSort)}`;
     const response = await api.get(url);
     return response.data;
   },

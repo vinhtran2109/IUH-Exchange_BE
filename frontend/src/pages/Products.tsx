@@ -84,7 +84,14 @@ const Products: React.FC = () => {
       let response;
       const condition = selectedCondition || undefined;
       if (debouncedSearch) {
-        response = await productService.searchProducts(debouncedSearch, page, PAGE_SIZE, condition);
+        response = await productService.searchProducts(
+          debouncedSearch,
+          page,
+          PAGE_SIZE,
+          condition,
+          selectedCategory || undefined,
+          sortBy
+        );
       } else {
         response = await productService.getProducts(page, PAGE_SIZE, selectedCategory || undefined, sortBy, condition);
       }

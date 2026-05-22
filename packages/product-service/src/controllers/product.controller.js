@@ -57,17 +57,19 @@ export async function listProducts(req, res) {
   const size = Math.min(100, Math.max(1, parseInt(req.query.size || '20', 10)));
   const sort = req.query.sort;
   const category = req.query.category;
+  const condition = req.query.condition;
   const location = req.query.location;
   const skip = (page - 1) * size;
 
   // Build cache key from query params
-  const cacheKey = `products:list:${page}:${size}:${sort || 'default'}:${category || 'all'}:${location || 'all'}`;
+  const cacheKey = `products:list:${page}:${size}:${sort || 'default'}:${category || 'all'}:${condition || 'all'}:${location || 'all'}`;
   
   const cached = await cache.get(cacheKey);
   if (cached) return res.json(cached);
 
   const filter = { status: 'AVAILABLE' };
   if (category) filter.category = category;
+  if (condition) filter.condition = condition;
   if (location) filter.location = { $regex: location, $options: 'i' };
 
   const [products, total] = await Promise.all([

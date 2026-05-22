@@ -120,6 +120,26 @@ describe('product.controller', () => {
       const response = res.json.mock.calls[0][0];
       expect(response.success).toBe(true);
     });
+
+    it('should filter products by condition', async () => {
+      const products = [{ ...mockProduct, condition: 'LIKE_NEW' }];
+      mockProductModel.find.mockReturnValue({
+        sort: vi.fn().mockReturnValue({
+          skip: vi.fn().mockReturnValue({
+            limit: vi.fn().mockReturnValue({
+              lean: vi.fn().mockResolvedValue(products),
+            }),
+          }),
+        }),
+      });
+      mockProductModel.countDocuments.mockResolvedValue(1);
+
+      const { req, res } = mockReqRes({}, {}, { page: '1', size: '20', condition: 'LIKE_NEW' });
+      await productController.listProducts(req, res);
+
+      expect(mockProductModel.find).toHaveBeenCalledWith({ status: 'AVAILABLE', condition: 'LIKE_NEW' });
+      expect(mockProductModel.countDocuments).toHaveBeenCalledWith({ status: 'AVAILABLE', condition: 'LIKE_NEW' });
+    });
   });
 
   describe('createProduct', () => {

@@ -15,7 +15,7 @@ import cors from 'cors';
 import crypto from 'node:crypto';
 import http from 'node:http';
 import jwt from 'jsonwebtoken';
-import { createProxyMiddleware } from 'http-proxy-middleware';
+import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
 import {
@@ -66,8 +66,22 @@ app.use(cors({
   maxAge: 3600,
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+const jsonParser = express.json({ limit: '10mb' });
+const urlencodedParser = express.urlencoded({ extended: true, limit: '10mb' });
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/v1') || req.path.startsWith('/ws')) {
+    return next();
+  }
+  return jsonParser(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/v1') || req.path.startsWith('/ws')) {
+    return next();
+  }
+  return urlencodedParser(req, res, next);
+});
 
 // ────────────────────────────────────────────────────────
 // Prometheus Metrics
@@ -188,20 +202,7 @@ function createServiceProxy(serviceName) {
         proxyReq(proxyReq, req) {
           // Forward correlation ID
           proxyReq.setHeader('X-Request-ID', req.requestId);
-
-          // Fix: express.json() consumes the body stream, so http-proxy-middleware
-          // can't forward the body. We write the parsed body back to the proxy request.
-          const shouldForwardJsonBody =
-            req.body !== undefined &&
-            req.body !== null &&
-            ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method.toUpperCase());
-
-          if (shouldForwardJsonBody) {
-            const bodyData = JSON.stringify(req.body);
-            proxyReq.setHeader('Content-Type', 'application/json');
-            proxyReq.setHeader('Content-Length', Buffer.byteLength(bodyData));
-            proxyReq.write(bodyData);
-          }
+          fixRequestBody(proxyReq, req);
         },
         proxyRes(proxyRes, req) {
           const status = proxyRes.statusCode;

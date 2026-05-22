@@ -51,25 +51,45 @@ const OrderDetail: React.FC = () => {
   const [paymentIssueReason, setPaymentIssueReason] = useState('');
   const [noShowReason, setNoShowReason] = useState('');
   const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
+  const initialOrder = (location.state as any)?.initialOrder || null;
 
   const fetchDetail = async (silent = false) => {
     if (!id) return;
     if (!silent) setLoading(true);
     try {
-      const res = await orderService.getOrderById(id);
+      let res: any = null;
+      let lastError: any = null;
+
+      for (let attempt = 0; attempt < 4; attempt += 1) {
+        try {
+          res = await orderService.getOrderById(id);
+          lastError = null;
+          break;
+        } catch (error: any) {
+          lastError = error;
+          const isTransientMissing = error?.response?.status === 404 && attempt < 3;
+          if (!isTransientMissing) break;
+          await new Promise((resolve) => window.setTimeout(resolve, 450 * (attempt + 1)));
+        }
+      }
+
+      if (lastError) throw lastError;
       if (res.success) {
         const currentOrder = res.data;
         setOrder(currentOrder);
 
-        const [productRes, paymentRes] = await Promise.all([
+        const [productRes, paymentRes] = await Promise.allSettled([
           productService.getProductById(currentOrder.productId),
           orderService.getPaymentDetails(id),
         ]);
 
-        if (productRes.success) setProduct(productRes.data);
-        if (paymentRes.success) setPayment(paymentRes.data);
+        if (productRes.status === 'fulfilled' && productRes.value.success) setProduct(productRes.value.data);
+        if (paymentRes.status === 'fulfilled' && paymentRes.value.success) setPayment(paymentRes.value.data);
       }
     } catch (error) {
+      if (!order && initialOrder) {
+        setOrder(initialOrder);
+      }
       console.error('Lỗi lấy chi tiết đơn hàng', error);
     } finally {
       if (!silent) setLoading(false);
@@ -77,6 +97,9 @@ const OrderDetail: React.FC = () => {
   };
 
   useEffect(() => {
+    if (initialOrder) {
+      setOrder(initialOrder);
+    }
     fetchDetail();
   }, [id]);
 

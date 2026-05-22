@@ -289,6 +289,7 @@ const ProductDetail: React.FC = () => {
       setHandoverLocation('');
       navigate(`/orders/${orderId}`, {
         state: {
+          initialOrder: createdOrder,
           flashMessage:
             paymentChoice === 'BANK_TRANSFER'
               ? 'Đã tạo đơn. Hãy chuyển khoản cho người bán, sau đó bấm Tôi đã chuyển khoản trong chi tiết đơn.'

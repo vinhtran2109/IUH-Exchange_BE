@@ -14,12 +14,10 @@ const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, ne
 
 router.get('/offers/:offerId/checkout', verifyGatewaySignature, asyncHandler(getOfferCheckout));
 
-router.use(authenticate);
-
-router.get('/offers/me', asyncHandler(listMyOffers));
-router.post('/:productId/offers', asyncHandler(createOffer));
-router.get('/:productId/offers', asyncHandler(listProductOffers));
-router.patch('/offers/:offerId/resolve', asyncHandler(resolveOffer));
-router.patch('/offers/:offerId/withdraw', asyncHandler(withdrawOffer));
+router.get('/offers/me', authenticate, asyncHandler(listMyOffers));
+router.post('/:productId/offers', authenticate, asyncHandler(createOffer));
+router.get('/:productId/offers', authenticate, asyncHandler(listProductOffers));
+router.patch('/offers/:offerId/resolve', authenticate, asyncHandler(resolveOffer));
+router.patch('/offers/:offerId/withdraw', authenticate, asyncHandler(withdrawOffer));
 
 export default router;
