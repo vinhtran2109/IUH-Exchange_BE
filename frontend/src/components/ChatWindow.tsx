@@ -121,11 +121,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     const contextKey = `${conversationId}:${productContext.id}`;
     if (sentProductContextKey.current === contextKey) return;
 
-    const productUrl = `${window.location.origin}/products/${productContext.id}`;
     const contextMsg = [
       `Mình đang hỏi về sản phẩm: ${productContext.title}`,
       `Giá: ${productContext.price.toLocaleString('vi-VN')}đ`,
-      `Link: ${productUrl}`,
       'Bạn tư vấn thêm giúp mình nhé.',
     ].join('\n');
 
