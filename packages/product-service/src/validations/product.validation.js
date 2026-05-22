@@ -44,6 +44,7 @@ export const paginationSchema = z.object({
   size: z.coerce.number().int().min(1).max(100).default(20),
   sort: z.string().optional(),
   category: z.string().optional(),
+  condition: z.enum(CONDITIONS).optional(),
   location: z.string().optional(),
 });
 

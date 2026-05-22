@@ -24,8 +24,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  // Đánh dấu đã pre-fill draft một lần — tránh chạy lại khi messages thay đổi
-  const draftApplied = useRef(false);
+  const sentProductContextKey = useRef<string | null>(null);
 
   const conversationId = useMemo(() => {
     if (!user?.id) return '';
@@ -115,31 +114,48 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     };
   }, [recipientId, recipientName]);
 
-  // Gửi tin nhắn ngữ cảnh sản phẩm khi mở chat từ trang sản phẩm (có productContext)
-  // Chỉ gửi khi: chưa có lịch sử hội thoại (conversation mới), và chỉ gửi đúng 1 lần
   useEffect(() => {
-    if (!productContext || !historyLoaded || draftApplied.current) return;
-    // Nếu đã có lịch sử thì không gửi lại (tránh spam)
-    if (messages.length > 0) {
-      draftApplied.current = true;
-      return;
-    }
-    draftApplied.current = true;
+    if (!productContext || !historyLoaded) return;
     if (!user?.id) return;
-    const contextMsg = `🛒 Hỏi về sản phẩm: "${productContext.title}"
-💰 Giá: ${productContext.price.toLocaleString('vi-VN')}đ
-Xin chào! Mình đang quan tâm đến sản phẩm này, bạn có thể tư vấn thêm không?`;
-    chatService.sendMessage({
-      senderId: user.id,
-      recipientId,
-      content: contextMsg,
-      timestamp: new Date().toISOString(),
-      ...(conversationId ? { conversationId } : {}),
-    } as any);
-    // Focus input sau khi gửi
-    setTimeout(() => inputRef.current?.focus(), 200);
-  }, [productContext, historyLoaded, messages.length]);
 
+    const contextKey = `${conversationId}:${productContext.id}`;
+    if (sentProductContextKey.current === contextKey) return;
+
+    const productUrl = `${window.location.origin}/products/${productContext.id}`;
+    const contextMsg = [
+      `Mình đang hỏi về sản phẩm: ${productContext.title}`,
+      `Giá: ${productContext.price.toLocaleString('vi-VN')}đ`,
+      `Link: ${productUrl}`,
+      'Bạn tư vấn thêm giúp mình nhé.',
+    ].join('\n');
+
+    const sendContextMessage = () => {
+      const sent = chatService.sendMessage({
+        senderId: user.id,
+        recipientId,
+        content: contextMsg,
+        timestamp: new Date().toISOString(),
+        ...(conversationId ? { conversationId } : {}),
+      } as any);
+
+      if (sent) {
+        sentProductContextKey.current = contextKey;
+        setTimeout(() => inputRef.current?.focus(), 200);
+      }
+
+      return sent;
+    };
+
+    if (sendContextMessage()) return;
+
+    const removeConnectedListener = chatService.addConnectedListener(() => {
+      if (sentProductContextKey.current !== contextKey) {
+        sendContextMessage();
+      }
+    });
+
+    return removeConnectedListener;
+  }, [conversationId, historyLoaded, productContext, recipientId, user?.id]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
