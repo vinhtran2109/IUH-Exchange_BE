@@ -37,9 +37,22 @@ const LostFoundDetail: React.FC = () => {
     if (id) fetchDetail(id);
   }, [id]);
 
-  const fetchDetail = async (itemId: string) => {
+  useEffect(() => {
+    if (!id) return;
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const targetId = String(notification?.targetId || '');
+      const type = String(notification?.type || '').toUpperCase();
+      if (targetId === String(id) && (type.includes('SYSTEM') || type.includes('LOST'))) {
+        fetchDetail(id, true);
+      }
+    });
+    return removeListener;
+  }, [id]);
+
+  const fetchDetail = async (itemId: string, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await lostFoundService.getItemById(itemId);
       if (response.success) {
         setItem(response.data);

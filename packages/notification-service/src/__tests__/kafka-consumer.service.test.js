@@ -312,6 +312,48 @@ describe('kafka-consumer.service', () => {
 
       expect(Notification.create).toHaveBeenCalledTimes(1);
     });
+
+    it('should notify the other party when payment issue is opened', async () => {
+      await simulateKafkaMessage('order.payment_issue.opened', {
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        productId: 'prod-1',
+        orderId: 'order-123',
+        openedBy: 'buyer-1',
+        reason: 'Chưa thấy tiền hoàn',
+      });
+
+      expect(Notification.create).toHaveBeenCalledTimes(1);
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'seller-1',
+          title: 'Có khiếu nại thanh toán',
+          message: expect.stringContaining('Giáo trình kỹ thuật đo điện'),
+          targetId: 'order-123',
+        })
+      );
+    });
+
+    it('should notify both parties when payment issue is resolved', async () => {
+      await simulateKafkaMessage('order.payment_issue.resolved', {
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        productId: 'prod-1',
+        orderId: 'order-123',
+        action: 'CONFIRM_PAID',
+        status: 'RESOLVED',
+      });
+
+      expect(Notification.create).toHaveBeenCalledTimes(2);
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'buyer-1',
+          title: 'Khiếu nại thanh toán đã xử lý',
+          message: expect.stringContaining('đã xác nhận thanh toán'),
+          targetId: 'order-123',
+        })
+      );
+    });
   });
 
   describe('product events', () => {

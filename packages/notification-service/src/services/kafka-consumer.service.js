@@ -21,6 +21,8 @@ const TOPICS = [
   { topic: 'order.handover.proposed', fromBeginning: false },
   { topic: 'order.handover.responded', fromBeginning: false },
   { topic: 'order.handover.confirmed', fromBeginning: false },
+  { topic: 'order.payment_issue.opened', fromBeginning: false },
+  { topic: 'order.payment_issue.resolved', fromBeginning: false },
   { topic: 'product.reserved', fromBeginning: false },
   { topic: 'product.reserve.expired', fromBeginning: false },
   { topic: 'product.approved', fromBeginning: false },
@@ -403,6 +405,42 @@ const eventHandlers = {
         recipientId,
         title: handoverStatus === 'HANDED_OVER' ? 'Giao nhận đã hoàn tất' : 'Đối tác đã xác nhận giao nhận',
         message: `Đơn ${orderProductLabel(orderDetails)} vừa cập nhật trạng thái giao nhận.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.payment_issue.opened': async (payload) => {
+    const { buyerId, sellerId, orderId, openedBy, reason } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Có khiếu nại thanh toán');
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(openedBy))) {
+      await sendNotification({
+        recipientId,
+        title: 'Có khiếu nại thanh toán',
+        message: `Đơn ${orderProductLabel(orderDetails)} vừa có khiếu nại thanh toán${reason ? `: ${reason}` : ''}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.payment_issue.resolved': async (payload) => {
+    const { buyerId, sellerId, orderId, action, status } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý khiếu nại thanh toán');
+    const actionLabel = action === 'CONFIRM_PAID'
+      ? 'đã xác nhận thanh toán'
+      : action === 'REFUND'
+        ? 'đã hoàn tiền'
+        : status === 'REJECTED'
+          ? 'đã từ chối khiếu nại'
+          : 'đã xử lý khiếu nại';
+
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Khiếu nại thanh toán đã xử lý',
+        message: `Admin ${actionLabel} cho ${orderProductLabel(orderDetails)}.`,
         type: 'ORDER',
         targetId: orderId,
       });

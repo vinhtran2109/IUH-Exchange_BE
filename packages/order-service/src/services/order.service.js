@@ -847,8 +847,10 @@ export class OrderService {
 
     await publishOrderEvent('order.payment_issue.opened', {
       orderId: order._id.toString(),
+      productId: order.productId,
       buyerId: order.buyerId,
       sellerId: order.sellerId,
+      price: order.price,
       openedBy: userId,
       reason,
     });
@@ -908,8 +910,10 @@ export class OrderService {
 
     await publishOrderEvent('order.payment_issue.resolved', {
       orderId: order._id.toString(),
+      productId: order.productId,
       buyerId: order.buyerId,
       sellerId: order.sellerId,
+      price: order.price,
       action,
       status: order.paymentIssueStatus,
     });
