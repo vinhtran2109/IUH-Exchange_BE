@@ -19,6 +19,50 @@ function escapeHtml(str) {
     .replace(/'/g, '&#039;');
 }
 
+function formatCurrency(value) {
+  if (value === undefined || value === null || value === '') return '';
+  const number = Number(value);
+  if (!Number.isFinite(number)) return escapeHtml(value);
+  return `${number.toLocaleString('vi-VN')}đ`;
+}
+
+function renderDetailRow(label, value) {
+  if (value === undefined || value === null || value === '') return '';
+  return `<tr>
+    <td style="padding:8px 0;color:#64748b;font-size:13px;width:128px;vertical-align:top;">${escapeHtml(label)}</td>
+    <td style="padding:8px 0;color:#1e293b;font-size:13px;font-weight:600;line-height:1.5;">${escapeHtml(value)}</td>
+  </tr>`;
+}
+
+function formatPerson(person) {
+  if (!person) return '';
+  const name = person.name || 'Chưa có tên';
+  const extra = [person.email, person.studentId ? `MSSV: ${person.studentId}` : ''].filter(Boolean);
+  return extra.length ? `${name} (${extra.join(' - ')})` : name;
+}
+
+function renderOrderDetails(orderDetails = {}, orderId, status) {
+  const buyer = formatPerson(orderDetails.buyer);
+  const seller = formatPerson(orderDetails.seller);
+  const product = orderDetails.product || {};
+  const rows = [
+    renderDetailRow('Mã đơn hàng', orderDetails.orderCode || (orderId ? `#${String(orderId).substring(0, 8)}` : '')),
+    renderDetailRow('Sản phẩm', product.title),
+    renderDetailRow('Giá', formatCurrency(product.price ?? orderDetails.price)),
+    renderDetailRow('Người mua', buyer),
+    renderDetailRow('Người bán', seller),
+    renderDetailRow('Trạng thái', status || orderDetails.status),
+    renderDetailRow('Lý do hủy', orderDetails.reason),
+  ].join('');
+
+  if (!rows) return '';
+
+  return `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px;margin:0 0 20px;">
+    <p style="margin:0 0 8px;color:#0f172a;font-size:14px;font-weight:700;">Thông tin đơn hàng</p>
+    <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
+  </div>`;
+}
+
 let transporter = null;
 
 function getTransporter() {
@@ -36,7 +80,7 @@ function getTransporter() {
 /**
  * Send an order notification email.
  */
-export async function sendOrderEmail(toEmail, { subject, title, body, orderId, status }) {
+export async function sendOrderEmail(toEmail, { subject, title, body, orderId, status, orderDetails }) {
   const transport = getTransporter();
   if (!transport) {
     logger.warn('[Email] SMTP not configured, skipping email notification');
@@ -45,7 +89,7 @@ export async function sendOrderEmail(toEmail, { subject, title, body, orderId, s
 
   const safeTitle = escapeHtml(title);
   const safeBody = escapeHtml(body);
-  const safeStatus = escapeHtml(status);
+  const detailsHtml = renderOrderDetails(orderDetails, orderId, status);
 
   const html = `<!DOCTYPE html>
 <html>
@@ -56,18 +100,14 @@ export async function sendOrderEmail(toEmail, { subject, title, body, orderId, s
       <table width="520" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
         <tr>
           <td style="background:linear-gradient(135deg,#4f46e5,#7c3aed);padding:28px 40px;text-align:center;">
-            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">🎓 ${escapeHtml(APP_NAME)}</h1>
+            <h1 style="color:#fff;margin:0;font-size:20px;font-weight:600;">${escapeHtml(APP_NAME)}</h1>
           </td>
         </tr>
         <tr>
           <td style="padding:32px 40px;">
             <h2 style="color:#1e293b;margin:0 0 12px;font-size:18px;">${safeTitle}</h2>
             <p style="color:#475569;font-size:14px;margin:0 0 20px;line-height:1.6;">${safeBody}</p>
-            ${orderId ? `<div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 20px;">
-              <p style="margin:0;color:#64748b;font-size:13px;">Mã đơn hàng</p>
-              <p style="margin:4px 0 0;font-size:16px;font-weight:700;color:#1e293b;">#${escapeHtml(orderId?.substring(0, 8))}</p>
-            </div>` : ''}
-            ${status ? `<p style="margin:0;color:#4f46e5;font-size:14px;font-weight:600;">Trạng thái: ${safeStatus}</p>` : ''}
+            ${detailsHtml}
           </td>
         </tr>
         <tr>

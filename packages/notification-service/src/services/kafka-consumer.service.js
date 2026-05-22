@@ -36,18 +36,84 @@ const TOPICS = [
 ];
 
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
 
 /**
- * Fetch user email from user-service (internal call).
+ * Fetch user profile from user-service (internal call).
  */
-async function getUserEmail(userId) {
+async function getUserProfile(userId) {
+  if (!userId) return null;
   try {
     const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${userId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    return data?.data?.email || null;
-  } catch {
+    const user = data?.data;
+    if (!user) return null;
+
+    return {
+      name: user.name || user.fullName || user.email || null,
+      email: user.email || null,
+      studentId: user.studentId || '',
+    };
+  } catch (err) {
+    logger.warn(`Failed to fetch user profile ${userId}: ${err.message}`);
     return null;
   }
+}
+
+/**
+ * Fetch product info from product-service (internal call).
+ */
+async function getProductInfo(productId) {
+  if (!productId) return null;
+  try {
+    const res = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const product = data?.data;
+    if (!product) return null;
+
+    return {
+      title: product.title || product.name || null,
+      price: product.price,
+      category: product.category || '',
+      condition: product.condition || '',
+    };
+  } catch (err) {
+    logger.warn(`Failed to fetch product info ${productId}: ${err.message}`);
+    return null;
+  }
+}
+
+async function buildOrderEmailDetails(payload, status) {
+  const [buyerProfile, sellerProfile, productInfo] = await Promise.all([
+    getUserProfile(payload.buyerId),
+    getUserProfile(payload.sellerId),
+    getProductInfo(payload.productId),
+  ]);
+
+  return {
+    orderCode: payload.orderId ? `#${String(payload.orderId).substring(0, 8)}` : '',
+    status,
+    reason: payload.reason || '',
+    price: payload.price,
+    buyer: {
+      name: buyerProfile?.name || payload.buyerName || 'Chưa có tên',
+      email: buyerProfile?.email || '',
+      studentId: buyerProfile?.studentId || '',
+    },
+    seller: {
+      name: sellerProfile?.name || payload.sellerName || 'Chưa có tên',
+      email: sellerProfile?.email || '',
+      studentId: sellerProfile?.studentId || '',
+    },
+    product: {
+      title: productInfo?.title || payload.productTitle || 'Chưa có tên sản phẩm',
+      price: payload.price ?? productInfo?.price,
+      category: productInfo?.category || '',
+      condition: productInfo?.condition || '',
+    },
+  };
 }
 
 /**
@@ -124,7 +190,7 @@ async function sendNotification({ recipientId, title, message, type, targetId })
 const eventHandlers = {
   'order.created': async (payload) => {
     const { sellerId, orderId, buyerName } = payload;
-    const { shouldSendEmail } = await sendNotification({
+    const result = await sendNotification({
       recipientId: sellerId,
       title: 'New Order',
       message: `You have a new purchase request for order ${orderId}${buyerName ? ` from ${buyerName}` : ''}`,
@@ -132,15 +198,16 @@ const eventHandlers = {
       targetId: orderId,
     });
     // Send email (respect preference)
-    if (shouldSendEmail) {
-      const email = await getUserEmail(sellerId);
-      if (email) {
-        await sendOrderEmail(email, {
+    if (result?.shouldSendEmail) {
+      const orderDetails = await buildOrderEmailDetails(payload, 'Chờ xác nhận');
+      if (orderDetails.seller.email) {
+        await sendOrderEmail(orderDetails.seller.email, {
           subject: 'Đơn hàng mới',
           title: 'Bạn có đơn hàng mới!',
-          body: `Một người mua vừa gửi yêu cầu mua sản phẩm của bạn. Vui lòng kiểm tra và xác nhận đơn hàng.`,
+          body: 'Một người mua vừa gửi yêu cầu mua sản phẩm của bạn. Vui lòng kiểm tra và xác nhận đơn hàng.',
           orderId,
           status: 'Chờ xác nhận',
+          orderDetails,
         });
       }
     }
@@ -148,6 +215,11 @@ const eventHandlers = {
 
   'order.completed': async (payload) => {
     const { buyerId, sellerId, orderId } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Hoàn tất');
+    const recipientProfiles = new Map([
+      [buyerId, orderDetails.buyer],
+      [sellerId, orderDetails.seller],
+    ]);
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
       const { shouldSendEmail } = await sendNotification({
@@ -158,14 +230,15 @@ const eventHandlers = {
         targetId: orderId,
       });
       if (shouldSendEmail) {
-        const email = await getUserEmail(recipientId);
-        if (email) {
-          await sendOrderEmail(email, {
+        const recipient = recipientProfiles.get(recipientId);
+        if (recipient?.email) {
+          await sendOrderEmail(recipient.email, {
             subject: 'Giao dịch thành công',
-            title: 'Giao dịch hoàn tất! 🎉',
+            title: 'Giao dịch hoàn tất!',
             body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
             orderId,
             status: 'Hoàn tất',
+            orderDetails,
           });
         }
       }
@@ -174,6 +247,11 @@ const eventHandlers = {
 
   'order.cancelled': async (payload) => {
     const { buyerId, sellerId, orderId, reason } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã hủy');
+    const recipientProfiles = new Map([
+      [buyerId, orderDetails.buyer],
+      [sellerId, orderDetails.seller],
+    ]);
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
       const { shouldSendEmail } = await sendNotification({
@@ -184,14 +262,15 @@ const eventHandlers = {
         targetId: orderId,
       });
       if (shouldSendEmail) {
-        const email = await getUserEmail(recipientId);
-        if (email) {
-          await sendOrderEmail(email, {
+        const recipient = recipientProfiles.get(recipientId);
+        if (recipient?.email) {
+          await sendOrderEmail(recipient.email, {
             subject: 'Đơn hàng đã bị hủy',
             title: 'Đơn hàng bị hủy',
             body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
             orderId,
             status: 'Đã hủy',
+            orderDetails,
           });
         }
       }
