@@ -219,7 +219,11 @@ export class OrderController {
     if (role !== 'ADMIN') throw new BadRequestException('Admin access required');
     const status = req.body?.status === 'REJECTED' ? 'REJECTED' : 'RESOLVED';
     const resolution = String(req.body?.resolution || '').trim();
-    const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution });
+    const outcome = ['SELLER_FAULT', 'BUYER_FAULT', 'BOTH_FAULT', 'NO_FAULT'].includes(req.body?.outcome)
+      ? req.body.outcome
+      : 'NO_FAULT';
+    const remedy = ['NONE', 'REFUND'].includes(req.body?.remedy) ? req.body.remedy : 'NONE';
+    const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution, outcome, remedy });
     return res.json(ApiResponse.ok(order, 'Dispute resolved'));
   }
 

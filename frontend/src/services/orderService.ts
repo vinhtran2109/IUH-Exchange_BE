@@ -134,8 +134,14 @@ export const orderService = {
     return response.data;
   },
 
-  resolveDispute: async (id: string, status: 'RESOLVED' | 'REJECTED', resolution: string) => {
-    const response = await api.patch(`/orders/${id}/disputes/resolve`, { status, resolution });
+  resolveDispute: async (
+    id: string,
+    status: 'RESOLVED' | 'REJECTED',
+    resolution: string,
+    outcome: 'SELLER_FAULT' | 'BUYER_FAULT' | 'BOTH_FAULT' | 'NO_FAULT' = 'NO_FAULT',
+    remedy: 'NONE' | 'REFUND' = 'NONE'
+  ) => {
+    const response = await api.patch(`/orders/${id}/disputes/resolve`, { status, resolution, outcome, remedy });
     return response.data;
   },
 

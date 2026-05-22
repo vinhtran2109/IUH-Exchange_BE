@@ -17,6 +17,7 @@ const TOPICS = [
   { topic: 'order.payment.reported', fromBeginning: false },
   { topic: 'order.payment.confirmed', fromBeginning: false },
   { topic: 'order.dispute.opened', fromBeginning: false },
+  { topic: 'order.dispute.resolved', fromBeginning: false },
   { topic: 'order.dispute.evidence_added', fromBeginning: false },
   { topic: 'order.refunded', fromBeginning: false },
   { topic: 'order.handover.proposed', fromBeginning: false },
@@ -356,6 +357,28 @@ const eventHandlers = {
         recipientId,
         title: 'Tranh chấp đơn hàng',
         message: `Đơn ${orderProductLabel(orderDetails)} vừa được mở tranh chấp${openedBy ? ' bởi một bên trong giao dịch' : ''}${reason ? `: ${reason}` : ''}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.dispute.resolved': async (payload) => {
+    const { buyerId, sellerId, orderId, outcome, remedy, resolution } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý tranh chấp');
+    const outcomeLabel = outcome === 'SELLER_FAULT'
+      ? 'người bán có lỗi'
+      : outcome === 'BUYER_FAULT'
+        ? 'người mua có lỗi'
+        : outcome === 'BOTH_FAULT'
+          ? 'cả hai bên cùng có lỗi'
+          : 'không xác định lỗi rõ ràng';
+
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Tranh chấp đã được xử lý',
+        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}`,
         type: 'ORDER',
         targetId: orderId,
       });

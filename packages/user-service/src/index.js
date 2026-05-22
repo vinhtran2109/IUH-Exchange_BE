@@ -13,6 +13,7 @@ import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import { initKafkaProducer } from './services/kafka.service.js';
+import { startKarmaConsumer } from './services/karma-consumer.service.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,6 +63,7 @@ if (AUDIT_MONGODB_URI) {
 }
 await pingSupabase();
 await initKafkaProducer();
+await startKarmaConsumer();
 
 app.listen(PORT, () => {
   logger.info(`🚀 User Service running on port ${PORT}`);

@@ -13,6 +13,7 @@ import {
   AuditLog,
 } from '@iuh-exchange/common';
 import { publishUserEvent } from '../services/kafka.service.js';
+import { applyKarmaAdjustment } from '../services/karma.service.js';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
 function escapeRegex(str) {
@@ -152,39 +153,21 @@ export async function adjustKarma(req, res) {
   const user = await User.findById(id);
   if (!user) throw new ResourceNotFoundException('User', id);
 
-  const previousKarma = user.karmaPoint;
-  user.karmaPoint += amount;
-
-  // Auto-revoke CAN_POST when karma drops below 0
-  if (user.karmaPoint < 0 && user.permissions.includes('CAN_POST')) {
-    user.permissions = user.permissions.filter((p) => p !== 'CAN_POST');
-    logger.info(`[Admin] CAN_POST revoked for ${user.email} (karma: ${user.karmaPoint})`);
-  }
-
-  // Restore CAN_POST when karma returns to non-negative
-  if (user.karmaPoint >= 0 && !user.permissions.includes('CAN_POST')) {
-    user.permissions.push('CAN_POST');
-    logger.info(`[Admin] CAN_POST restored for ${user.email} (karma: ${user.karmaPoint})`);
-  }
-
-  await user.save();
-
-  // Log karma change to history
-  await KarmaHistory.create({
+  const previousKarma = Number(user.karmaPoint ?? 100);
+  await applyKarmaAdjustment({
     userId: id,
     amount,
-    previousKarma,
-    newKarma: user.karmaPoint,
     reason: reason || 'Admin adjustment',
     performedBy: req.user?.sub || null,
     source: 'ADMIN',
   });
+  const updatedUser = await User.findById(id);
 
   logger.info(`[Admin] Karma adjusted for ${user.email}: ${previousKarma} → ${user.karmaPoint} (${amount > 0 ? '+' : ''}${amount}). Reason: ${reason || 'N/A'}`);
 
   res.json(
     ApiResponse.ok(
-      { ...mapToProfile(user), previousKarma, adjustment: amount },
+      { ...mapToProfile(updatedUser), previousKarma, adjustment: amount },
       'Cập nhật karma thành công'
     )
   );
