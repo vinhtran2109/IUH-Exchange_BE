@@ -64,6 +64,25 @@ function buildSearchSortOption(sortParam) {
   }
 }
 
+function getRequestUser(req) {
+  return {
+    id: req.user?.sub || req.user?.id || req.headers?.['x-user-id'] || '',
+    role: req.user?.role || req.headers?.['x-user-role'] || 'GUEST',
+  };
+}
+
+function isInternalServiceRequest(req) {
+  const token = process.env.INTERNAL_SERVICE_TOKEN || process.env.GATEWAY_SECRET || process.env.JWT_SECRET || 'dev-secret';
+  return Boolean(req.headers?.['x-internal-service'] && req.headers?.['x-internal-token'] === token);
+}
+
+function canViewProduct(product, req) {
+  if (product.status === 'AVAILABLE') return true;
+  if (isInternalServiceRequest(req)) return true;
+  const viewer = getRequestUser(req);
+  return viewer.role === 'ADMIN' || String(product.sellerId) === String(viewer.id);
+}
+
 async function searchProductsInMongo(keyword, page, size, filters = {}) {
   const skip = (page - 1) * size;
   const filter = { status: 'AVAILABLE' };
@@ -222,14 +241,19 @@ export async function getMyProducts(req, res) {
  */
 export async function getProductById(req, res) {
   const cacheKey = `products:detail:${req.params.id}`;
-  const cached = await cache.get(cacheKey);
+  const viewer = getRequestUser(req);
+  const usePublicCache = !viewer.id && !isInternalServiceRequest(req);
+  const cached = usePublicCache ? await cache.get(cacheKey) : null;
   if (cached) return res.json(cached);
 
   const product = await Product.findById(req.params.id).lean();
   if (!product) throw new ResourceNotFoundException('Product', req.params.id);
+  if (!canViewProduct(product, req)) throw new ResourceNotFoundException('Product', req.params.id);
 
   const response = ApiResponse.ok(toResponse(product), 'Success');
-  await cache.set(cacheKey, response, 300); // Cache 5 minutes
+  if (product.status === 'AVAILABLE') {
+    await cache.set(cacheKey, response, 300); // Cache 5 minutes
+  }
   res.json(response);
 }
 
@@ -280,6 +304,10 @@ export async function updateProduct(req, res) {
 
   if (product.sellerId !== req.user.sub) {
     throw new ForbiddenException("You don't have permission to update this product");
+  }
+
+  if (['RESERVED', 'SOLD'].includes(product.status)) {
+    throw new BadRequestException('Không thể chỉnh sửa sản phẩm đang giữ chỗ hoặc đã bán');
   }
 
   const { title, description, price, category, condition, location, imageUrls, listingType, tradeWanted, allowOffers } = req.body;
@@ -336,6 +364,10 @@ export async function deleteProduct(req, res) {
 
   if (product.sellerId !== req.user.sub) {
     throw new ForbiddenException("You don't have permission to delete this product");
+  }
+
+  if (['RESERVED', 'SOLD'].includes(product.status)) {
+    throw new BadRequestException('Không thể xóa sản phẩm đang giữ chỗ hoặc đã bán. Hãy ẩn sản phẩm nếu cần.');
   }
 
   // Clean up S3 images

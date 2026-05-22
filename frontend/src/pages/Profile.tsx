@@ -40,7 +40,7 @@ const Profile: React.FC = () => {
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const { confirm } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'wishlist' | 'history'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'sales' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
 
   const [name, setName] = useState(user?.name || '');
@@ -274,6 +274,13 @@ const Profile: React.FC = () => {
     });
   }, [myOrders, user?.id]);
 
+  const sellerOrders = useMemo(() => {
+    return myOrders.filter((order: any) => {
+      const sellerId = String(order?.sellerId || order?.seller?.id || order?.seller?._id || '');
+      return sellerId && sellerId === String(user?.id || '');
+    });
+  }, [myOrders, user?.id]);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
@@ -302,6 +309,7 @@ const Profile: React.FC = () => {
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
             { id: 'products', label: 'Món đồ đang bán', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
+            { id: 'sales', label: 'Đơn bán của tôi', icon: Store },
             { id: 'wishlist', label: 'Đã lưu', icon: Bookmark },
             { id: 'history', label: 'Đã xem', icon: Clock },
             { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
@@ -645,6 +653,74 @@ const Profile: React.FC = () => {
                 )}
 
                 {!ordersLoading && buyerOrders.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Bạn chưa có đơn mua nào.</div>}
+              </div>
+            )}
+
+            {activeTab === 'sales' && (
+              <div className="space-y-3">
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-800">Đơn bán của tôi</h3>
+                    <p className="mt-1 text-xs text-slate-400">Theo dõi các đơn người mua gửi cho sản phẩm của bạn.</p>
+                  </div>
+                  <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    {sellerOrders.length} đơn
+                  </div>
+                </div>
+
+                {ordersLoading ? (
+                  <div className="py-16 text-center text-sm text-slate-400">Đang tải...</div>
+                ) : (
+                  sellerOrders.map((o: any) => (
+                    <button
+                      key={o?.id || o?._id || o?.createdAt}
+                      type="button"
+                      onClick={() => navigate(`/orders/${o?.id || o?._id}`)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-4 text-left transition-all hover:border-slate-300 hover:shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="rounded-xl bg-slate-100 p-2.5 text-slate-500">
+                            <Store size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-medium text-slate-400">#{String(o?.id || o?._id || '').substring(0, 8) || '--------'}</div>
+                            <div className="mt-1 truncate text-sm font-semibold text-slate-800">
+                              {typeof o?.productId === 'object' && o?.productId?.title
+                                ? o.productId.title
+                                : o?.productTitle || o?.product?.title || `Sản phẩm #${String(o?.productId || '').slice(-6) || '--'}`}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                              <span className="flex items-center gap-1">
+                                <Clock size={12} /> {new Date(o.createdAt).toLocaleDateString()}
+                              </span>
+                              <span
+                                className={`rounded-full px-2 py-0.5 font-medium ${
+                                  o.status === 'COMPLETED'
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : o.status === 'CANCELLED'
+                                      ? 'bg-red-50 text-red-600'
+                                      : 'bg-amber-50 text-amber-700'
+                                }`}
+                              >
+                                {o.status === 'COMPLETED' ? 'Thành công' : o.status === 'CANCELLED' ? 'Đã hủy' : 'Cần xử lý'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right">
+                          <div className="text-base font-bold text-slate-900">{Number(o.price).toLocaleString()}đ</div>
+                          <div className="mt-2 flex items-center justify-end gap-1 text-xs font-medium text-slate-500">
+                            <Check size={12} /> Xem chi tiết
+                          </div>
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                )}
+
+                {!ordersLoading && sellerOrders.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Bạn chưa có đơn bán nào.</div>}
               </div>
             )}
 

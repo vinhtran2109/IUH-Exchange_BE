@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ── Mocks ──
 const mockOrder = {
@@ -65,11 +65,29 @@ const orderService = new OrderService();
 describe('order.service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        success: true,
+        data: {
+          id: 'prod123',
+          sellerId: 'seller123',
+          price: 50000,
+          status: 'AVAILABLE',
+          listingType: 'SELL',
+          title: 'Test product',
+        },
+      }),
+    });
     mockOrderModel.find.mockReturnThis();
     mockOrderModel.sort.mockReturnThis();
     mockOrderModel.skip.mockReturnThis();
     mockOrderModel.limit.mockReturnThis();
     mockOrderModel.lean.mockReturnThis();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('createOrder', () => {
@@ -95,9 +113,34 @@ describe('order.service', () => {
 
       expect(result).toBeDefined();
       expect(mockOrderModel.create).toHaveBeenCalledWith(
-        expect.objectContaining({ paymentMethod: 'BANK_TRANSFER' })
+        expect.objectContaining({
+          sellerId: 'seller123',
+          price: 50000,
+          paymentMethod: 'BANK_TRANSFER',
+        })
       );
       expect(mockPublishOrderCreated).toHaveBeenCalled();
+    });
+
+    it('should ignore tampered seller and price from frontend', async () => {
+      mockRedis.get.mockResolvedValue(null);
+      mockRedis.set.mockResolvedValue('OK');
+      mockOrderModel.create.mockResolvedValue({
+        ...mockOrder,
+        toObject: () => ({ ...mockOrder }),
+      });
+
+      await orderService.createOrder('buyer123', {
+        productId: 'prod123',
+        sellerId: 'attacker-seller',
+        price: 1,
+        idempotencyKey: 'idem-key-tampered',
+      });
+
+      expect(mockOrderModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        sellerId: 'seller123',
+        price: 50000,
+      }));
     });
 
     it('should return cached order for duplicate request', async () => {
@@ -123,6 +166,19 @@ describe('order.service', () => {
     it('should reject self-purchase', async () => {
       mockRedis.get.mockResolvedValue(null);
       mockRedis.set.mockResolvedValue('OK');
+      globalThis.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          success: true,
+          data: {
+            id: 'prod123',
+            sellerId: 'same-user',
+            price: 50000,
+            status: 'AVAILABLE',
+            listingType: 'SELL',
+          },
+        }),
+      });
 
       await expect(
         orderService.createOrder('same-user', {
@@ -365,9 +421,17 @@ describe('order.service', () => {
         lean: vi.fn().mockResolvedValue({ ...mockOrder }),
       });
 
-      const result = await orderService.getOrderById('order123');
+      const result = await orderService.getOrderById('order123', 'buyer123');
       expect(result).toBeDefined();
       expect(result._id).toBe('order123');
+    });
+
+    it('should reject order detail access from unrelated user', async () => {
+      mockOrderModel.findById.mockReturnValue({
+        lean: vi.fn().mockResolvedValue({ ...mockOrder }),
+      });
+
+      await expect(orderService.getOrderById('order123', 'stranger')).rejects.toThrow('không có quyền');
     });
 
     it('should throw 404 for missing order', async () => {
@@ -375,7 +439,7 @@ describe('order.service', () => {
         lean: vi.fn().mockResolvedValue(null),
       });
 
-      await expect(orderService.getOrderById('nonexistent')).rejects.toThrow();
+      await expect(orderService.getOrderById('nonexistent', 'buyer123')).rejects.toThrow();
     });
   });
 

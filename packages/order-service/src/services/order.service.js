@@ -60,6 +60,32 @@ async function getAcceptedOfferCheckout(offerId, buyerId) {
   return body.data;
 }
 
+async function getProductCheckoutSnapshot(productId, buyerId) {
+  const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`, {
+    headers: buildGatewayHeaders(buyerId),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body?.success) {
+    throw new BadRequestException(body?.message || body?.error || 'Không thể lấy thông tin sản phẩm để tạo đơn');
+  }
+
+  const product = body.data;
+  if (!product) {
+    throw new BadRequestException('Sản phẩm không tồn tại');
+  }
+  if (product.status !== 'AVAILABLE') {
+    throw new BadRequestException('Sản phẩm hiện không còn khả dụng để đặt mua');
+  }
+
+  return {
+    productId: product.id || product._id || productId,
+    sellerId: product.sellerId,
+    price: Number(product.price || 0),
+    listingType: product.listingType || 'SELL',
+    productTitle: product.title || '',
+  };
+}
+
 function appendStatusHistory(order, nextStatus, {
   changedBy = 'system',
   actorRole = 'SYSTEM',
@@ -164,6 +190,14 @@ export class OrderService {
           tradeItemTitle: checkout.tradeItemTitle,
           tradeItemDescription: checkout.tradeItemDescription,
         };
+      } else {
+        const checkout = await getProductCheckoutSnapshot(request.productId, buyerId);
+        request.productId = checkout.productId;
+        request.sellerId = checkout.sellerId;
+        request.price = checkout.price;
+        request.tradeMetadata = {
+          listingType: checkout.listingType,
+        };
       }
 
       // Step 2: Validate buyer cannot buy from themselves
@@ -267,6 +301,16 @@ export class OrderService {
     });
     await order.save();
     logger.info(`[SAGA Step 2] Order awaiting seller confirmation: orderId=${orderId}`);
+
+    await publishOrderEvent('order.updated', {
+      orderId: order._id.toString(),
+      productId: order.productId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      status: order.status,
+      paymentStatus: order.paymentStatus,
+      reason: 'Product reserved successfully',
+    });
   }
 
   /**
@@ -581,10 +625,17 @@ export class OrderService {
    * @param {string} orderId
    * @returns {object} Order
    */
-  async getOrderById(orderId) {
+  async getOrderById(orderId, userId, role = 'STUDENT') {
     const order = await Order.findById(orderId).lean();
     if (!order) {
       throw new ResourceNotFoundException('Order', orderId);
+    }
+    const canView =
+      role === 'ADMIN' ||
+      String(order.buyerId) === String(userId) ||
+      String(order.sellerId) === String(userId);
+    if (!canView) {
+      throw new ForbiddenException('Bạn không có quyền xem đơn hàng này');
     }
     return order;
   }

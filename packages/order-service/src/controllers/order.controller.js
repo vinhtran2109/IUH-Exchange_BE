@@ -35,12 +35,8 @@ export class OrderController {
 
     const { productId, sellerId, price, buyerNote, handoverLocation, handoverTime, paymentMethod, offerId } = req.body;
 
-    if (!offerId && (!productId || !sellerId || price === undefined)) {
-      throw new BadRequestException('productId, sellerId, and price are required');
-    }
-
-    if (!offerId && (typeof price !== 'number' || price <= 0)) {
-      throw new BadRequestException('price must be a positive number');
+    if (!offerId && !productId) {
+      throw new BadRequestException('productId is required');
     }
 
     const order = await this.orderService.createOrder(buyerId, {
@@ -100,7 +96,13 @@ export class OrderController {
    * Get a single order by ID.
    */
   async getOrderById(req, res) {
-    const order = await this.orderService.getOrderById(req.params.id);
+    const userId = req.headers['x-user-id'];
+    const role = req.headers['x-user-role'] || req.user?.role || 'STUDENT';
+    if (!userId) {
+      throw new BadRequestException('Missing X-User-Id header');
+    }
+
+    const order = await this.orderService.getOrderById(req.params.id, userId, role);
     return res.json(ApiResponse.ok(order));
   }
 

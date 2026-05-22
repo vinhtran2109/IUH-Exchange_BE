@@ -328,5 +328,14 @@ describe('payment.controller', () => {
       const response = res.json.mock.calls[0][0];
       expect(response.data.paymentStatus).toBe('UNPAID');
     });
+
+    it('should reject payment details access from unrelated user', async () => {
+      mockOrderModel.findById.mockReturnValue({
+        lean: vi.fn().mockResolvedValue({ ...mockOrder }),
+      });
+
+      const { req, res } = mockReqRes({}, { id: 'order123' }, { 'x-user-id': 'stranger' });
+      await expect(paymentController.getPaymentDetails(req, res)).rejects.toThrow('không có quyền');
+    });
   });
 });
