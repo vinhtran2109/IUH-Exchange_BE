@@ -63,6 +63,43 @@ describe('kafka-consumer.service', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    global.fetch = vi.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('/api/v1/users/by-student/')) {
+        return {
+          ok: true,
+          json: async () => ({ data: { id: 'student-owner-1' } }),
+        };
+      }
+      if (target.includes('/api/v1/users/buyer-1')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: { name: 'Nguyễn Văn Buyer', email: 'buyer@example.com', studentId: '21000001' },
+          }),
+        };
+      }
+      if (target.includes('/api/v1/users/seller-1')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: { name: 'Trần Thị Seller', email: 'seller@example.com', studentId: '21000002' },
+          }),
+        };
+      }
+      if (target.includes('/api/v1/products/prod-1')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: { title: 'Giáo trình kỹ thuật đo điện', price: 15000, category: 'BOOK', condition: 'USED' },
+          }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({ data: { name: 'Test User', email: 'user@example.com', studentId: '21000000' } }),
+      };
+    });
 
     // Setup mock consumer
     mockConsumer = {
@@ -90,6 +127,8 @@ describe('kafka-consumer.service', () => {
     it('should handle order.created event', async () => {
       await simulateKafkaMessage('order.created', {
         sellerId: 'seller-1',
+        buyerId: 'buyer-1',
+        productId: 'prod-1',
         orderId: 'order-123',
         buyerName: 'Nguyễn Văn A',
       });
@@ -102,28 +141,61 @@ describe('kafka-consumer.service', () => {
         })
       );
       expect(publishNotification).toHaveBeenCalled();
+      expect(sendOrderEmail).toHaveBeenCalledWith(
+        'seller@example.com',
+        expect.objectContaining({
+          orderDetails: expect.objectContaining({
+            buyer: expect.objectContaining({ name: 'Nguyễn Văn Buyer' }),
+            seller: expect.objectContaining({ name: 'Trần Thị Seller' }),
+            product: expect.objectContaining({ title: 'Giáo trình kỹ thuật đo điện', price: 15000 }),
+          }),
+        })
+      );
     });
 
     it('should handle order.completed event', async () => {
       await simulateKafkaMessage('order.completed', {
         buyerId: 'buyer-1',
         sellerId: 'seller-1',
+        productId: 'prod-1',
         orderId: 'order-123',
       });
 
       // Should notify both buyer and seller
       expect(Notification.create).toHaveBeenCalledTimes(2);
+      expect(sendOrderEmail).toHaveBeenCalledTimes(2);
+      expect(sendOrderEmail).toHaveBeenCalledWith(
+        'buyer@example.com',
+        expect.objectContaining({
+          status: 'Hoàn tất',
+          orderDetails: expect.objectContaining({
+            buyer: expect.objectContaining({ name: 'Nguyễn Văn Buyer' }),
+            seller: expect.objectContaining({ name: 'Trần Thị Seller' }),
+          }),
+        })
+      );
     });
 
     it('should handle order.cancelled event', async () => {
       await simulateKafkaMessage('order.cancelled', {
         buyerId: 'buyer-1',
         sellerId: 'seller-1',
+        productId: 'prod-1',
         orderId: 'order-123',
         reason: 'Không liên lạc được',
       });
 
       expect(Notification.create).toHaveBeenCalledTimes(2);
+      expect(sendOrderEmail).toHaveBeenCalledWith(
+        'seller@example.com',
+        expect.objectContaining({
+          status: 'Đã hủy',
+          orderDetails: expect.objectContaining({
+            reason: 'Không liên lạc được',
+            product: expect.objectContaining({ title: 'Giáo trình kỹ thuật đo điện' }),
+          }),
+        })
+      );
     });
 
     it('should handle order.refunded event', async () => {

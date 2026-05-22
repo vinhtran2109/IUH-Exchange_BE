@@ -121,11 +121,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     const contextKey = `${conversationId}:${productContext.id}`;
     if (sentProductContextKey.current === contextKey) return;
 
-    const productUrl = `${window.location.origin}/products/${productContext.id}`;
     const contextMsg = [
       `Mình đang hỏi về sản phẩm: ${productContext.title}`,
       `Giá: ${productContext.price.toLocaleString('vi-VN')}đ`,
-      `Link: ${productUrl}`,
       'Bạn tư vấn thêm giúp mình nhé.',
     ].join('\n');
 
@@ -216,7 +214,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 12 }}
-      className="fixed bottom-6 right-6 z-50 flex h-[480px] w-[360px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl"
+      className="fixed bottom-4 right-4 z-50 flex h-[560px] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:bottom-6 sm:right-6"
     >
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -281,7 +279,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
               key={(msg.id || (msg as any)._id || `${msg.timestamp}-${index}`) as string}
               className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`flex max-w-[82%] items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+              <div className={`flex max-w-[90%] items-end gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
                 {!isMe && (
                   <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-slate-200 text-slate-500">
                     {recipientInfo?.avatarUrl ? (
@@ -292,7 +290,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
                   </div>
                 )}
                 <div
-                  className={`rounded-2xl px-3 py-2 text-sm shadow-sm ${
+                  className={`min-w-0 rounded-2xl px-3 py-2 text-sm shadow-sm ${
                     isMe
                       ? 'rounded-br-md bg-slate-900 text-white'
                       : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'
@@ -312,7 +310,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
                       />
                     </a>
                   ) : (
-                    <div>{msg.content}</div>
+                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</div>
                   )}
                 </div>
               </div>
