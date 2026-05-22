@@ -255,6 +255,36 @@ describe('order.service', () => {
       ).rejects.toThrow('xac nhan da nhan tien');
     });
 
+    it('should mark cash payment as paid when seller completes order', async () => {
+      const order = {
+        ...mockOrder,
+        status: 'AWAITING_SELLER',
+        sellerId: 'seller123',
+        paymentMethod: 'CASH',
+        paymentStatus: 'UNPAID',
+        transactions: [],
+        save: vi.fn().mockResolvedValue(true),
+        toObject: () => order,
+      };
+      mockOrderModel.findById.mockResolvedValue(order);
+
+      await orderService.confirmOrder('order123', 'seller123');
+
+      expect(order.status).toBe('COMPLETED');
+      expect(order.paymentStatus).toBe('PAID');
+      expect(order.paymentProviderStatus).toBe('CASH_CONFIRMED');
+      expect(order.paidAt).toBeInstanceOf(Date);
+      expect(order.paymentTransactionId).toMatch(/^CASH_/);
+      expect(order.transactions).toEqual([
+        expect.objectContaining({
+          type: 'CASH_CONFIRMED',
+          method: 'CASH',
+          status: 'SUCCESS',
+        }),
+      ]);
+      expect(order.save).toHaveBeenCalled();
+    });
+
     it('should throw 404 for missing order', async () => {
       mockOrderModel.findById.mockResolvedValue(null);
       await expect(
