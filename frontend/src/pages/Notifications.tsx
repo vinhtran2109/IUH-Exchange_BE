@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { notificationService, normalizeNotification } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
+import { chatService } from '../services/chatService';
 
 /* ─── Map type → route ─────────────────────────────────────────────────────── */
 const getNotifLink = (n: Notification): string | null => {
@@ -93,6 +94,19 @@ const Notifications: React.FC = () => {
       } catch { /* ignore */ }
       finally { setLoading(false); }
     })();
+  }, []);
+
+  useEffect(() => {
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notif: Notification) => {
+      const normalized = normalizeNotification(notif);
+      setNotifications(prev => {
+        const notificationId = normalized.id;
+        if (notificationId && prev.some(n => n.id === notificationId)) return prev;
+        return [normalized, ...prev];
+      });
+    });
+    return removeListener;
   }, []);
 
   const handleMarkRead = async (id: string) => {

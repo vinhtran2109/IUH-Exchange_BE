@@ -147,6 +147,26 @@ const ProductDetail: React.FC = () => {
   }, [id, user?.id, product?.sellerId]);
 
   useEffect(() => {
+    if (!id) return;
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const targetId = String(notification?.targetId || '');
+      const type = String(notification?.type || '').toUpperCase();
+      if (targetId !== String(id)) return;
+
+      if (type.includes('PRODUCT')) {
+        productService.getProductById(id)
+          .then((response) => {
+            if (response.success) setProduct(response.data);
+          })
+          .catch(() => {});
+        void loadOffers();
+      }
+    });
+    return removeListener;
+  }, [id, user?.id, product?.sellerId]);
+
+  useEffect(() => {
     if (!id || !user) return;
     const checkWish = async () => {
       try {

@@ -16,6 +16,7 @@ export interface ChatMessage {
   fileUrl?: string;
   conversationId?: string;
   userId?: string;
+  productContext?: ProductContext;
 }
 
 export interface PresenceEvent {

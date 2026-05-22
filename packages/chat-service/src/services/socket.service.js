@@ -365,7 +365,7 @@ function handleSend(conn, frame, sessionData) {
 async function handleChatSend(conn, frame, userId) {
   try {
     const body = JSON.parse(frame.body);
-    const { recipientId, content, conversationId: providedConvId } = body;
+    const { recipientId, content, conversationId: providedConvId, productContext } = body;
 
     if (content.length > 5000) {
       sendFrame(conn, 'ERROR', {
@@ -390,12 +390,21 @@ async function handleChatSend(conn, frame, userId) {
     }
 
     const conversationId = providedConvId || buildConversationId(userId, recipientId);
+    const safeProductContext = productContext?.id && productContext?.title
+      ? {
+          id: String(productContext.id).slice(0, 128),
+          title: String(productContext.title).slice(0, 240),
+          price: Number.isFinite(Number(productContext.price)) ? Number(productContext.price) : 0,
+          imageUrl: productContext.imageUrl ? String(productContext.imageUrl).slice(0, 1000) : '',
+        }
+      : null;
 
     const message = await ChatMessage.create({
       senderId: userId,
       receiverId: recipientId,
       content: content.trim(),
       conversationId,
+      ...(safeProductContext ? { messageType: 'PRODUCT_CONTEXT', productContext: safeProductContext } : {}),
     });
 
     const messageObj = message.toObject();

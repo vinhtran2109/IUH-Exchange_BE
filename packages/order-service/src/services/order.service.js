@@ -339,6 +339,25 @@ export class OrderService {
       throw new BadRequestException('Nguoi ban can xac nhan da nhan tien truoc khi hoan tat don chuyen khoan');
     }
 
+    if (order.paymentMethod === 'CASH' && order.paymentStatus !== 'PAID') {
+      const paidAt = new Date();
+      order.paymentStatus = 'PAID';
+      order.paymentProviderStatus = 'CASH_CONFIRMED';
+      order.paymentWebhookVerified = false;
+      order.reconciliationStatus = 'MATCHED';
+      order.paidAt = paidAt;
+      order.paymentTransactionId = order.paymentTransactionId || `CASH_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`;
+      order.transactions = order.transactions || [];
+      order.transactions.push({
+        type: 'CASH_CONFIRMED',
+        transactionId: order.paymentTransactionId,
+        amount: order.price,
+        method: 'CASH',
+        status: 'SUCCESS',
+        note: 'Seller confirmed cash payment during handover',
+      });
+    }
+
     this._assertTransition(order.status, 'COMPLETED');
 
     appendStatusHistory(order, 'COMPLETED', {
@@ -828,8 +847,10 @@ export class OrderService {
 
     await publishOrderEvent('order.payment_issue.opened', {
       orderId: order._id.toString(),
+      productId: order.productId,
       buyerId: order.buyerId,
       sellerId: order.sellerId,
+      price: order.price,
       openedBy: userId,
       reason,
     });
@@ -889,8 +910,10 @@ export class OrderService {
 
     await publishOrderEvent('order.payment_issue.resolved', {
       orderId: order._id.toString(),
+      productId: order.productId,
       buyerId: order.buyerId,
       sellerId: order.sellerId,
+      price: order.price,
       action,
       status: order.paymentIssueStatus,
     });

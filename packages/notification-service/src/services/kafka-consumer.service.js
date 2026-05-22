@@ -13,12 +13,16 @@ const TOPICS = [
   { topic: 'order.created', fromBeginning: false },
   { topic: 'order.completed', fromBeginning: false },
   { topic: 'order.cancelled', fromBeginning: false },
+  { topic: 'order.payment.reported', fromBeginning: false },
+  { topic: 'order.payment.confirmed', fromBeginning: false },
   { topic: 'order.dispute.opened', fromBeginning: false },
   { topic: 'order.dispute.evidence_added', fromBeginning: false },
   { topic: 'order.refunded', fromBeginning: false },
   { topic: 'order.handover.proposed', fromBeginning: false },
   { topic: 'order.handover.responded', fromBeginning: false },
   { topic: 'order.handover.confirmed', fromBeginning: false },
+  { topic: 'order.payment_issue.opened', fromBeginning: false },
+  { topic: 'order.payment_issue.resolved', fromBeginning: false },
   { topic: 'product.reserved', fromBeginning: false },
   { topic: 'product.reserve.expired', fromBeginning: false },
   { topic: 'product.approved', fromBeginning: false },
@@ -116,6 +120,16 @@ async function buildOrderEmailDetails(payload, status) {
   };
 }
 
+function orderProductLabel(orderDetails) {
+  return orderDetails?.product?.title && orderDetails.product.title !== 'Chưa có tên sản phẩm'
+    ? `"${orderDetails.product.title}"`
+    : 'sản phẩm trong đơn';
+}
+
+function personLabel(person, fallback = 'Đối tác') {
+  return person?.name && person.name !== 'Chưa có tên' ? person.name : fallback;
+}
+
 /**
  * Create and persist a notification, then publish it via Redis pub/sub.
  * The chat-service picks it up and delivers to connected WebSocket clients.
@@ -189,17 +203,17 @@ async function sendNotification({ recipientId, title, message, type, targetId })
  */
 const eventHandlers = {
   'order.created': async (payload) => {
-    const { sellerId, orderId, buyerName } = payload;
+    const { sellerId, orderId } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Chờ xác nhận');
     const result = await sendNotification({
       recipientId: sellerId,
-      title: 'New Order',
-      message: `You have a new purchase request for order ${orderId}${buyerName ? ` from ${buyerName}` : ''}`,
+      title: 'Đơn hàng mới',
+      message: `${personLabel(orderDetails.buyer, 'Người mua')} vừa gửi yêu cầu mua ${orderProductLabel(orderDetails)}.`,
       type: 'ORDER',
       targetId: orderId,
     });
     // Send email (respect preference)
     if (result?.shouldSendEmail) {
-      const orderDetails = await buildOrderEmailDetails(payload, 'Chờ xác nhận');
       if (orderDetails.seller.email) {
         await sendOrderEmail(orderDetails.seller.email, {
           subject: 'Đơn hàng mới',
@@ -224,8 +238,8 @@ const eventHandlers = {
     for (const recipientId of recipients) {
       const { shouldSendEmail } = await sendNotification({
         recipientId,
-        title: 'Transaction Complete',
-        message: `Order ${orderId} has been completed successfully!`,
+        title: 'Giao dịch hoàn tất',
+        message: `Giao dịch ${orderProductLabel(orderDetails)} đã hoàn tất thành công.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -235,7 +249,7 @@ const eventHandlers = {
           await sendOrderEmail(recipient.email, {
             subject: 'Giao dịch thành công',
             title: 'Giao dịch hoàn tất!',
-            body: `Đơn hàng #${orderId.substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
+            body: `Đơn hàng #${String(orderId).substring(0, 8)} đã được xác nhận hoàn tất. Cảm ơn bạn đã sử dụng ${process.env.APP_NAME || 'IUH Exchange'}!`,
             orderId,
             status: 'Hoàn tất',
             orderDetails,
@@ -256,8 +270,8 @@ const eventHandlers = {
     for (const recipientId of recipients) {
       const { shouldSendEmail } = await sendNotification({
         recipientId,
-        title: 'Order Cancelled',
-        message: `Order ${orderId} has been cancelled${reason ? `: ${reason}` : ''}`,
+        title: 'Đơn hàng đã hủy',
+        message: `Đơn ${orderProductLabel(orderDetails)} đã bị hủy${reason ? `: ${reason}` : ''}.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -267,7 +281,7 @@ const eventHandlers = {
           await sendOrderEmail(recipient.email, {
             subject: 'Đơn hàng đã bị hủy',
             title: 'Đơn hàng bị hủy',
-            body: `Đơn hàng #${orderId.substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
+            body: `Đơn hàng #${String(orderId).substring(0, 8)} đã bị hủy.${reason ? ` Lý do: ${reason}` : ''}`,
             orderId,
             status: 'Đã hủy',
             orderDetails,
@@ -277,14 +291,49 @@ const eventHandlers = {
     }
   },
 
+  'order.payment.reported': async (payload) => {
+    const { sellerId, orderId } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã báo chuyển khoản');
+    await sendNotification({
+      recipientId: sellerId,
+      title: 'Người mua đã báo chuyển khoản',
+      message: `${personLabel(orderDetails.buyer, 'Người mua')} đã báo chuyển khoản cho ${orderProductLabel(orderDetails)}. Vui lòng kiểm tra và xác nhận khi tiền đã vào tài khoản.`,
+      type: 'ORDER',
+      targetId: orderId,
+    });
+  },
+
+  'order.payment.confirmed': async (payload) => {
+    const { buyerId, sellerId, orderId, paymentMethod } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã thanh toán');
+    const isOnlinePayment = paymentMethod === 'VNPAY_MOCK';
+
+    const recipients = isOnlinePayment
+      ? [sellerId].filter(Boolean)
+      : [buyerId].filter(Boolean);
+
+    for (const recipientId of recipients) {
+      await sendNotification({
+        recipientId,
+        title: 'Thanh toán thành công',
+        message: isOnlinePayment
+          ? `${personLabel(orderDetails.buyer, 'Người mua')} đã thanh toán online cho ${orderProductLabel(orderDetails)}.`
+          : `${personLabel(orderDetails.seller, 'Người bán')} đã xác nhận nhận tiền cho ${orderProductLabel(orderDetails)}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
   'order.dispute.opened': async (payload) => {
     const { buyerId, sellerId, orderId, reason, openedBy } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đang tranh chấp');
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
       await sendNotification({
         recipientId,
         title: 'Tranh chấp đơn hàng',
-        message: `Đơn hàng ${orderId} vừa được mở tranh chấp${openedBy ? ` bởi ${openedBy}` : ''}${reason ? `: ${reason}` : ''}`,
+        message: `Đơn ${orderProductLabel(orderDetails)} vừa được mở tranh chấp${openedBy ? ' bởi một bên trong giao dịch' : ''}${reason ? `: ${reason}` : ''}.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -293,12 +342,13 @@ const eventHandlers = {
 
   'order.refunded': async (payload) => {
     const { buyerId, sellerId, orderId, amount } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã hoàn tiền');
     const recipients = [buyerId, sellerId].filter(Boolean);
     for (const recipientId of recipients) {
       await sendNotification({
         recipientId,
         title: 'Hoàn tiền đơn hàng',
-        message: `Đơn hàng ${orderId} đã được hoàn tiền${amount ? ` ${Number(amount).toLocaleString('vi-VN')}đ` : ''}`,
+        message: `Đơn ${orderProductLabel(orderDetails)} đã được hoàn tiền${amount ? ` ${Number(amount).toLocaleString('vi-VN')}đ` : ''}.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -307,11 +357,12 @@ const eventHandlers = {
 
   'order.dispute.evidence_added': async (payload) => {
     const { buyerId, sellerId, orderId, submittedBy } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đang tranh chấp');
     for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(submittedBy))) {
       await sendNotification({
         recipientId,
         title: 'Bằng chứng tranh chấp mới',
-        message: `Đơn hàng ${orderId} vừa có bằng chứng tranh chấp mới.`,
+        message: `Đơn ${orderProductLabel(orderDetails)} vừa có bằng chứng tranh chấp mới.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -320,11 +371,12 @@ const eventHandlers = {
 
   'order.handover.proposed': async (payload) => {
     const { buyerId, sellerId, orderId, proposedBy, location } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đang hẹn giao nhận');
     for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(proposedBy))) {
       await sendNotification({
         recipientId,
         title: 'Lịch hẹn giao nhận mới',
-        message: `Đơn hàng ${orderId} có đề xuất hẹn tại ${location || 'IUH'}.`,
+        message: `Đơn ${orderProductLabel(orderDetails)} có đề xuất hẹn tại ${location || 'IUH'}.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -333,11 +385,12 @@ const eventHandlers = {
 
   'order.handover.responded': async (payload) => {
     const { buyerId, sellerId, orderId, respondedBy, action } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đang hẹn giao nhận');
     for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(respondedBy))) {
       await sendNotification({
         recipientId,
         title: action === 'ACCEPT' ? 'Lịch hẹn đã được chấp nhận' : 'Lịch hẹn đã bị từ chối',
-        message: `Đề xuất giao nhận cho đơn ${orderId} đã được phản hồi.`,
+        message: `Đề xuất giao nhận cho ${orderProductLabel(orderDetails)} đã được phản hồi.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -346,11 +399,48 @@ const eventHandlers = {
 
   'order.handover.confirmed': async (payload) => {
     const { buyerId, sellerId, orderId, confirmedBy, handoverStatus } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đang giao nhận');
     for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(confirmedBy))) {
       await sendNotification({
         recipientId,
         title: handoverStatus === 'HANDED_OVER' ? 'Giao nhận đã hoàn tất' : 'Đối tác đã xác nhận giao nhận',
-        message: `Đơn hàng ${orderId} vừa cập nhật trạng thái giao nhận.`,
+        message: `Đơn ${orderProductLabel(orderDetails)} vừa cập nhật trạng thái giao nhận.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.payment_issue.opened': async (payload) => {
+    const { buyerId, sellerId, orderId, openedBy, reason } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Có khiếu nại thanh toán');
+    for (const recipientId of [buyerId, sellerId].filter(Boolean).filter((id) => String(id) !== String(openedBy))) {
+      await sendNotification({
+        recipientId,
+        title: 'Có khiếu nại thanh toán',
+        message: `Đơn ${orderProductLabel(orderDetails)} vừa có khiếu nại thanh toán${reason ? `: ${reason}` : ''}.`,
+        type: 'ORDER',
+        targetId: orderId,
+      });
+    }
+  },
+
+  'order.payment_issue.resolved': async (payload) => {
+    const { buyerId, sellerId, orderId, action, status } = payload;
+    const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý khiếu nại thanh toán');
+    const actionLabel = action === 'CONFIRM_PAID'
+      ? 'đã xác nhận thanh toán'
+      : action === 'REFUND'
+        ? 'đã hoàn tiền'
+        : status === 'REJECTED'
+          ? 'đã từ chối khiếu nại'
+          : 'đã xử lý khiếu nại';
+
+    for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
+      await sendNotification({
+        recipientId,
+        title: 'Khiếu nại thanh toán đã xử lý',
+        message: `Admin ${actionLabel} cho ${orderProductLabel(orderDetails)}.`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -358,23 +448,23 @@ const eventHandlers = {
   },
 
   'product.reserved': async (payload) => {
-    const { sellerId, productId, buyerName } = payload;
+    const { sellerId, productId, buyerName, productTitle } = payload;
     await sendNotification({
       recipientId: sellerId,
-      title: 'Product Reserved',
-      message: `Your product has been reserved${buyerName ? ` by ${buyerName}` : ''}`,
+      title: 'Sản phẩm đã được giữ chỗ',
+      message: `${buyerName || 'Người mua'} vừa giữ chỗ "${productTitle || 'sản phẩm của bạn'}".`,
       type: 'ORDER',
       targetId: productId,
     });
   },
 
   'product.reserve.expired': async (payload) => {
-    const { buyerId, sellerId, orderId, productId } = payload;
+    const { buyerId, sellerId, orderId, productId, productTitle } = payload;
     for (const recipientId of [buyerId, sellerId].filter(Boolean)) {
       await sendNotification({
         recipientId,
         title: 'Giữ chỗ đã hết hạn',
-        message: `Thời gian giữ chỗ cho sản phẩm ${productId || ''} đã hết hạn.`,
+        message: `Thời gian giữ chỗ cho "${productTitle || 'sản phẩm này'}" đã hết hạn.`,
         type: 'ORDER',
         targetId: orderId || productId,
       });
@@ -427,30 +517,30 @@ const eventHandlers = {
 
   'karma.updated': async (payload) => {
     const { userId, karmaChange, reason } = payload;
-    const direction = karmaChange >= 0 ? 'increased' : 'decreased';
+    const direction = karmaChange >= 0 ? 'tăng' : 'giảm';
     await sendNotification({
       recipientId: userId,
-      title: 'Karma Updated',
-      message: `Your karma has ${direction} by ${Math.abs(karmaChange)}${reason ? `. Reason: ${reason}` : ''}`,
+      title: 'Karma đã cập nhật',
+      message: `Điểm karma của bạn ${direction} ${Math.abs(karmaChange)} điểm${reason ? `. Lý do: ${reason}` : ''}.`,
       type: 'KARMA',
-      targetId: userId,
+      targetId: null,
     });
   },
 
   'report.created': async (payload) => {
-    const { reporterId, reportedUserId, reportId } = payload;
+    const { reporterId, reportedUserId, reportId, targetTitle } = payload;
     await sendNotification({
       recipientId: reporterId,
-      title: 'Report Submitted',
-      message: `Your report #${reportId} has been submitted and is under review`,
+      title: 'Đã gửi tố cáo',
+      message: `Tố cáo${targetTitle ? ` về "${targetTitle}"` : ''} đã được gửi và đang chờ xem xét.`,
       type: 'REPORT',
       targetId: reportId,
     });
     if (reportedUserId) {
       await sendNotification({
         recipientId: reportedUserId,
-        title: 'Account Under Review',
-        message: 'Your account has been flagged for review',
+        title: 'Tài khoản đang được xem xét',
+        message: 'Tài khoản của bạn có nội dung bị tố cáo và đang được quản trị viên xem xét.',
         type: 'REPORT',
         targetId: reportId,
       });

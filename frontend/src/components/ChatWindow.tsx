@@ -31,6 +31,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     return chatService.buildConversationId(user.id, recipientId);
   }, [recipientId, user?.id]);
 
+  const productContextStorageKey = useMemo(() => {
+    if (!conversationId || !productContext?.id) return '';
+    return `iuh-chat-product-context:${conversationId}:${productContext.id}`;
+  }, [conversationId, productContext?.id]);
+
   const appendMessage = (incoming: ChatMessage) => {
     setMessages((prev) => {
       const list = Array.isArray(prev) ? prev : [];
@@ -41,6 +46,32 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       return [...list, incoming];
     });
   };
+
+  const renderProductCard = (context: ProductContext, compact = false) => (
+    <a
+      href={`/products/${context.id}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`flex items-center gap-2.5 rounded-xl border transition-colors ${
+        compact
+          ? 'border-white/10 bg-white/10 p-2 hover:bg-white/15'
+          : 'border-emerald-100 bg-emerald-50 p-2.5 hover:bg-emerald-100'
+      }`}
+    >
+      <div className={`flex shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white ${compact ? 'h-10 w-10' : 'h-11 w-11'}`}>
+        {context.imageUrl ? (
+          <img src={context.imageUrl} alt={context.title} className="h-full w-full object-cover" />
+        ) : (
+          <ShoppingBag size={16} className={compact ? 'text-slate-700' : 'text-emerald-600'} />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className={`truncate text-xs font-semibold ${compact ? 'text-white' : 'text-emerald-900'}`}>{context.title}</p>
+        <p className={`text-xs font-bold ${compact ? 'text-white/80' : 'text-emerald-700'}`}>{Number(context.price || 0).toLocaleString('vi-VN')}đ</p>
+      </div>
+      <ExternalLink size={12} className={`shrink-0 ${compact ? 'text-white/70' : 'text-emerald-500'}`} />
+    </a>
+  );
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -120,6 +151,28 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
 
     const contextKey = `${conversationId}:${productContext.id}`;
     if (sentProductContextKey.current === contextKey) return;
+    if (productContextStorageKey && localStorage.getItem(productContextStorageKey)) {
+      sentProductContextKey.current = contextKey;
+      return;
+    }
+
+    const hasExistingContextMessage = messages.some((msg) => {
+      const senderId = String(msg.senderId || (msg as any).userId || '');
+      const content = String(msg.content || '');
+      return (
+        senderId === String(user.id) &&
+        (
+          msg.productContext?.id === productContext.id ||
+          (content.includes('Mình đang hỏi về sản phẩm:') && content.includes(productContext.title))
+        )
+      );
+    });
+
+    if (hasExistingContextMessage) {
+      sentProductContextKey.current = contextKey;
+      if (productContextStorageKey) localStorage.setItem(productContextStorageKey, 'sent');
+      return;
+    }
 
     const contextMsg = [
       `Mình đang hỏi về sản phẩm: ${productContext.title}`,
@@ -133,11 +186,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
         recipientId,
         content: contextMsg,
         timestamp: new Date().toISOString(),
+        productContext,
         ...(conversationId ? { conversationId } : {}),
       } as any);
 
       if (sent) {
         sentProductContextKey.current = contextKey;
+        if (productContextStorageKey) localStorage.setItem(productContextStorageKey, 'sent');
         setTimeout(() => inputRef.current?.focus(), 200);
       }
 
@@ -153,7 +208,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     });
 
     return removeConnectedListener;
-  }, [conversationId, historyLoaded, productContext, recipientId, user?.id]);
+  }, [conversationId, historyLoaded, messages, productContext, productContextStorageKey, recipientId, user?.id]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -273,6 +328,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
         {(Array.isArray(messages) ? messages : []).map((msg, index) => {
           const isMe = msg.senderId === user?.id;
           const isImage = (msg as any).messageType === 'IMAGE' || (msg as any).fileUrl;
+          const messageProductContext = msg.productContext?.id ? msg.productContext : undefined;
 
           return (
             <div
@@ -310,7 +366,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
                       />
                     </a>
                   ) : (
-                    <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</div>
+                    <div className="space-y-2">
+                      {messageProductContext && renderProductCard(messageProductContext, isMe)}
+                      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</div>
+                    </div>
                   )}
                 </div>
               </div>

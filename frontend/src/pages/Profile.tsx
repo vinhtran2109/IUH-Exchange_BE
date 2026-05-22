@@ -29,6 +29,7 @@ import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import { orderService } from '../services/orderService';
 import { wishlistService } from '../services/wishlistService';
+import { chatService } from '../services/chatService';
 import type { User as ProfileUser } from '../types/api';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Dialogs';
@@ -79,6 +80,23 @@ const Profile: React.FC = () => {
         .then((res) => { if (res.success) setSellerTrust(res.data); })
         .catch(() => {});
     }
+  }, []);
+
+  useEffect(() => {
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const type = String(notification?.type || '').toUpperCase();
+      if (type.includes('ORDER')) {
+        void fetchMyOrders();
+      }
+      if (type.includes('PRODUCT')) {
+        void fetchMyProducts();
+      }
+      if (type.includes('KARMA') || type.includes('SYSTEM')) {
+        void fetchProfile();
+      }
+    });
+    return removeListener;
   }, []);
 
   const fetchProfile = async () => {

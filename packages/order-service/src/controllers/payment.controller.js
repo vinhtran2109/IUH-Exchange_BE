@@ -7,7 +7,7 @@ import {
   ForbiddenException,
   logger,
 } from '@iuh-exchange/common';
-import { publishOrderRefunded } from '../services/saga.service.js';
+import { publishOrderEvent, publishOrderRefunded } from '../services/saga.service.js';
 
 /**
  * POST /api/v1/orders/:id/payment/create
@@ -106,6 +106,14 @@ export async function reportBankTransfer(req, res) {
     note: req.body?.note || 'Buyer reported direct bank transfer',
   });
   await order.save();
+  await publishOrderEvent('order.payment.reported', {
+    orderId: order._id?.toString?.() || orderId,
+    buyerId: order.buyerId,
+    sellerId: order.sellerId,
+    productId: order.productId,
+    price: order.price,
+    paymentMethod: 'BANK_TRANSFER',
+  });
 
   logger.info(`[Payment] Bank transfer reported: orderId=${orderId}, buyerId=${userId}`);
 
@@ -161,6 +169,14 @@ export async function confirmBankTransfer(req, res) {
     note: req.body?.note || 'Seller confirmed bank transfer received',
   });
   await order.save();
+  await publishOrderEvent('order.payment.confirmed', {
+    orderId: order._id?.toString?.() || orderId,
+    buyerId: order.buyerId,
+    sellerId: order.sellerId,
+    productId: order.productId,
+    price: order.price,
+    paymentMethod: 'BANK_TRANSFER',
+  });
 
   logger.info(`[Payment] Bank transfer confirmed: orderId=${orderId}, sellerId=${userId}`);
 
@@ -208,6 +224,14 @@ export async function paymentCallback(req, res) {
       note: 'Payment completed',
     });
     await order.save();
+    await publishOrderEvent('order.payment.confirmed', {
+      orderId: order._id?.toString?.() || orderId,
+      buyerId: order.buyerId,
+      sellerId: order.sellerId,
+      productId: order.productId,
+      price: order.price,
+      paymentMethod: order.paymentMethod,
+    });
 
     logger.info(`[Payment] Payment confirmed: orderId=${orderId}, txnId=${transactionId}`);
     res.json(ApiResponse.ok({

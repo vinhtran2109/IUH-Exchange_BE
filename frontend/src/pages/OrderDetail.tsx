@@ -18,6 +18,7 @@ import {
 import { useAuthStore } from '../store/authStore';
 import { orderService } from '../services/orderService';
 import { productService } from '../services/productService';
+import { chatService } from '../services/chatService';
 import { useToast } from '../components/Toast';
 import { usePrompt } from '../components/Dialogs';
 
@@ -119,6 +120,19 @@ const OrderDetail: React.FC = () => {
 
     return () => window.clearInterval(interval);
   }, [order?.status, id]);
+
+  useEffect(() => {
+    if (!id) return;
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const isCurrentOrder = String(notification?.targetId || '') === String(id);
+      const isOrderNotification = String(notification?.type || '').toUpperCase().includes('ORDER');
+      if (isCurrentOrder && isOrderNotification) {
+        fetchDetail(true);
+      }
+    });
+    return removeListener;
+  }, [id]);
 
   const handleConfirm = async () => {
     if (!order) return;
@@ -369,8 +383,11 @@ const OrderDetail: React.FC = () => {
   const isBuyer = !!(user?.id && order?.buyerId && user.id === order.buyerId);
 
   const currentStatus = (order?.status || 'PENDING') as OrderStatusKey;
-  const paymentStatus = (payment?.paymentStatus || order?.paymentStatus || 'UNPAID') as PaymentStatusKey;
-  const isBankTransfer = payment?.paymentMethod === 'BANK_TRANSFER' || order?.paymentMethod === 'BANK_TRANSFER';
+  const paymentMethod = payment?.paymentMethod || order?.paymentMethod;
+  const rawPaymentStatus = (payment?.paymentStatus || order?.paymentStatus || 'UNPAID') as PaymentStatusKey;
+  const isBankTransfer = paymentMethod === 'BANK_TRANSFER';
+  const isCashPayment = paymentMethod === 'CASH';
+  const paymentStatus = (isCashPayment && currentStatus === 'COMPLETED' && rawPaymentStatus === 'UNPAID' ? 'PAID' : rawPaymentStatus) as PaymentStatusKey;
   const transferReported = !!payment?.transferReportedAt;
   const transferConfirmed = !!payment?.transferConfirmedAt;
   const paymentDisplayStatus = (
@@ -419,7 +436,13 @@ const OrderDetail: React.FC = () => {
         done: true,
       },
       {
-        title: paymentDisplayStatus === 'PAID' ? 'Đã thanh toán' : paymentDisplayStatus === 'REPORTED' ? 'Đã báo chuyển khoản' : 'Chờ thanh toán',
+        title: paymentDisplayStatus === 'PAID'
+          ? (isCashPayment ? 'Đã thanh toán khi gặp' : 'Đã thanh toán')
+          : paymentDisplayStatus === 'REPORTED'
+            ? 'Đã báo chuyển khoản'
+            : isCashPayment
+              ? 'Thanh toán khi gặp'
+              : 'Chờ thanh toán',
         subtitle:
           paymentDisplayStatus === 'PAID'
             ? payment?.paidAt
@@ -427,7 +450,9 @@ const OrderDetail: React.FC = () => {
               : 'Đã ghi nhận thanh toán'
             : transferReported && payment?.transferReportedAt
               ? `Người mua báo chuyển khoản lúc ${new Date(payment.transferReportedAt).toLocaleString()}`
-              : 'Người mua chuyển khoản trực tiếp cho người bán rồi báo đã chuyển.',
+              : isCashPayment
+                ? 'Hai bên thanh toán trực tiếp khi bàn giao sản phẩm.'
+                : 'Người mua chuyển khoản trực tiếp cho người bán rồi báo đã chuyển.',
         done: paymentDisplayStatus === 'PAID' || paymentDisplayStatus === 'REPORTED',
       },
       {
@@ -447,7 +472,7 @@ const OrderDetail: React.FC = () => {
         danger: currentStatus === 'CANCELLED',
       },
     ],
-    [currentStatus, order?.createdAt, payment?.paidAt, payment?.transferReportedAt, paymentDisplayStatus, transferReported]
+    [currentStatus, isCashPayment, order?.createdAt, payment?.paidAt, payment?.transferReportedAt, paymentDisplayStatus, transferReported]
   );
 
   const nextStep = useMemo(() => {
@@ -628,11 +653,11 @@ const OrderDetail: React.FC = () => {
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="mb-1 text-xs font-medium text-slate-500">Phương thức</div>
               <div className="text-sm font-semibold text-slate-800">
-                {(payment?.paymentMethod || order?.paymentMethod) === 'BANK_TRANSFER'
+                {paymentMethod === 'BANK_TRANSFER'
                   ? 'Chuyển khoản trực tiếp'
-                  : (payment?.paymentMethod || order?.paymentMethod) === 'VNPAY_MOCK'
+                  : paymentMethod === 'VNPAY_MOCK'
                   ? 'Thanh toán online'
-                  : (payment?.paymentMethod || order?.paymentMethod) === 'CASH'
+                  : paymentMethod === 'CASH'
                     ? 'Thanh toán trực tiếp'
                     : 'Chưa chọn'}
               </div>
