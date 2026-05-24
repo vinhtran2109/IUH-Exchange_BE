@@ -103,14 +103,14 @@ describe('auth middleware', () => {
       req.user = { sub: 'user-1', permissions: ['CAN_CHAT'] };
       const middleware = authorize('CAN_POST');
 
-      expect(() => middleware(req, res, next)).toThrow('Insufficient permissions');
+      expect(() => middleware(req, res, next)).toThrow('Tài khoản của bạn chưa có quyền đăng bài');
     });
 
     it('should require all specified permissions', () => {
       req.user = { sub: 'user-1', permissions: ['CAN_POST'] };
       const middleware = authorize('CAN_POST', 'CAN_CHAT');
 
-      expect(() => middleware(req, res, next)).toThrow('Insufficient permissions');
+      expect(() => middleware(req, res, next)).toThrow('Tài khoản của bạn chưa có quyền chat');
     });
   });
 

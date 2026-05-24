@@ -63,7 +63,6 @@ export interface AdminOrderData {
   paymentIssueReason?: string;
   cancellationCategory?: string;
   cancellationReason?: string;
-  handoverLocation?: string;
   createdAt: string;
 }
 

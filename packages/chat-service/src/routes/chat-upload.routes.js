@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { authenticate } from '@iuh-exchange/common';
+import { authenticate, authorize } from '@iuh-exchange/common';
 import { generatePresignedUploadUrl } from '../services/s3.service.js';
 import { ApiResponse } from '@iuh-exchange/common';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(authorize('CAN_CHAT'));
 
 /**
  * POST /api/v1/chat/upload-url

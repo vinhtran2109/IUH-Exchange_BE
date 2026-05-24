@@ -31,6 +31,27 @@ function sendFrame(conn, command, headers, body = '') {
   }
 }
 
+function sendPermissionError(conn, permission) {
+  const permissionLabels = {
+    CAN_CHAT: 'chat',
+    CAN_REPORT: 'báo cáo',
+  };
+  sendFrame(conn, 'ERROR', {
+    'message': 'Permission denied',
+    'content-type': 'application/json',
+  }, JSON.stringify({
+    success: false,
+    message: `Tài khoản của bạn chưa có quyền ${permissionLabels[permission] || permission}. Vui lòng kiểm tra điểm karma hoặc liên hệ admin.`,
+    code: 'PERMISSION_DENIED',
+    permission,
+  }));
+}
+
+function hasPermission(sessionData, permission) {
+  if (sessionData.userRole === 'ADMIN') return true;
+  return Array.isArray(sessionData.permissions) && sessionData.permissions.includes(permission);
+}
+
 /**
  * Publish a notification to Redis for cross-instance delivery.
  */
@@ -135,6 +156,8 @@ export function initSocketService(httpServer) {
       authenticated: false,
       userId: null,
       userEmail: null,
+      userRole: null,
+      permissions: [],
     };
 
     sessions.set(conn.id, sessionData);
@@ -266,6 +289,8 @@ function handleConnect(conn, frame, sessionData) {
 
     sessionData.userId = userId;
     sessionData.userEmail = decoded.email || '';
+    sessionData.userRole = decoded.role || 'STUDENT';
+    sessionData.permissions = Array.isArray(decoded.permissions) ? decoded.permissions : [];
     sessionData.authenticated = true;
 
     if (!userSessions.has(userId)) {
@@ -344,8 +369,16 @@ function handleSend(conn, frame, sessionData) {
   const userId = sessionData.userId;
 
   if (destination === '/app/chat') {
+    if (!hasPermission(sessionData, 'CAN_CHAT')) {
+      sendPermissionError(conn, 'CAN_CHAT');
+      return;
+    }
     handleChatSend(conn, frame, userId);
   } else if (destination === '/app/chat.image') {
+    if (!hasPermission(sessionData, 'CAN_CHAT')) {
+      sendPermissionError(conn, 'CAN_CHAT');
+      return;
+    }
     handleChatImage(conn, frame, userId);
   } else if (destination === '/app/chat.read') {
     handleChatRead(conn, frame, userId);

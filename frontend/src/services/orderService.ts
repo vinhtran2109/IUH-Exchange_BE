@@ -5,8 +5,6 @@ export interface CreateOrderRequest {
   sellerId: string;
   price: number;
   buyerNote?: string;
-  handoverLocation?: string;
-  handoverTime?: string;
   paymentMethod?: 'BANK_TRANSFER' | 'CASH';
   idempotencyKey: string;
   offerId?: string;
@@ -87,21 +85,6 @@ export const orderService = {
 
   addDisputeEvidence: async (id: string, payload: { type?: 'IMAGE' | 'CHAT_SCREENSHOT' | 'RECEIPT' | 'OTHER'; url: string; note?: string }) => {
     const response = await api.post(`/orders/${id}/disputes/evidence`, payload);
-    return response.data;
-  },
-
-  proposeHandover: async (id: string, payload: { location: string; time: string; note?: string }) => {
-    const response = await api.post(`/orders/${id}/handover/proposals`, payload);
-    return response.data;
-  },
-
-  respondHandover: async (id: string, proposalId: string, action: 'ACCEPT' | 'REJECT') => {
-    const response = await api.patch(`/orders/${id}/handover/proposals/${proposalId}`, { action });
-    return response.data;
-  },
-
-  confirmHandover: async (id: string, payload: { code?: string; evidenceUrl?: string; note?: string } = {}) => {
-    const response = await api.patch(`/orders/${id}/handover/confirm`, payload);
     return response.data;
   },
 

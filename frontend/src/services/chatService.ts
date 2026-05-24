@@ -47,6 +47,7 @@ let listeners: Array<(msg: ChatMessage) => void> = [];
 let notificationListeners: Array<(notif: any) => void> = [];
 let openChatListeners: Array<(recipientId: string, recipientName: string, product?: ProductContext) => void> = [];
 let connectedListeners: Array<() => void> = [];
+let errorListeners: Array<(message: string) => void> = [];
 
 const clearReconnectTimer = () => {
   if (reconnectTimer) {
@@ -77,6 +78,13 @@ export const chatService = {
     }
     return () => {
       connectedListeners = connectedListeners.filter((l) => l !== callback);
+    };
+  },
+
+  addErrorListener: (callback: (message: string) => void) => {
+    errorListeners.push(callback);
+    return () => {
+      errorListeners = errorListeners.filter((l) => l !== callback);
     };
   },
 
@@ -159,6 +167,17 @@ export const chatService = {
     }, (error) => {
       isConnecting = false;
       console.error('WebSocket sync error:', error);
+      let message = 'Không thể kết nối hoặc gửi tin nhắn.';
+      const frame = typeof error === 'string' ? null : error;
+      const headers = frame?.headers as { message?: string } | undefined;
+      try {
+        const rawBody = typeof frame?.body === 'string' ? frame.body : '';
+        const parsed = rawBody ? JSON.parse(rawBody) as { message?: string } : null;
+        message = parsed?.message || headers?.message || message;
+      } catch {
+        message = headers?.message || message;
+      }
+      errorListeners.forEach((callback) => callback(message));
       if (!localStorage.getItem('accessToken')) {
         chatService.disconnect();
         return;

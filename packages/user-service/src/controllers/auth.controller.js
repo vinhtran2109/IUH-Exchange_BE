@@ -16,6 +16,7 @@ import {
 } from '@iuh-exchange/common';
 import crypto from 'crypto';
 import { sendAdminLoginOtpEmail, sendOtpEmail, sendPasswordResetOtpEmail } from '../services/email.service.js';
+import { DEFAULT_KARMA } from '../services/karma-policy.js';
 
 function parseCookieHeader(cookieHeader = '') {
   return cookieHeader
@@ -64,6 +65,7 @@ export async function register(req, res) {
     otp,
     otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
     otpAttemptCount: 0,
+    karmaPoint: DEFAULT_KARMA,
   });
 
   // Bug #8 fix: Don't log OTP plaintext to console/logs

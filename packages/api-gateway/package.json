@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=../../.env --watch src/index.js",
+    "dev": "node --env-file=../../.env --watch-path=src --watch-path=../common/src src/index.js",
     "start": "node --env-file=../../.env src/index.js"
   },
   "dependencies": {

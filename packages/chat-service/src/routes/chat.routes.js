@@ -1,4 +1,4 @@
-import { authenticate } from '@iuh-exchange/common';
+import { authenticate, authorize } from '@iuh-exchange/common';
 import { Router } from 'express';
 import {
   getConversationHistory,
@@ -17,7 +17,7 @@ router.use(authenticate);
 
 router.get('/admin/reported-messages', listReportedMessages);
 router.patch('/admin/reported-messages/:id/resolve', resolveReportedMessage);
-router.post('/messages/:id/report', reportMessage);
+router.post('/messages/:id/report', authorize('CAN_REPORT'), reportMessage);
 router.get('/conversations', getUserConversations);
 router.get('/conversations/:conversationId', getConversationHistory);
 router.patch('/conversations/:conversationId/read', markConversationAsRead);

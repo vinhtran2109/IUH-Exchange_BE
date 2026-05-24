@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, optionalAuth, ForbiddenException } from '@iuh-exchange/common';
+import { authenticate, authorize, optionalAuth, ForbiddenException } from '@iuh-exchange/common';
 import {
   listItems,
   listAdminItems,
@@ -37,10 +37,10 @@ router.post('/admin/bulk-moderate', authenticate, adminOnly, bulkModerate);
 router.delete('/admin/:id', authenticate, adminOnly, deleteItemAsAdmin);
 
 // Protected: mutations require authentication
-router.post('/', authenticate, ocrRateLimit, createItem);
+router.post('/', authenticate, authorize('CAN_REPORT'), ocrRateLimit, createItem);
 
 // Upload presigned URL (must be before /:id)
-router.post('/upload-url', authenticate, getUploadUrl);
+router.post('/upload-url', authenticate, authorize('CAN_REPORT'), getUploadUrl);
 
 // Match preview (before creating) — must be before /:id
 router.post('/match-preview', optionalAuth, previewMatches);
@@ -52,9 +52,9 @@ router.get('/:id', optionalAuth, getItemById);
 router.get('/:id/matches', optionalAuth, getMatches);
 
 // Protected: update/delete/claim
-router.put('/:id', authenticate, updateItem);
+router.put('/:id', authenticate, authorize('CAN_REPORT'), updateItem);
 router.delete('/:id', authenticate, deleteItem);
-router.post('/:id/claim', authenticate, claimItem);
-router.patch('/:id/claims/:claimId', authenticate, reviewClaim);
+router.post('/:id/claim', authenticate, authorize('CAN_REPORT'), claimItem);
+router.patch('/:id/claims/:claimId', authenticate, authorize('CAN_REPORT'), reviewClaim);
 
 export default router;

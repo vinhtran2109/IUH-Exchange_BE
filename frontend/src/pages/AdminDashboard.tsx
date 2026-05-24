@@ -1318,7 +1318,6 @@ const AdminDashboard: React.FC = () => {
               <th className="p-4">Trạng thái</th>
               <th className="p-4">Tranh chấp</th>
               <th className="p-4">Thanh toán</th>
-              <th className="p-4">Hẹn giao</th>
               <th className="p-4">Xử lý</th>
             </tr>
           </thead>
@@ -1348,7 +1347,6 @@ const AdminDashboard: React.FC = () => {
                   {order.paymentIssueReason && <div className="mt-1 max-w-[220px] truncate text-xs text-slate-400">{order.paymentIssueReason}</div>}
                   {order.cancellationCategory && <div className="mt-1 text-xs text-rose-500">{statusLabel(order.cancellationCategory)}</div>}
                 </td>
-                <td className="p-4 text-slate-500">{order.handoverLocation || 'Chưa có'}</td>
                 <td className="p-4">
                   {(order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN') && (
                     <div className="flex flex-wrap gap-2">

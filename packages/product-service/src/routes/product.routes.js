@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, ForbiddenException, validate } from '@iuh-exchange/common';
+import { authenticate, authorize, ForbiddenException, validate } from '@iuh-exchange/common';
 import {
   createProductSchema,
   uploadUrlSchema,
@@ -53,11 +53,11 @@ router.get('/suggestions', asyncHandler(suggestProductsHandler));
 router.get('/', validateQuery(paginationSchema), asyncHandler(listProducts));
 
 router.get('/me', authenticate, validateQuery(paginationSchema), asyncHandler(getMyProducts));
-router.post('/', authenticate, validateBody(createProductSchema), asyncHandler(createProduct));
-router.post('/upload-url', authenticate, validateBody(uploadUrlSchema), asyncHandler(getUploadUrl));
+router.post('/', authenticate, authorize('CAN_POST'), validateBody(createProductSchema), asyncHandler(createProduct));
+router.post('/upload-url', authenticate, authorize('CAN_POST'), validateBody(uploadUrlSchema), asyncHandler(getUploadUrl));
 
 router.get('/:id', asyncHandler(getProductById));
-router.put('/:id', authenticate, validateBody(createProductSchema), asyncHandler(updateProduct));
+router.put('/:id', authenticate, authorize('CAN_POST'), validateBody(createProductSchema), asyncHandler(updateProduct));
 router.delete('/:id', authenticate, asyncHandler(deleteProduct));
 
 export default router;
