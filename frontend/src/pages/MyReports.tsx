@@ -4,8 +4,10 @@ import { AlertTriangle, ArrowLeft, CheckCircle, Clock, Flag, Send, XCircle } fro
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import api from '../services/api';
+import { useAuthStore } from '../store/authStore';
 
 type ReportTargetType = 'USER' | 'PRODUCT' | 'LOST_FOUND';
+type ReportFormTargetType = ReportTargetType | 'ACCOUNT_SUPPORT';
 
 interface Report {
   id: string;
@@ -29,7 +31,10 @@ const TARGET_LABELS: Record<string, string> = {
   PRODUCT: 'Sản phẩm',
   USER: 'Người dùng',
   LOST_FOUND: 'Đồ thất lạc',
+  ACCOUNT_SUPPORT: 'Hỗ trợ tài khoản',
 };
+
+const ACCOUNT_SUPPORT_PREFIX = '[Hỗ trợ tài khoản]';
 
 function parseReportTarget(rawValue: string, fallbackType: ReportTargetType) {
   const value = rawValue.trim();
@@ -53,12 +58,14 @@ function parseReportTarget(rawValue: string, fallbackType: ReportTargetType) {
 const MyReports: React.FC = () => {
   const navigate = useNavigate();
   const { success: toastSuccess, error: toastError } = useToast();
+  const { user } = useAuthStore();
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [targetType, setTargetType] = useState<ReportTargetType>('USER');
+  const [targetType, setTargetType] = useState<ReportFormTargetType>('ACCOUNT_SUPPORT');
   const [targetId, setTargetId] = useState('');
   const [reason, setReason] = useState('');
+  const requiresTargetInput = targetType !== 'ACCOUNT_SUPPORT';
 
   const fetchReports = async () => {
     setLoading(true);
@@ -80,11 +87,14 @@ const MyReports: React.FC = () => {
 
   const handleSubmitReport = async (event: React.FormEvent) => {
     event.preventDefault();
-    const parsedTarget = parseReportTarget(targetId, targetType);
+    const isAccountSupport = targetType === 'ACCOUNT_SUPPORT';
+    const parsedTarget = isAccountSupport
+      ? { targetType: 'USER' as const, targetId: user?.id || '' }
+      : parseReportTarget(targetId, targetType);
     const trimmedReason = reason.trim();
 
     if (!parsedTarget.targetId) {
-      toastError('Vui lòng nhập link hoặc mã đối tượng cần báo cáo.');
+      toastError(isAccountSupport ? 'Vui lòng đăng nhập để gửi hỗ trợ tài khoản.' : 'Vui lòng nhập link hoặc mã đối tượng cần báo cáo.');
       return;
     }
     if (trimmedReason.length < 5) {
@@ -97,9 +107,9 @@ const MyReports: React.FC = () => {
       await api.post('/reports', {
         targetType: parsedTarget.targetType,
         targetId: parsedTarget.targetId,
-        reason: trimmedReason,
+        reason: isAccountSupport ? `${ACCOUNT_SUPPORT_PREFIX} ${trimmedReason}` : trimmedReason,
       });
-      setTargetType(parsedTarget.targetType);
+      setTargetType(isAccountSupport ? 'ACCOUNT_SUPPORT' : parsedTarget.targetType);
       setTargetId('');
       setReason('');
       toastSuccess('Đã gửi báo cáo cho admin.');
@@ -140,26 +150,33 @@ const MyReports: React.FC = () => {
             <label className="mb-1.5 block text-xs font-semibold text-slate-500">Loại đối tượng</label>
             <select
               value={targetType}
-              onChange={(event) => setTargetType(event.target.value as ReportTargetType)}
+              onChange={(event) => setTargetType(event.target.value as ReportFormTargetType)}
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
             >
-              <option value="USER">Người dùng</option>
+              <option value="ACCOUNT_SUPPORT">Hỗ trợ tài khoản</option>
+              <option value="USER">Người dùng khác</option>
               <option value="PRODUCT">Sản phẩm</option>
               <option value="LOST_FOUND">Đồ thất lạc</option>
             </select>
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">Link hoặc mã đối tượng</label>
-            <input
-              value={targetId}
-              onChange={(event) => setTargetId(event.target.value)}
-              placeholder="Dán link trang sản phẩm, người bán, đồ thất lạc hoặc mã ID"
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
-            />
-            <p className="mt-1.5 text-xs text-slate-400">
-              Dễ nhất là mở trang cần báo cáo rồi dán đường link vào đây. Hệ thống sẽ tự nhận dạng loại đối tượng nếu link là /products, /sellers hoặc /lost-found.
-            </p>
-          </div>
+          {requiresTargetInput ? (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-500">Link hoặc mã đối tượng</label>
+              <input
+                value={targetId}
+                onChange={(event) => setTargetId(event.target.value)}
+                placeholder="Dán link trang sản phẩm, người bán, đồ thất lạc hoặc mã ID"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
+              />
+              <p className="mt-1.5 text-xs text-slate-400">
+                Dễ nhất là mở trang cần báo cáo rồi dán đường link vào đây. Hệ thống sẽ tự nhận dạng loại đối tượng nếu link là /products, /sellers hoặc /lost-found.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              Báo cáo này sẽ gửi về admin như một yêu cầu hỗ trợ cho chính tài khoản của bạn.
+            </div>
+          )}
         </div>
 
         <div className="mt-3">
@@ -178,7 +195,7 @@ const MyReports: React.FC = () => {
         <div className="mt-3 flex justify-end">
           <button
             type="submit"
-            disabled={submitting || !targetId.trim() || reason.trim().length < 5}
+            disabled={submitting || (requiresTargetInput && !targetId.trim()) || reason.trim().length < 5}
             className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? 'Đang gửi...' : 'Gửi báo cáo'}
@@ -206,6 +223,8 @@ const MyReports: React.FC = () => {
               icon: <AlertTriangle size={13} />,
             };
             const reportId = report.id || report._id || `${report.targetType}:${report.targetId}:${report.createdAt}`;
+            const isAccountSupportReport = report.targetType === 'USER' && report.reason.startsWith(ACCOUNT_SUPPORT_PREFIX);
+            const displayReason = isAccountSupportReport ? report.reason.replace(ACCOUNT_SUPPORT_PREFIX, '').trim() : report.reason;
 
             return (
               <motion.div
@@ -218,7 +237,7 @@ const MyReports: React.FC = () => {
                 <div className="mb-2 flex items-start justify-between gap-3">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                      {TARGET_LABELS[report.targetType] || report.targetType}
+                      {isAccountSupportReport ? TARGET_LABELS.ACCOUNT_SUPPORT : TARGET_LABELS[report.targetType] || report.targetType}
                     </span>
                     <span className={`flex items-center gap-1 rounded border px-2 py-0.5 text-[11px] font-medium ${statusInfo.color}`}>
                       {statusInfo.icon}
@@ -230,8 +249,8 @@ const MyReports: React.FC = () => {
                   </span>
                 </div>
 
-                <div className="mb-1 break-all text-xs text-slate-400">ID: {report.targetId}</div>
-                <p className="text-sm text-slate-700">{report.reason}</p>
+                {!isAccountSupportReport && <div className="mb-1 break-all text-xs text-slate-400">ID: {report.targetId}</div>}
+                <p className="text-sm text-slate-700">{displayReason}</p>
 
                 {report.adminNote && (
                   <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
