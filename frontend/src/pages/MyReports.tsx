@@ -31,6 +31,25 @@ const TARGET_LABELS: Record<string, string> = {
   LOST_FOUND: 'Đồ thất lạc',
 };
 
+function parseReportTarget(rawValue: string, fallbackType: ReportTargetType) {
+  const value = rawValue.trim();
+  if (!value) return { targetType: fallbackType, targetId: '' };
+
+  try {
+    const url = new URL(value, window.location.origin);
+    const parts = url.pathname.split('/').filter(Boolean);
+    const [section, id] = parts;
+
+    if (section === 'products' && id) return { targetType: 'PRODUCT' as const, targetId: id };
+    if (section === 'lost-found' && id) return { targetType: 'LOST_FOUND' as const, targetId: id };
+    if ((section === 'sellers' || section === 'users') && id) return { targetType: 'USER' as const, targetId: id };
+  } catch {
+    // Keep the raw value below.
+  }
+
+  return { targetType: fallbackType, targetId: value };
+}
+
 const MyReports: React.FC = () => {
   const navigate = useNavigate();
   const { success: toastSuccess, error: toastError } = useToast();
@@ -61,11 +80,11 @@ const MyReports: React.FC = () => {
 
   const handleSubmitReport = async (event: React.FormEvent) => {
     event.preventDefault();
-    const trimmedTargetId = targetId.trim();
+    const parsedTarget = parseReportTarget(targetId, targetType);
     const trimmedReason = reason.trim();
 
-    if (!trimmedTargetId) {
-      toastError('Vui lòng nhập ID đối tượng cần báo cáo.');
+    if (!parsedTarget.targetId) {
+      toastError('Vui lòng nhập link hoặc mã đối tượng cần báo cáo.');
       return;
     }
     if (trimmedReason.length < 5) {
@@ -76,10 +95,11 @@ const MyReports: React.FC = () => {
     try {
       setSubmitting(true);
       await api.post('/reports', {
-        targetType,
-        targetId: trimmedTargetId,
+        targetType: parsedTarget.targetType,
+        targetId: parsedTarget.targetId,
         reason: trimmedReason,
       });
+      setTargetType(parsedTarget.targetType);
       setTargetId('');
       setReason('');
       toastSuccess('Đã gửi báo cáo cho admin.');
@@ -129,13 +149,16 @@ const MyReports: React.FC = () => {
             </select>
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-semibold text-slate-500">ID đối tượng</label>
+            <label className="mb-1.5 block text-xs font-semibold text-slate-500">Link hoặc mã đối tượng</label>
             <input
               value={targetId}
               onChange={(event) => setTargetId(event.target.value)}
-              placeholder="Dán ID người dùng, sản phẩm hoặc bài đồ thất lạc"
+              placeholder="Dán link trang sản phẩm, người bán, đồ thất lạc hoặc mã ID"
               className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 outline-none focus:border-slate-400"
             />
+            <p className="mt-1.5 text-xs text-slate-400">
+              Dễ nhất là mở trang cần báo cáo rồi dán đường link vào đây. Hệ thống sẽ tự nhận dạng loại đối tượng nếu link là /products, /sellers hoặc /lost-found.
+            </p>
           </div>
         </div>
 
