@@ -19,6 +19,14 @@ const createReportSchema = z.object({
   reason: z.string().min(5).max(1000).trim(),
 });
 
+const ACCOUNT_SUPPORT_PREFIX = '[Hỗ trợ tài khoản]';
+
+const isAccountSupportReport = (reportLike) =>
+  reportLike?.targetType === 'USER' &&
+  String(reportLike?.targetId) === String(reportLike?.reporterId || '') &&
+  typeof reportLike?.reason === 'string' &&
+  reportLike.reason.startsWith(ACCOUNT_SUPPORT_PREFIX);
+
 const resolveReportSchema = z.object({
   status: z.enum(['REVIEWED', 'RESOLVED', 'DISMISSED']),
   adminNote: z.string().max(2000).optional().default(''),
@@ -34,8 +42,10 @@ export async function createReport(req, res, next) {
   try {
     const data = createReportSchema.parse(req.body);
 
-    // Prevent self-reporting
-    if (data.targetType === 'USER' && data.targetId === req.user.sub) {
+    const isAccountSupport = data.targetType === 'USER' && data.targetId === req.user.sub && data.reason.startsWith(ACCOUNT_SUPPORT_PREFIX);
+
+    // Prevent self-reporting, except account support tickets.
+    if (data.targetType === 'USER' && data.targetId === req.user.sub && !isAccountSupport) {
       throw new BadRequestException('You cannot report yourself');
     }
 
@@ -118,6 +128,7 @@ export async function resolveReport(req, res, next) {
       status: statusRaw,
       adminNote: req.query.adminNote || req.body?.adminNote || '',
     });
+    const skipKarmaPenalty = req.query.skipKarmaPenalty === 'true' || req.body?.skipKarmaPenalty === true;
 
     const report = await Report.findById(req.params.reportId);
     if (!report) throw new ResourceNotFoundException('Report', req.params.reportId);
@@ -131,7 +142,7 @@ export async function resolveReport(req, res, next) {
     await report.save();
 
     // If admin approves the report (complaint is valid), deduct karma from reported user
-    if (data.status === 'RESOLVED' && report.targetType === 'USER') {
+    if (data.status === 'RESOLVED' && report.targetType === 'USER' && !skipKarmaPenalty && !isAccountSupportReport(report)) {
       await publishKarmaPenalty(report.targetId.toString(), report.reason);
       logger.info(`Karma penalty triggered for user ${report.targetId} from report ${report._id}`);
     }
