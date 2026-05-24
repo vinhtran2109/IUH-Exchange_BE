@@ -504,6 +504,56 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  const handleResolveReportWithAction = async (
+    report: ReportData,
+    action: 'WARN_USER' | 'PENALIZE_USER' | 'REMOVE_PRODUCT' | 'REMOVE_LOST_FOUND' | 'DISMISS'
+  ) => {
+    const reportId = getEntityId(report);
+    if (!reportId) return;
+
+    const defaultNotes = {
+      WARN_USER: 'Admin chấp nhận tố cáo và cảnh cáo người dùng.',
+      PENALIZE_USER: 'Admin chấp nhận tố cáo và trừ karma người dùng.',
+      REMOVE_PRODUCT: 'Admin chấp nhận tố cáo và gỡ sản phẩm vi phạm.',
+      REMOVE_LOST_FOUND: 'Admin chấp nhận tố cáo và gỡ bài đồ thất lạc vi phạm.',
+      DISMISS: 'Admin đã kiểm tra và bỏ qua tố cáo.',
+    } as const;
+    const adminNote = prompt('Ghi chú xử lý:', defaultNotes[action]) || defaultNotes[action];
+
+    try {
+      if (action === 'DISMISS') {
+        await adminService.resolveReport(reportId, 'DISMISSED', adminNote);
+        await fetchData();
+        return;
+      }
+
+      if (action === 'WARN_USER' || action === 'PENALIZE_USER') {
+        const amount = action === 'WARN_USER' ? -5 : -10;
+        await adminService.adjustKarma(report.targetId, amount, `${adminNote} Lý do tố cáo: ${report.reason}`);
+        await adminService.resolveReport(reportId, 'RESOLVED', adminNote, { skipKarmaPenalty: true });
+        await fetchData();
+        return;
+      }
+
+      if (action === 'REMOVE_PRODUCT') {
+        if (!window.confirm('Gỡ sản phẩm bị tố cáo và đánh dấu tố cáo đã xử lý?')) return;
+        await adminService.deleteProduct(report.targetId);
+        await adminService.resolveReport(reportId, 'RESOLVED', adminNote);
+        await fetchData();
+        return;
+      }
+
+      if (action === 'REMOVE_LOST_FOUND') {
+        if (!window.confirm('Gỡ bài đồ thất lạc bị tố cáo và đánh dấu tố cáo đã xử lý?')) return;
+        await adminService.deleteLostFoundItem(report.targetId);
+        await adminService.resolveReport(reportId, 'RESOLVED', adminNote);
+        await fetchData();
+      }
+    } catch (e: any) {
+      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xử lý tố cáo'));
+    }
+  };
+
   const handleRetryDlq = async (eventId: string) => {
     try {
       const res = await adminService.retryDlqEvent(eventId);
@@ -1034,8 +1084,19 @@ const AdminDashboard: React.FC = () => {
                       {report.status === 'PENDING' && (
                         <>
                           <button onClick={() => handleResolveReport(reportId, 'REVIEWED')} className="px-3 py-2 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold hover:bg-sky-100">Đã xem</button>
-                          <button onClick={() => handleResolveReport(reportId, 'RESOLVED')} className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-700">Chấp nhận</button>
-                          <button onClick={() => handleResolveReport(reportId, 'DISMISSED')} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">Bỏ qua</button>
+                          {report.targetType === 'USER' && (
+                            <>
+                              <button onClick={() => handleResolveReportWithAction(report, 'WARN_USER')} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100">Cảnh cáo -5</button>
+                              <button onClick={() => handleResolveReportWithAction(report, 'PENALIZE_USER')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Phạt -10</button>
+                            </>
+                          )}
+                          {report.targetType === 'PRODUCT' && (
+                            <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_PRODUCT')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Gỡ sản phẩm</button>
+                          )}
+                          {report.targetType === 'LOST_FOUND' && (
+                            <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_LOST_FOUND')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Gỡ bài</button>
+                          )}
+                          <button onClick={() => handleResolveReportWithAction(report, 'DISMISS')} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">Bỏ qua</button>
                         </>
                       )}
                     </div>

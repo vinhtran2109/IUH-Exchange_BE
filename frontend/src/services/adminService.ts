@@ -133,8 +133,12 @@ export const adminService = {
     return response.data;
   },
 
-  resolveReport: async (reportId: string, status: string, adminNote?: string) => {
-    const response = await api.patch(`/reports/admin/${reportId}/resolve?status=${status}${adminNote ? `&adminNote=${encodeURIComponent(adminNote)}` : ''}`);
+  resolveReport: async (reportId: string, status: string, adminNote?: string, options: { skipKarmaPenalty?: boolean } = {}) => {
+    const response = await api.patch(`/reports/admin/${reportId}/resolve`, {
+      status,
+      adminNote: adminNote || '',
+      skipKarmaPenalty: Boolean(options.skipKarmaPenalty),
+    });
     return response.data;
   },
 

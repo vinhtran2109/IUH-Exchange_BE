@@ -118,6 +118,7 @@ export async function resolveReport(req, res, next) {
       status: statusRaw,
       adminNote: req.query.adminNote || req.body?.adminNote || '',
     });
+    const skipKarmaPenalty = req.query.skipKarmaPenalty === 'true' || req.body?.skipKarmaPenalty === true;
 
     const report = await Report.findById(req.params.reportId);
     if (!report) throw new ResourceNotFoundException('Report', req.params.reportId);
@@ -131,7 +132,7 @@ export async function resolveReport(req, res, next) {
     await report.save();
 
     // If admin approves the report (complaint is valid), deduct karma from reported user
-    if (data.status === 'RESOLVED' && report.targetType === 'USER') {
+    if (data.status === 'RESOLVED' && report.targetType === 'USER' && !skipKarmaPenalty) {
       await publishKarmaPenalty(report.targetId.toString(), report.reason);
       logger.info(`Karma penalty triggered for user ${report.targetId} from report ${report._id}`);
     }
