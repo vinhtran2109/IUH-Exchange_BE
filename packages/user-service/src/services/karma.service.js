@@ -2,9 +2,25 @@ import { User } from '../models/User.js';
 import { KarmaHistory } from '../models/KarmaHistory.js';
 import { logger, ResourceNotFoundException } from '@iuh-exchange/common';
 import { publishUserEvent } from './kafka.service.js';
+import { DEFAULT_KARMA, KARMA_PERMISSION_RULES } from './karma-policy.js';
 
 function normalizePermissions(permissions) {
   return Array.isArray(permissions) ? permissions : ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT'];
+}
+
+function syncPermissionsWithKarma(user) {
+  const permissions = new Set(normalizePermissions(user.permissions));
+  const karmaPoint = Number(user.karmaPoint ?? DEFAULT_KARMA);
+
+  for (const { permission, minKarma } of KARMA_PERMISSION_RULES) {
+    if (karmaPoint >= minKarma) {
+      permissions.add(permission);
+    } else {
+      permissions.delete(permission);
+    }
+  }
+
+  user.permissions = Array.from(permissions);
 }
 
 export async function applyKarmaAdjustment({
@@ -29,17 +45,10 @@ export async function applyKarmaAdjustment({
   const user = await User.findById(userId);
   if (!user) throw new ResourceNotFoundException('User', userId);
 
-  const previousKarma = Number(user.karmaPoint ?? 100);
+  const previousKarma = Number(user.karmaPoint ?? DEFAULT_KARMA);
   const delta = Number(amount);
   user.karmaPoint = previousKarma + delta;
-  user.permissions = normalizePermissions(user.permissions);
-
-  if (user.karmaPoint < 0 && user.permissions.includes('CAN_POST')) {
-    user.permissions = user.permissions.filter((permission) => permission !== 'CAN_POST');
-  }
-  if (user.karmaPoint >= 0 && !user.permissions.includes('CAN_POST')) {
-    user.permissions.push('CAN_POST');
-  }
+  syncPermissionsWithKarma(user);
 
   await user.save();
 
@@ -69,3 +78,5 @@ export async function applyKarmaAdjustment({
 
   return history;
 }
+
+export { syncPermissionsWithKarma };

@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch-path=src --watch-path=../common/src src/index.js"
   },
   "dependencies": {
     "@iuh-exchange/common": "*",

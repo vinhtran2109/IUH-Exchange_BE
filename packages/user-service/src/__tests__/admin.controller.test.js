@@ -169,6 +169,39 @@ describe('admin.controller', () => {
 
       expect(user.permissions).toContain('CAN_POST');
     });
+
+    it('should revoke CAN_CHAT when karma drops to -10 or lower', async () => {
+      const user = {
+        ...mockUser,
+        karmaPoint: -5,
+        permissions: ['CAN_CHAT', 'CAN_REPORT'],
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockUserModel.findById.mockResolvedValue(user);
+      mockKarmaHistoryModel.create.mockResolvedValue(true);
+
+      const { req, res } = mockReqRes({ amount: -5, reason: 'Spam chat' }, { id: 'user123' });
+      await adminController.adjustKarma(req, res);
+
+      expect(user.permissions).not.toContain('CAN_CHAT');
+      expect(user.permissions).toContain('CAN_REPORT');
+    });
+
+    it('should revoke CAN_REPORT when karma drops to -20 or lower', async () => {
+      const user = {
+        ...mockUser,
+        karmaPoint: -15,
+        permissions: ['CAN_REPORT'],
+        save: vi.fn().mockResolvedValue(true),
+      };
+      mockUserModel.findById.mockResolvedValue(user);
+      mockKarmaHistoryModel.create.mockResolvedValue(true);
+
+      const { req, res } = mockReqRes({ amount: -5, reason: 'False reports' }, { id: 'user123' });
+      await adminController.adjustKarma(req, res);
+
+      expect(user.permissions).not.toContain('CAN_REPORT');
+    });
   });
 
   describe('toggleBanUser', () => {

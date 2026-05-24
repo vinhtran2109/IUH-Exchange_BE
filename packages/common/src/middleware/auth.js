@@ -95,11 +95,24 @@ export function authorize(...requiredPermissions) {
       throw new UnauthorizedException('Authentication required');
     }
 
+    if (req.user.role === 'ADMIN') {
+      return next();
+    }
+
     const userPermissions = req.user.permissions || [];
     const hasPermission = requiredPermissions.every((p) => userPermissions.includes(p));
 
     if (!hasPermission) {
-      throw new ForbiddenException('Insufficient permissions');
+      const permissionLabels = {
+        CAN_POST: 'đăng bài',
+        CAN_CHAT: 'chat',
+        CAN_REPORT: 'báo cáo',
+      };
+      const missing = requiredPermissions
+        .filter((p) => !userPermissions.includes(p))
+        .map((p) => permissionLabels[p] || p)
+        .join(', ');
+      throw new ForbiddenException(`Tài khoản của bạn chưa có quyền ${missing}. Vui lòng kiểm tra điểm karma hoặc liên hệ admin.`);
     }
 
     next();

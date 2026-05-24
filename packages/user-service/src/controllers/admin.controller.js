@@ -14,6 +14,7 @@ import {
 } from '@iuh-exchange/common';
 import { publishUserEvent } from '../services/kafka.service.js';
 import { applyKarmaAdjustment } from '../services/karma.service.js';
+import { DEFAULT_KARMA } from '../services/karma-policy.js';
 
 // Bug #6 fix: Escape special regex chars to prevent ReDoS
 function escapeRegex(str) {
@@ -153,7 +154,7 @@ export async function adjustKarma(req, res) {
   const user = await User.findById(id);
   if (!user) throw new ResourceNotFoundException('User', id);
 
-  const previousKarma = Number(user.karmaPoint ?? 100);
+  const previousKarma = Number(user.karmaPoint ?? DEFAULT_KARMA);
   await applyKarmaAdjustment({
     userId: id,
     amount,

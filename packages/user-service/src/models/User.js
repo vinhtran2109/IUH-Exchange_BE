@@ -1,4 +1,5 @@
 import { SupabaseModel, baseRow, valueOrNull } from '@iuh-exchange/common';
+import { DEFAULT_KARMA } from '../services/karma-policy.js';
 
 function mapUserToRow(user) {
   return {
@@ -12,7 +13,7 @@ function mapUserToRow(user) {
     bank_info: user.bankInfo || {},
     is_verified: Boolean(user.isVerified),
     is_active: user.isActive !== false,
-    karma_point: Number(user.karmaPoint ?? 100),
+    karma_point: Number(user.karmaPoint ?? DEFAULT_KARMA),
     role: user.role || 'STUDENT',
     permissions: Array.isArray(user.permissions) ? user.permissions : ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT'],
     otp: valueOrNull(user.otp),

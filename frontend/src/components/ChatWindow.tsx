@@ -5,6 +5,7 @@ import { chatService } from '../services/chatService';
 import type { ChatMessage, ProductContext } from '../services/chatService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
+import { useToast } from './Toast';
 
 interface ChatWindowProps {
   recipientId: string;
@@ -16,6 +17,7 @@ interface ChatWindowProps {
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onClose, onBack, productContext }) => {
   const { user } = useAuthStore() as any;
+  const { error: toastError } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -35,6 +37,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     if (!conversationId || !productContext?.id) return '';
     return `iuh-chat-product-context:${conversationId}:${productContext.id}`;
   }, [conversationId, productContext?.id]);
+
+  useEffect(() => {
+    return chatService.addErrorListener((message) => {
+      toastError(message);
+    });
+  }, [toastError]);
 
   const appendMessage = (incoming: ChatMessage) => {
     setMessages((prev) => {
@@ -215,6 +223,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
 
   const handleSend = () => {
     if (!inputValue.trim() || !user?.id) return;
+    if (Array.isArray(user.permissions) && !user.permissions.includes('CAN_CHAT') && user.role !== 'ADMIN') {
+      toastError('Tài khoản của bạn chưa có quyền chat. Vui lòng kiểm tra điểm karma hoặc liên hệ admin.');
+      return;
+    }
 
     const chatMsg: ChatMessage = {
       senderId: user.id,
@@ -239,6 +251,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
 
     if (file.size > 5 * 1024 * 1024) {
       alert('Ảnh tối đa 5MB');
+      return;
+    }
+
+    if (Array.isArray(user.permissions) && !user.permissions.includes('CAN_CHAT') && user.role !== 'ADMIN') {
+      toastError('Tài khoản của bạn chưa có quyền chat. Vui lòng kiểm tra điểm karma hoặc liên hệ admin.');
       return;
     }
 

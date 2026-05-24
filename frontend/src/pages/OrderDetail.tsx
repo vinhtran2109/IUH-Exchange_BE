@@ -40,12 +40,6 @@ const OrderDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [flashMessage, setFlashMessage] = useState<string | null>((location.state as any)?.flashMessage || null);
-  const [handoverLocation, setHandoverLocation] = useState('');
-  const [handoverTime, setHandoverTime] = useState('');
-  const [handoverNote, setHandoverNote] = useState('');
-  const [handoverCode, setHandoverCode] = useState('');
-  const [handoverProofUrl, setHandoverProofUrl] = useState('');
-  const [handoverProofNote, setHandoverProofNote] = useState('');
   const [disputeReason, setDisputeReason] = useState('');
   const [evidenceUrl, setEvidenceUrl] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
@@ -225,63 +219,6 @@ const OrderDetail: React.FC = () => {
       }
     } catch (error: any) {
       toastError(error?.response?.data?.message || 'Không thể xác nhận nhận tiền lúc này.');
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleProposeHandover = async () => {
-    if (!order || !handoverLocation || !handoverTime) return;
-    try {
-      setActing(true);
-      const res = await orderService.proposeHandover(order.id || order._id, {
-        location: handoverLocation,
-        time: new Date(handoverTime).toISOString(),
-        note: handoverNote,
-      });
-      if (res.success) {
-        setHandoverLocation('');
-        setHandoverTime('');
-        setHandoverNote('');
-        await fetchDetail(true);
-      }
-    } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể đề xuất lịch hẹn.');
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleRespondHandover = async (proposalId: string, action: 'ACCEPT' | 'REJECT') => {
-    if (!order) return;
-    try {
-      setActing(true);
-      const res = await orderService.respondHandover(order.id || order._id, proposalId, action);
-      if (res.success) await fetchDetail(true);
-    } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể phản hồi lịch hẹn.');
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleConfirmHandover = async () => {
-    if (!order) return;
-    try {
-      setActing(true);
-      const res = await orderService.confirmHandover(order.id || order._id, {
-        code: handoverCode,
-        evidenceUrl: handoverProofUrl,
-        note: handoverProofNote,
-      });
-      if (res.success) {
-        setHandoverCode('');
-        setHandoverProofUrl('');
-        setHandoverProofNote('');
-        await fetchDetail(true);
-      }
-    } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể xác nhận giao nhận.');
     } finally {
       setActing(false);
     }
@@ -491,14 +428,11 @@ const OrderDetail: React.FC = () => {
     if (isSeller && isBankTransfer && paymentDisplayStatus === 'REPORTED') {
       return { title: 'Bước tiếp theo: xác nhận tiền', body: 'Kiểm tra tài khoản ngân hàng. Nếu đã nhận tiền, bấm “Đã nhận tiền”.' };
     }
-    if (!order?.handoverLocation && !order?.meetingProposals?.length) {
-      return { title: 'Bước tiếp theo: chốt lịch hẹn', body: 'Một trong hai bên đề xuất địa điểm và thời gian giao nhận trong trường.' };
-    }
     if (isSeller) {
       return { title: 'Bước tiếp theo: hoàn tất giao dịch', body: 'Sau khi đã giao hàng và điều kiện thanh toán đã ổn, người bán xác nhận hoàn tất đơn.' };
     }
-    return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi lịch hẹn, thanh toán và thông báo từ người bán tại trang này.' };
-  }, [currentStatus, isBankTransfer, isBuyer, isSeller, isCompletedButPaymentPending, order?.handoverLocation, order?.meetingProposals?.length, paymentDisplayStatus]);
+    return { title: 'Bước tiếp theo: theo dõi phản hồi', body: 'Theo dõi thanh toán và thông báo từ người bán tại trang này.' };
+  }, [currentStatus, isBankTransfer, isBuyer, isSeller, isCompletedButPaymentPending, paymentDisplayStatus]);
 
   const paymentGuide = useMemo(() => {
     if (paymentStatus === 'REFUNDED') {
@@ -771,49 +705,6 @@ const OrderDetail: React.FC = () => {
               </div>
             </section>
           </div>
-
-          {(isBuyer || isSeller) && currentStatus !== 'CANCELLED' && (
-            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <h3 className="mb-3 text-sm font-semibold text-slate-800">Lịch hẹn giao nhận</h3>
-              <div className="mb-3 grid gap-2 md:grid-cols-3">
-                <input value={handoverLocation} onChange={(e) => setHandoverLocation(e.target.value)} placeholder="Địa điểm trong trường" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input value={handoverTime} onChange={(e) => setHandoverTime(e.target.value)} type="datetime-local" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                <input value={handoverNote} onChange={(e) => setHandoverNote(e.target.value)} placeholder="Ghi chú" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-              </div>
-              <details className="mb-3 rounded-lg border border-slate-200 bg-white p-3">
-                <summary className="cursor-pointer text-sm font-bold text-slate-700">Xác nhận bàn giao bằng mã</summary>
-                {order.handoverCode && (
-                  <div className="mt-3 rounded-lg border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">
-                    <div className="text-xs font-bold uppercase">Mã bàn giao</div>
-                    <div className="mt-1 font-mono text-2xl font-black tracking-widest">{order.handoverCode}</div>
-                    <div className="mt-1 text-xs">Mã hết hạn: {order.handoverCodeExpiresAt ? new Date(order.handoverCodeExpiresAt).toLocaleString() : 'Chưa xác định'}</div>
-                  </div>
-                )}
-                <div className="mt-3 grid gap-2 md:grid-cols-3">
-                  <input value={handoverCode} onChange={(e) => setHandoverCode(e.target.value)} placeholder="Nhập mã bàn giao" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                  <input value={handoverProofUrl} onChange={(e) => setHandoverProofUrl(e.target.value)} placeholder="URL ảnh/bằng chứng giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                  <input value={handoverProofNote} onChange={(e) => setHandoverProofNote(e.target.value)} placeholder="Ghi chú giao nhận" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                </div>
-              </details>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <button onClick={handleProposeHandover} disabled={acting || !handoverLocation || !handoverTime} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Đề xuất lịch hẹn</button>
-                <button onClick={handleConfirmHandover} disabled={acting || (!!order.handoverCode && !handoverCode)} className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 disabled:opacity-50">Tôi đã giao/nhận</button>
-              </div>
-              {(order.meetingProposals || []).slice(-3).map((proposal: any) => (
-                <div key={proposal._id} className="mb-2 rounded-lg border border-slate-200 bg-white p-3 text-sm">
-                  <div className="font-bold text-slate-800">{proposal.location} - {new Date(proposal.time).toLocaleString()}</div>
-                  <div className="mt-1 text-xs text-slate-500">Trạng thái: {proposal.status}</div>
-                  {proposal.note && <div className="mt-1 text-xs text-slate-500">{proposal.note}</div>}
-                  {proposal.status === 'PENDING' && proposal.proposedBy !== user?.id && (
-                    <div className="mt-2 flex gap-2">
-                      <button onClick={() => handleRespondHandover(proposal._id, 'ACCEPT')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Chấp nhận</button>
-                      <button onClick={() => handleRespondHandover(proposal._id, 'REJECT')} className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">Từ chối</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </section>
-          )}
 
           {(isBuyer || isSeller) && (
             <details className="rounded-xl border border-slate-200 bg-white p-4">

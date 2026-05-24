@@ -53,7 +53,6 @@ const ProductDetail: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [buyerNote, setBuyerNote] = useState('');
-  const [handoverLocation, setHandoverLocation] = useState('');
   const [sellerProfile, setSellerProfile] = useState<any>(null);
   const [sellerTrust, setSellerTrust] = useState<any>(null);
   const [followingSeller, setFollowingSeller] = useState(false);
@@ -282,7 +281,6 @@ const ProductDetail: React.FC = () => {
         sellerId: product.sellerId || '',
         price: product.price,
         buyerNote: buyerNote.trim(),
-        handoverLocation: handoverLocation.trim(),
         paymentMethod: paymentChoice,
         idempotencyKey: window.crypto.randomUUID(),
       };
@@ -306,7 +304,6 @@ const ProductDetail: React.FC = () => {
 
       setPurchaseOpen(false);
       setBuyerNote('');
-      setHandoverLocation('');
       navigate(`/orders/${orderId}`, {
         state: {
           initialOrder: createdOrder,
@@ -813,10 +810,6 @@ const ProductDetail: React.FC = () => {
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Lời nhắn cho người bán</label>
                 <textarea value={buyerNote} onChange={(e) => setBuyerNote(e.target.value)} rows={4} placeholder="Ví dụ: Mình muốn nhận hàng vào chiều mai ở khu A." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400" />
-              </div>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Điểm hẹn giao dịch</label>
-                <input value={handoverLocation} onChange={(e) => setHandoverLocation(e.target.value)} placeholder="Ví dụ: Sảnh A, Thư viện IUH" className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 outline-none transition-colors focus:border-slate-400" />
               </div>
               <div>
                 <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700"><Wallet size={16} /><span>Hình thức thanh toán</span></div>

@@ -7,19 +7,16 @@ import paymentRoutes from './routes/payment.routes.js';
 
 const PORT = process.env.PORT || 3003;
 
-// ── Initialize dependencies ──────────────────────────────────────────
+// Initialize dependencies
 const redis = getRedis();
 
 // Initialize Kafka producer
 await initProducer();
 
-// ── Create service instances ─────────────────────────────────────────
+// Create service instances
 const orderService = new OrderService();
 
-// ── Start Kafka consumer for saga events ─────────────────────────────
-await startSagaConsumer(orderService);
-
-// ── Express app ──────────────────────────────────────────────────────
+// Express app
 const app = express();
 app.use(express.json());
 app.use(metricsMiddleware);
@@ -43,7 +40,7 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// Prometheus Metrics
+// Prometheus metrics
 app.get('/metrics', metricsHandler);
 
 // Mount order routes
@@ -55,9 +52,14 @@ app.use('/api/v1/orders', paymentRoutes);
 // Global error handler (must be after routes)
 app.use(errorHandler);
 
-// ── Connect DB and start server ──────────────────────────────────────
+// Connect DB and start server
 await pingSupabase();
 
 app.listen(PORT, () => {
-  logger.info(`🚀 Order Service running on port ${PORT}`);
+  logger.info(`Order Service running on port ${PORT}`);
+});
+
+// Kafka group joins can take seconds; keep HTTP available while the consumer starts.
+startSagaConsumer(orderService).catch((err) => {
+  logger.error(`Saga consumer failed to start: ${err.message}`);
 });

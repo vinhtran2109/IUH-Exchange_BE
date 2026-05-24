@@ -14,9 +14,10 @@ import { chatService } from '../services/chatService';
 import { normalizeNotification, notificationService } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
 import { authService } from '../services/authService';
+import api, { refreshAccessToken } from '../services/api';
 
 const Layout: React.FC = () => {
-  const { user, isAuthenticated, logout } = (useAuthStore as any)();
+  const { user, isAuthenticated, logout, updateUser } = (useAuthStore as any)();
   const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -45,6 +46,14 @@ const Layout: React.FC = () => {
         if (notificationId && prev.some(n => n.id === notificationId)) return prev;
         return [normalized, ...prev];
       });
+      if (String(normalized.type || '').toUpperCase().includes('KARMA')) {
+        refreshAccessToken()
+          .then(() => api.get('/users/me'))
+          .then((res) => {
+            if (res.data?.success && res.data?.data) updateUser(res.data.data);
+          })
+          .catch((error) => console.error('Failed to refresh user after karma update', error));
+      }
     });
 
     const interval = setInterval(fetchNotifs, 120000);

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, ForbiddenException } from '@iuh-exchange/common';
+import { authenticate, authorize, ForbiddenException } from '@iuh-exchange/common';
 import {
   createReport,
   listReports,
@@ -10,7 +10,7 @@ import {
 const router = Router();
 
 // Authenticated: submit a report
-router.post('/', authenticate, createReport);
+router.post('/', authenticate, authorize('CAN_REPORT'), createReport);
 
 // Authenticated: view own reports
 router.get('/my', authenticate, listMyReports);

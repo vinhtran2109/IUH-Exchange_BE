@@ -13,11 +13,11 @@ const app = express();
 const PORT = process.env.PORT || 3002;
 const MONGODB_URI = process.env.PRODUCT_SERVICE_MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27018/iuh_products';
 
-// ── Middleware ──
+// Middleware
 app.use(express.json());
 app.use(metricsMiddleware);
 
-// ── Health ──
+// Health
 app.get('/health', async (req, res) => {
   const mongoose = await import('mongoose');
   const dbState = mongoose.default.connection.readyState;
@@ -33,31 +33,34 @@ app.get('/health', async (req, res) => {
   });
 });
 
-// ── Prometheus Metrics ──
+// Prometheus metrics
 app.get('/metrics', metricsHandler);
 
-// ── Routes ──
+// Routes
 app.use('/api/v1/products', offerRoutes);
 app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/products', reviewRoutes);
 app.use('/api/v1/products', wishlistRoutes);
 app.use('/api/v1/products', trustRoutes);
 
-// ── Error handler ──
+// Error handler
 app.use(errorHandler);
 
-// ── Start ──
+// Start HTTP as soon as critical dependencies are ready.
 await connectMongo(MONGODB_URI);
 await initKafkaProducer();
-await ensureIndex();
-await initSagaListener();
+
+app.listen(PORT, () => {
+  logger.info(`Product Service running on port ${PORT}`);
+});
+
+// Non-HTTP workers must not block the port from opening. Kafka group joins and
+// Elasticsearch startup can take seconds, and the gateway treats that as down.
+ensureIndex().catch((err) => logger.error(`Elasticsearch index init failed: ${err.message}`));
+initSagaListener().catch((err) => logger.error(`Saga listener init failed: ${err.message}`));
 
 const reservationSweepMs = Number(process.env.PRODUCT_RESERVATION_SWEEP_MS || 60_000);
 const reservationSweepTimer = setInterval(() => {
   releaseExpiredReservations().catch((err) => logger.error(`Reservation sweep failed: ${err.message}`));
 }, reservationSweepMs);
 reservationSweepTimer.unref?.();
-
-app.listen(PORT, () => {
-  logger.info(`🚀 Product Service running on port ${PORT}`);
-});
