@@ -150,6 +150,16 @@ const reportTargetLabel = (targetType?: string) => {
   }
 };
 
+const ACCOUNT_SUPPORT_PREFIX = '[Hỗ trợ tài khoản]';
+
+const isAccountSupportReport = (report: ReportData) =>
+  report.targetType === 'USER' &&
+  report.targetId === report.reporterId &&
+  report.reason.startsWith(ACCOUNT_SUPPORT_PREFIX);
+
+const displayReportReason = (report: ReportData) =>
+  isAccountSupportReport(report) ? report.reason.replace(ACCOUNT_SUPPORT_PREFIX, '').trim() : report.reason;
+
 const lostFoundTypeLabel = (type?: string) => {
   switch (type) {
     case 'ALL':
@@ -1062,14 +1072,16 @@ const AdminDashboard: React.FC = () => {
           <tbody>
             {reports.map((report) => {
               const reportId = getEntityId(report);
+              const isAccountSupport = isAccountSupportReport(report);
+              const reason = displayReportReason(report);
               return (
                 <tr key={reportId} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="p-4">
-                    <div className="font-bold text-slate-800">{reportTargetLabel(report.targetType)}</div>
-                    <div className="text-xs text-slate-400 break-all">{report.targetId}</div>
+                    <div className="font-bold text-slate-800">{isAccountSupport ? 'Hỗ trợ tài khoản' : reportTargetLabel(report.targetType)}</div>
+                    <div className="text-xs text-slate-400 break-all">{isAccountSupport ? 'Người gửi yêu cầu' : report.targetId}</div>
                   </td>
                   <td className="p-4 max-w-[360px]">
-                    <div className="text-sm text-slate-700 line-clamp-2">{report.reason}</div>
+                    <div className="text-sm text-slate-700 line-clamp-2">{reason}</div>
                     {report.adminNote && <div className="text-xs text-slate-400 mt-1">Ghi chú: {report.adminNote}</div>}
                   </td>
                   <td className="p-4">
@@ -1084,7 +1096,10 @@ const AdminDashboard: React.FC = () => {
                       {report.status === 'PENDING' && (
                         <>
                           <button onClick={() => handleResolveReport(reportId, 'REVIEWED')} className="px-3 py-2 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold hover:bg-sky-100">Đã xem</button>
-                          {report.targetType === 'USER' && (
+                          {isAccountSupport && (
+                            <button onClick={() => handleResolveReport(reportId, 'RESOLVED')} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100">Hoàn tất hỗ trợ</button>
+                          )}
+                          {report.targetType === 'USER' && !isAccountSupport && (
                             <>
                               <button onClick={() => handleResolveReportWithAction(report, 'WARN_USER')} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100">Cảnh cáo -5</button>
                               <button onClick={() => handleResolveReportWithAction(report, 'PENALIZE_USER')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Phạt -10</button>
