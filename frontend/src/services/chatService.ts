@@ -26,6 +26,12 @@ export interface PresenceEvent {
   at: string;
 }
 
+export interface AiAssistantReply {
+  message: string;
+  answer: string;
+  model: string;
+}
+
 let stompClient: Stomp.Client | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let isConnecting = false;
@@ -338,5 +344,14 @@ export const chatService = {
   reportMessage: async (messageId: string, reason: string) => {
     const response = await api.post(`/chat/messages/${messageId}/report`, { reason });
     return response.data;
+  },
+
+  askAiAssistant: async (message: string) => {
+    const response = await api.post('/chat/ai', { message, locale: 'vi-VN' });
+    return response.data as {
+      success: boolean;
+      data: AiAssistantReply;
+      message: string;
+    };
   },
 };

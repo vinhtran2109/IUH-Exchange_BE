@@ -32,6 +32,20 @@ const productSchema = new mongoose.Schema(
     reservedBy: { type: String, default: null },
     reservedAt: { type: Date, default: null },
     reservationExpiresAt: { type: Date, default: null, index: true },
+    aiModeration: {
+      status: {
+        type: String,
+        enum: ['PENDING', 'PASSED', 'REJECTED', 'SKIPPED', 'ERROR'],
+        default: 'PENDING',
+        index: true,
+      },
+      category: { type: String, default: 'OK' },
+      reason: { type: String, default: '' },
+      confidence: { type: Number, min: 0, max: 1, default: 0 },
+      provider: { type: String, default: '' },
+      model: { type: String, default: '' },
+      checkedAt: { type: Date, default: null },
+    },
   },
   { timestamps: true }
 );

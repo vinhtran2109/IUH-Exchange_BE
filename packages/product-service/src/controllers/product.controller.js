@@ -1,5 +1,5 @@
 import { Product } from '../models/Product.js';
-import { containsProfanity } from '../services/profanity-filter.js';
+import { assertProductAllowed, moderateProductContent } from '../services/product-moderation.service.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
 import { publishProductEvent, TOPICS } from '../services/kafka.service.js';
 import { searchProducts, suggestProducts } from '../services/elasticsearch.service.js';
@@ -30,6 +30,7 @@ function toResponse(product) {
     condition: product.condition,
     status: product.status,
     sellerId: product.sellerId,
+    aiModeration: product.aiModeration || undefined,
     reservationExpiresAt: product.reservationExpiresAt,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
@@ -265,10 +266,14 @@ export async function createProduct(req, res) {
   const sellerId = req.user.sub;
   const { title, description, price, category, location, condition, imageUrls, listingType, tradeWanted, allowOffers } = req.body;
 
-  // Profanity filter
-  if (containsProfanity(title) || containsProfanity(description)) {
-    throw new BadRequestException('Nội dung chứa từ ngữ không phù hợp với môi trường học đường.');
-  }
+  const aiModeration = await moderateProductContent({
+    title,
+    description,
+    category,
+    listingType: listingType || 'SELL',
+    tradeWanted: tradeWanted || '',
+  });
+  assertProductAllowed(aiModeration);
 
   const product = await Product.create({
     sellerId,
@@ -283,6 +288,7 @@ export async function createProduct(req, res) {
     condition,
     imageUrls: imageUrls || [],
     status: 'PENDING_APPROVAL',
+    aiModeration,
   });
 
   logger.info(`Product created: id=${product._id}, title=${title}`);
@@ -312,13 +318,15 @@ export async function updateProduct(req, res) {
 
   const { title, description, price, category, condition, location, imageUrls, listingType, tradeWanted, allowOffers } = req.body;
 
-  // Profanity filter on updated text
-  if (title && containsProfanity(title)) {
-    throw new BadRequestException('Nội dung chứa từ ngữ không phù hợp với môi trường học đường.');
-  }
-  if (description && containsProfanity(description)) {
-    throw new BadRequestException('Nội dung chứa từ ngữ không phù hợp với môi trường học đường.');
-  }
+  const nextProductText = {
+    title: title ?? product.title,
+    description: description ?? product.description,
+    category: category ?? product.category,
+    listingType: listingType ?? product.listingType ?? 'SELL',
+    tradeWanted: tradeWanted ?? product.tradeWanted ?? '',
+  };
+  const aiModeration = await moderateProductContent(nextProductText);
+  assertProductAllowed(aiModeration);
 
   if (title !== undefined) product.title = title;
   if (description !== undefined) product.description = description;
@@ -330,6 +338,7 @@ export async function updateProduct(req, res) {
   if (condition !== undefined) product.condition = condition;
   if (location !== undefined) product.location = location;
   if (imageUrls !== undefined) product.imageUrls = imageUrls;
+  product.aiModeration = aiModeration;
 
   const saved = await product.save();
 

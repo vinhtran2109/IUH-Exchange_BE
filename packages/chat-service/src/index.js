@@ -4,6 +4,7 @@ import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsH
 import { initSocketService } from './services/socket.service.js';
 import chatRoutes from './routes/chat.routes.js';
 import chatUploadRoutes from './routes/chat-upload.routes.js';
+import aiAssistantRoutes from './routes/ai-assistant.routes.js';
 
 const app = express();
 const httpServer = createServer(app);
@@ -25,6 +26,7 @@ app.get('/metrics', metricsHandler);
 
 // ── REST API routes ──
 app.use('/api/v1/chat', chatUploadRoutes);
+app.use('/api/v1/chat', aiAssistantRoutes);
 app.use('/api/v1/chat', chatRoutes);
 
 // ── Error handler ──
