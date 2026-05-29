@@ -15,18 +15,77 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// ── Client-side Rate Limiter ──────────────────────────────────────────
+// Bảo vệ server khỏi spam request từ phía client.
+// Hoạt động song song với Server Rate Limiter ở API Gateway (defense-in-depth).
+
+// Sliding Window Rate Limiter: tối đa 15 request trong 2 giây
+const requestTimestamps: number[] = [];
+const MAX_REQUESTS_PER_WINDOW = 15;
+const WINDOW_SIZE_MS = 2000;
+
+// Double-Submit Prevention: chặn bấm nút liên tục với cooldown 1.2s
+const pendingMutations = new Map<string, number>();
+const MUTATION_COOLDOWN_MS = 1200;
+
+/**
+ * BUG FIX #6: Dọn dẹp các entry quá hạn trong pendingMutations Map.
+ * Không dùng setTimeout để xóa (dễ race condition) mà dọn chủ động
+ * mỗi khi có request mutation mới để tránh Map phình to vô hạn.
+ */
+function cleanOldMutations(): void {
+  const now = Date.now();
+  for (const [key, ts] of pendingMutations.entries()) {
+    if (now - ts > MUTATION_COOLDOWN_MS * 2) {
+      pendingMutations.delete(key);
+    }
+  }
+}
+
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("accessToken");
-
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    const now = Date.now();
+
+    // 1. Sliding Window Rate Limiter
+    // Xóa các timestamp cũ ngoài cửa sổ 2 giây
+    while (requestTimestamps.length > 0 && requestTimestamps[0] < now - WINDOW_SIZE_MS) {
+      requestTimestamps.shift();
+    }
+    if (requestTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+      return Promise.reject(
+        new Error("[ClientRateLimit] Bạn đang gửi yêu cầu quá nhanh. Vui lòng thao tác chậm lại.")
+      );
+    }
+    requestTimestamps.push(now);
+
+    // 2. Double-Submit Prevention cho các request thay đổi dữ liệu (POST/PUT/PATCH/DELETE)
+    const { method, url, data } = config;
+    if (method && ["post", "put", "delete", "patch"].includes(method.toLowerCase())) {
+      cleanOldMutations(); // BUG FIX #6: dọn entry cũ trước khi kiểm tra
+
+      // Key duy nhất theo method + url + payload
+      const requestKey = `${method.toUpperCase()}:${url}:${JSON.stringify(data || {})}`;
+      const lastSent = pendingMutations.get(requestKey);
+
+      if (lastSent && now - lastSent < MUTATION_COOLDOWN_MS) {
+        return Promise.reject(
+          new Error("[DoubleSubmit] Yêu cầu đang được xử lý. Vui lòng không bấm liên tục!")
+        );
+      }
+      // Ghi nhận thời điểm gửi — cleanOldMutations() sẽ tự dọn sau khi hết hạn
+      pendingMutations.set(requestKey, now);
     }
 
     return config;
   },
   (error) => Promise.reject(error)
 );
+
 
 let isRefreshing = false;
 let failedQueue: Array<{ resolve: (token: string) => void; reject: (err: any) => void }> = [];

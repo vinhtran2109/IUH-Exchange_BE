@@ -42,7 +42,12 @@ const ReportLostFound: React.FC = () => {
     detectedType?: string;
     studentId?: string;
     confidence?: number;
+    matchCount?: number;
   } | null>(null);
+
+  // BUG FIX #1: Tách trạng thái "submit thành công" ra riêng.
+  // Không navigate ngay mà render kết quả AI trước, để user thấy.
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -92,17 +97,21 @@ const ReportLostFound: React.FC = () => {
       });
 
       if (response.success) {
-        // Show AI analysis results if available
         const data = response.data;
-        if (data?.detectedType || data?.matches?.length > 0) {
+
+        // BUG FIX #1: Set result TRƯỚC, KHÔNG navigate ngay.
+        // BUG FIX #12: Đọc `extracted.studentId` đúng field từ backend response.
+        if (data?.detectedType || data?.extracted?.studentId || data?.matches?.length > 0) {
           setAnalysisResult({
             detectedType: data.detectedType,
-            studentId: data.studentId,
-            confidence: data.confidence,
+            studentId: data.extracted?.studentId || data.studentId,
+            confidence: data.analysisConfidence || data.confidence,
+            matchCount: data.matches?.length ?? 0,
           });
         }
+
         toastSuccess('Đăng tin thành công! Hy vọng bạn sớm tìm thấy đồ.');
-        navigate('/lost-found');
+        setSubmitSuccess(true); // ← Hiển thị panel kết quả, KHÔNG navigate
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.');
@@ -110,6 +119,71 @@ const ReportLostFound: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // BUG FIX #1: Hiển thị kết quả sau submit thay vì render form
+  if (submitSuccess) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-4">
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-indigo-100/50 text-center space-y-6">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+            <BadgeCheck size={40} className="text-emerald-500" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 mb-2">Đăng tin <span className="text-emerald-600">thành công!</span></h1>
+            <p className="text-slate-500">Tin của bạn đã được đăng lên hệ thống IUH Exchange.</p>
+          </div>
+
+          {/* Kết quả AI nếu có */}
+          {analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-5 bg-indigo-50 rounded-2xl border border-indigo-100 text-left space-y-2"
+            >
+              <div className="flex items-center gap-2 text-indigo-700 font-black text-sm uppercase mb-3">
+                <ScanLine size={16} />
+                Kết quả phân tích AI
+              </div>
+              {analysisResult.detectedType && analysisResult.detectedType !== 'unknown' && (
+                <p className="text-sm text-slate-700">
+                  <span className="font-bold">Loại đồ vật:</span> {analysisResult.detectedType}
+                  {analysisResult.confidence && (
+                    <span className="ml-2 text-xs text-slate-500">({Math.round(analysisResult.confidence * 100)}% tin cậy)</span>
+                  )}
+                </p>
+              )}
+              {analysisResult.studentId && (
+                <p className="text-sm text-slate-700">
+                  <span className="font-bold">MSSV phát hiện:</span>{' '}
+                  <span className="font-mono bg-indigo-100 px-2 py-0.5 rounded">{analysisResult.studentId}</span>
+                </p>
+              )}
+              {(analysisResult.matchCount ?? 0) > 0 && (
+                <p className="text-sm text-emerald-700 font-bold">
+                  🎯 Tìm thấy {analysisResult.matchCount} tin có thể khớp!
+                </p>
+              )}
+            </motion.div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => navigate('/lost-found')}
+              className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+            >
+              Xem danh sách tin
+            </button>
+            <button
+              onClick={() => { setSubmitSuccess(false); setAnalysisResult(null); setImageFile(null); setImagePreview(null); setFormData({ title: '', description: '', type: 'LOST' as ItemType, location: '', contactInfo: '' }); }}
+              className="px-6 py-4 border-2 border-slate-200 text-slate-600 rounded-2xl font-bold hover:border-indigo-300 transition-all"
+            >
+              Đăng thêm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
@@ -307,35 +381,8 @@ const ReportLostFound: React.FC = () => {
             )}
           </div>
 
-          {/* AI Analysis Result Preview */}
-          {analysisResult && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="p-5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2"
-            >
-              <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase">
-                <ScanLine size={16} />
-                Kết quả phân tích AI
-              </div>
-              {analysisResult.detectedType && analysisResult.detectedType !== 'unknown' && (
-                <p className="text-sm text-slate-700">
-                  <span className="font-bold">Loại đồ vật:</span> {analysisResult.detectedType}
-                  {analysisResult.confidence && (
-                    <span className="ml-2 text-xs text-slate-500">({Math.round(analysisResult.confidence * 100)}% tin cậy)</span>
-                  )}
-                </p>
-              )}
-              {analysisResult.studentId && (
-                <p className="text-sm text-slate-700">
-                  <span className="font-bold">MSSV phát hiện:</span>{' '}
-                  <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded">{analysisResult.studentId}</span>
-                </p>
-              )}
-            </motion.div>
-          )}
-
           {error && (
+
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}

@@ -68,8 +68,11 @@ function normalizeLocation(loc) {
 /**
  * Calculate match score between a source item and a candidate item.
  * Returns a score between 0 and 1.
+ *
+ * Exported để controller có thể import sử dụng cho preview matches.
+ * Không duplicate lại logic này ở chỗ khác (BUG FIX #9).
  */
-function calculateMatchScore(source, candidate) {
+export function calculateMatchScore(source, candidate) {
   let score = 0;
   let weights = 0;
 
