@@ -6,7 +6,7 @@ import {
   Bell, MessageSquare, Search, User as UserIcon, 
   Package, PlusCircle, LogOut, Clock,
   ShoppingCart, Info, AlertOctagon, PackageCheck,
-  Sun, Moon, Star, Zap
+  Sun, Moon, Star, Zap, Bot
 } from 'lucide-react';
 
 import ChatManager from './ChatManager';
@@ -152,6 +152,10 @@ const Layout: React.FC = () => {
             <Link to="/" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Trang chủ</Link>
             <Link to="/products" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Cửa hàng</Link>
             <Link to="/lost-found" className="text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">Đồ thất lạc</Link>
+            <Link to="/ai-assistant" className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-900 transition-colors">
+              <Bot size={15} />
+              AI
+            </Link>
           </div>
 
           {/* Search Bar */}
