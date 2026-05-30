@@ -10,7 +10,10 @@ import {
   Package,
   User as UserIcon,
   Flag,
-  Hand
+  Hand,
+  ScanLine,
+  BadgeCheck,
+  ShieldCheck
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 import type { LostFoundItem } from '../services/lostFoundService';
@@ -90,20 +93,39 @@ const LostFoundDetail: React.FC = () => {
 
   const handleClaim = async () => {
     if (!item || !user) return;
-    const confirmed = await confirm({
-      title: 'Xác nhận tìm thấy',
-      message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
-      confirmText: 'Xác nhận',
-      cancelText: 'Hủy',
-      variant: 'default',
-    });
-    if (!confirmed) return;
+
+    // Nếu item có câu hỏi xác minh → hiển thị prompt để user trả lời TRƯỚC khi confirm
+    let answer = 'Tôi xác nhận đã tìm thấy đồ vật này';
+    if (item.verificationQuestion) {
+      // Dùng usePrompt hook (nhất quán với UX app) thay vì native window.prompt()
+      const userAnswer = await prompt({
+        title: 'Câu hỏi xác minh quyền sở hữu',
+        message: item.verificationQuestion,
+        placeholder: 'Nhập câu trả lời của bạn...',
+        confirmText: 'Xác nhận',
+        minLength: 2,
+        rows: 2,
+      });
+      if (!userAnswer) return; // User bấm Cancel
+      answer = userAnswer.trim();
+    } else {
+      // Không có câu hỏi → confirm đơn giản
+      const confirmed = await confirm({
+        title: 'Xác nhận tìm thấy',
+        message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
     try {
       setClaiming(true);
-      const res = await lostFoundService.claimItem(item.id);
+      const res = await lostFoundService.claimItem(item.id, { answer });
       if (res.success) {
         setItem({ ...item, status: 'CLAIMED' as any });
-        toastSuccess('Đã xác nhận tìm thấy đồ vật!');
+        toastSuccess('Đã xác nhận tìm thấy đồ vật! Chủ sở hữu sẽ xem xét yêu cầu của bạn.');
       }
     } catch (err: any) {
       toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể xác nhận'));
@@ -205,6 +227,52 @@ const LostFoundDetail: React.FC = () => {
              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3">Mô tả chi tiết</h3>
              <p className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">{item.description}</p>
           </div>
+
+          {/* AI Analysis Results */}
+          {item.analysisStatus === 'COMPLETED' && (item.detectedType || item.extracted?.studentId) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-indigo-50 border border-indigo-100 rounded-3xl p-6 mb-8 space-y-3"
+            >
+              <div className="flex items-center gap-2 text-indigo-700 font-black text-sm uppercase">
+                <ScanLine size={18} />
+                Kết quả phân tích AI
+              </div>
+              {item.detectedType && item.detectedType !== 'unknown' && (
+                <div className="flex items-center gap-2">
+                  <BadgeCheck size={16} className="text-emerald-500" />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-bold">Loại đồ vật:</span> {item.detectedType}
+                    {item.analysisConfidence && (
+                      <span className="ml-2 text-xs text-slate-500">({Math.round(item.analysisConfidence * 100)}% tin cậy)</span>
+                    )}
+                  </span>
+                </div>
+              )}
+              {item.extracted?.studentId && (
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-indigo-500" />
+                  <span className="text-sm text-slate-700">
+                    <span className="font-bold">MSSV phát hiện:</span>{' '}
+                    <span className="font-mono bg-indigo-100 px-2 py-0.5 rounded">{item.extracted.studentId}</span>
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Hiển thị câu hỏi xác minh nếu có — chỉ hiển thị với người không phải chủ */}
+          {!isOwner && item.verificationQuestion && item.status === 'OPEN' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 mb-6 flex items-start gap-3">
+              <span className="text-amber-500 text-xl mt-0.5">❓</span>
+              <div>
+                <h4 className="text-xs font-black text-amber-600 uppercase tracking-widest mb-1">Câu hỏi xác minh quyền sở hữu</h4>
+                <p className="text-sm text-amber-900 font-medium">{item.verificationQuestion}</p>
+                <p className="text-xs text-amber-600 mt-1">Bạn sẽ cần trả lời câu hỏi này khi xác nhận tìm thấy đồ vật.</p>
+              </div>
+            </div>
+          )}
 
            <div className="mt-auto space-y-4">
               <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 p-6 rounded-3xl">

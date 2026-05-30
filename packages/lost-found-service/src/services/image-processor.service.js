@@ -1,37 +1,44 @@
 /**
  * Image Processor Service
  *
- * Analyzes uploaded images for lost-found items:
- * - Object detection (classify what the item is)
- * - OCR (extract text like student ID / MSSV)
- * - Auto-categorization
+ * Phân tích ảnh tải lên cho các đồ vật thất lạc:
+ * - Object detection / phân loại đồ vật
+ * - OCR: trích xuất chữ viết (MSSV, tên trên thẻ)
+ * - Auto-categorization dựa trên nhãn phát hiện được
  *
- * Architecture: Provider adapter pattern — swap between cloud Vision API
- * (Google Vision, AWS Rekognition) or local Tesseract without changing callers.
+ * Architecture: Provider Adapter Pattern — có thể hoán đổi giữa
+ * Tesseract.js (cục bộ), Google Vision, AWS Rekognition mà không
+ * thay đổi code gọi hàm.
  *
- * Triggered async after item creation (non-blocking for user latency).
+ * Triggered async sau khi tạo item (non-blocking cho user latency).
  */
 
-import { logger } from '@iuh-exchange/common';
+import { logger, cache, withRetry } from '@iuh-exchange/common';
 import { LostFoundItem } from '../models/LostFound.js';
 import { publishLostFoundAnalyzed, publishLostFoundMatch } from './kafka.service.js';
 import { findMatches } from './matching.service.js';
 
-// ── Configuration ──
+// ── Cấu hình ──
 
-const PROVIDER = process.env.IMAGE_ANALYSIS_PROVIDER || 'mock'; // 'google-vision' | 'aws-rekognition' | 'tesseract' | 'mock'
+/**
+ * Provider AI đang dùng. Đổi biến môi trường IMAGE_ANALYSIS_PROVIDER để chuyển:
+ *   'tesseract'       — OCR cục bộ bằng Tesseract.js (mặc định, không cần API key)
+ *   'google-vision'   — Google Cloud Vision API
+ *   'aws-rekognition' — AWS Rekognition
+ *   'mock'            — Giả lập cho development/testing
+ */
+const PROVIDER = process.env.IMAGE_ANALYSIS_PROVIDER || 'tesseract';
 const MATCH_THRESHOLD = parseFloat(process.env.MATCH_THRESHOLD) || 0.3;
 const MAX_RETRIES = 3;
-const RETRY_DELAY_MS = 2000;
+const RETRY_BASE_DELAY_MS = 2000; // 2s → 4s → 6s (Exponential Backoff)
 
 // ── Provider Adapters ──
 
 /**
- * Mock provider for development/testing.
- * Returns deterministic results based on image URL patterns.
+ * Mock provider cho development/testing.
+ * Trả về kết quả xác định dựa trên URL pattern.
  */
 async function mockAnalyze(imageUrls) {
-  // Simulate processing delay
   await new Promise((r) => setTimeout(r, 500));
 
   const results = [];
@@ -42,20 +49,14 @@ async function mockAnalyze(imageUrls) {
     let text = '';
     let confidence = 0.5;
 
-    // Simple pattern matching for demo
     if (urlLower.includes('wallet') || urlLower.includes('vi')) {
-      detectedType = 'wallet';
-      confidence = 0.85;
+      detectedType = 'wallet'; confidence = 0.85;
     } else if (urlLower.includes('phone') || urlLower.includes('dien-thoai')) {
-      detectedType = 'phone';
-      confidence = 0.9;
+      detectedType = 'phone'; confidence = 0.9;
     } else if (urlLower.includes('key') || urlLower.includes('chinh-khoa')) {
-      detectedType = 'keys';
-      confidence = 0.8;
+      detectedType = 'keys'; confidence = 0.8;
     } else if (urlLower.includes('card') || urlLower.includes('the')) {
-      detectedType = 'card';
-      confidence = 0.75;
-      // Simulate MSSV extraction
+      detectedType = 'card'; confidence = 0.75;
       studentId = '2100001234';
       text = 'DH_CNTT MSSV: 2100001234';
     }
@@ -67,22 +68,88 @@ async function mockAnalyze(imageUrls) {
 }
 
 /**
+ * Tesseract.js (OCR cục bộ) — AI thực tế, không cần tài khoản đám mây.
+ *
+ * BUG FIX #3 — Tránh Memory Leak:
+ *   Dùng createWorker() + finally { worker.terminate() } thủ công.
+ *   Không dùng Tesseract.recognize() vì API đó tạo/hủy worker ẩn
+ *   không kiểm soát được, tích lũy sau nhiều lần gọi gây OOM.
+ *
+ * BUG FIX #4 — Tránh lỗi URL S3 hết hạn trong container:
+ *   Fetch ảnh về Buffer trong memory trước khi đưa vào Tesseract.
+ *   Tránh phụ thuộc vào mạng của worker process bên trong Docker.
+ */
+async function tesseractAnalyze(imageUrls) {
+  // Import động để không bắt buộc install nếu dùng provider khác
+  const { default: Tesseract } = await import('tesseract.js');
+
+  const results = [];
+
+  for (const url of imageUrls) {
+    // BUG FIX #4: Download ảnh về Buffer — không truyền URL trực tiếp cho Tesseract
+    logger.info(`[AI OCR] Đang tải ảnh từ: ${url.substring(0, 80)}...`);
+    const fetchResponse = await fetch(url);
+    if (!fetchResponse.ok) {
+      throw new Error(
+        `Không thể tải ảnh để phân tích (HTTP ${fetchResponse.status}): ${url}`
+      );
+    }
+    const imageBuffer = Buffer.from(await fetchResponse.arrayBuffer());
+
+    // BUG FIX #3: Tạo worker thủ công, luôn terminate trong finally
+    const worker = await Tesseract.createWorker('eng+vie');
+    try {
+      logger.info('[AI OCR] Đang quét OCR bằng Tesseract.js (eng+vie)...');
+      const { data: { text, confidence: rawConfidence } } = await worker.recognize(imageBuffer);
+
+      logger.debug(`[AI OCR] Kết quả text: "${text.trim().substring(0, 120)}"`);
+      logger.debug(`[AI OCR] Tesseract confidence: ${rawConfidence?.toFixed(1)}%`);
+
+      // Phát hiện loại thẻ/đồ vật từ nội dung text
+      let detectedType = 'document';
+      let confidence = Math.min(rawConfidence / 100, 0.99) || 0.55;
+      const lower = text.toLowerCase();
+
+      if (lower.includes('sinh viên') || lower.includes('student') || lower.includes('iuh') ||
+          lower.includes('đại học') || lower.includes('university')) {
+        detectedType = 'student_card';
+        confidence = Math.max(confidence, 0.85);
+      } else if (lower.includes('căn cước') || lower.includes('citizen') ||
+                 lower.includes('chứng minh nhân dân')) {
+        detectedType = 'id_card';
+        confidence = Math.max(confidence, 0.8);
+      } else if (lower.includes('giấy phép lái xe') || lower.includes('driving license') ||
+                 lower.includes('driver')) {
+        detectedType = 'driver_license';
+        confidence = Math.max(confidence, 0.75);
+      } else if (lower.includes('thẻ') || lower.includes('card')) {
+        detectedType = 'card';
+        confidence = Math.max(confidence, 0.6);
+      }
+
+      results.push({
+        detectedType,
+        studentId: extractStudentId(text),
+        text,
+        confidence,
+      });
+    } finally {
+      // BUG FIX #3: Luôn terminate để giải phóng bộ nhớ
+      await worker.terminate();
+      logger.debug('[AI OCR] Tesseract worker đã được terminate');
+    }
+  }
+
+  return results;
+}
+
+/**
  * Google Cloud Vision API adapter.
  * Requires: GOOGLE_APPLICATION_CREDENTIALS env var
  */
 async function googleVisionAnalyze(imageUrls) {
-  // TODO: Implement with @google-cloud/vision
-  // const vision = require('@google-cloud/vision');
-  // const client = new vision.ImageAnnotatorClient();
-  //
-  // for (const url of imageUrls) {
-  //   const [result] = await client.labelDetection(url);
-  //   const labels = result.labelAnnotations;
-  //   const [textResult] = await client.textDetection(url);
-  //   const texts = textResult.textAnnotations;
-  //   // Extract MSSV from text using regex
-  // }
-  throw new Error('Google Vision provider not implemented. Set IMAGE_ANALYSIS_PROVIDER=mock for development.');
+  // TODO: Implement với @google-cloud/vision
+  throw new Error('Google Vision provider chưa cài đặt. Set IMAGE_ANALYSIS_PROVIDER=tesseract');
 }
 
 /**
@@ -90,66 +157,44 @@ async function googleVisionAnalyze(imageUrls) {
  * Requires: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION env vars
  */
 async function awsRekognitionAnalyze(imageUrls) {
-  // TODO: Implement with @aws-sdk/client-rekognition
-  // const client = new RekognitionClient({ region: process.env.AWS_REGION });
-  //
-  // for (const url of imageUrls) {
-  //   const params = { Image: { S3Object: { ... } } };
-  //   const labels = await client.send(new DetectLabelsCommand(params));
-  //   const text = await client.send(new DetectTextCommand(params));
-  // }
-  throw new Error('AWS Rekognition provider not implemented. Set IMAGE_ANALYSIS_PROVIDER=mock for development.');
-}
-
-/**
- * Tesseract.js (local OCR) adapter.
- * Good for MSSV extraction, weaker for object classification.
- */
-async function tesseractAnalyze(imageUrls) {
-  // TODO: Implement with tesseract.js
-  // const Tesseract = require('tesseract.js');
-  //
-  // for (const url of imageUrls) {
-  //   const { data: { text } } = await Tesseract.recognize(url, 'vie+eng');
-  //   const studentId = extractMSSV(text);
-  // }
-  throw new Error('Tesseract provider not implemented. Set IMAGE_ANALYSIS_PROVIDER=mock for development.');
+  // TODO: Implement với @aws-sdk/client-rekognition
+  throw new Error('AWS Rekognition provider chưa cài đặt. Set IMAGE_ANALYSIS_PROVIDER=tesseract');
 }
 
 // ── Provider Registry ──
 
 const providers = {
   mock: mockAnalyze,
+  tesseract: tesseractAnalyze,
   'google-vision': googleVisionAnalyze,
   'aws-rekognition': awsRekognitionAnalyze,
-  tesseract: tesseractAnalyze,
 };
 
-// ── MSSV Extraction ──
+// ── Trích xuất MSSV ──
 
 /**
- * Extract student ID (MSSV) from OCR text.
- * IUH student IDs are typically 10-digit numbers.
+ * Trích xuất mã số sinh viên (MSSV) từ text OCR.
+ * MSSV của IUH thường là số 10 chữ số.
  */
 function extractStudentId(text) {
   if (!text) return '';
 
-  // Pattern 1: Explicit MSSV label
+  // Pattern 1: Nhãn MSSV rõ ràng
   const mssvMatch = text.match(/(?:MSSV|mã\s*số\s*sinh\s*viên|student\s*id)[:\s]*(\d{8,12})/i);
   if (mssvMatch) return mssvMatch[1];
 
-  // Pattern 2: Standalone 10-digit number (common IUH format)
+  // Pattern 2: Số 10 chữ số standalone (định dạng IUH phổ biến)
   const standaloneMatch = text.match(/\b(\d{10})\b/);
   if (standaloneMatch) return standaloneMatch[1];
 
-  // Pattern 3: Any 8-12 digit number
+  // Pattern 3: Bất kỳ số 8-12 chữ số nào
   const anyMatch = text.match(/\b(\d{8,12})\b/);
   if (anyMatch) return anyMatch[1];
 
   return '';
 }
 
-// ── Category Mapping ──
+// ── Ánh xạ Category ──
 
 const DETECTED_TYPE_TO_CATEGORY = {
   wallet: 'ACCESSORIES',
@@ -168,7 +213,9 @@ const DETECTED_TYPE_TO_CATEGORY = {
   card: 'DOCUMENTS',
   id_card: 'DOCUMENTS',
   student_card: 'DOCUMENTS',
+  driver_license: 'DOCUMENTS',
   notebook: 'DOCUMENTS',
+  document: 'DOCUMENTS',
   umbrella: 'OTHER',
   bottle: 'OTHER',
   clothing: 'CLOTHING',
@@ -179,178 +226,220 @@ const DETECTED_TYPE_TO_CATEGORY = {
 };
 
 /**
- * Auto-categorize based on detected object type.
+ * Tự động phân loại category từ loại đồ vật phát hiện được.
  */
 function inferCategory(detectedType) {
   const normalized = detectedType.toLowerCase().replace(/[\s-]/g, '_');
   return DETECTED_TYPE_TO_CATEGORY[normalized] || 'OTHER';
 }
 
-// ── Main Analysis Function ──
+// ── Hàm phân tích chính ──
 
 /**
- * Analyze a single lost-found item's images.
+ * Phân tích ảnh của một lost-found item.
  *
- * @param {string} itemId - The LostFoundItem ID
- * @param {object} options - { force: boolean } — re-analyze even if already done
- * @returns {object} Analysis result
+ * BUG FIX #3 & #4 (integrated): withRetry CHỈ bọc lớp provider call,
+ * không bọc toàn bộ hàm để tránh retry lại các thao tác DB đã ghi thành công.
+ *
+ * @param {string} itemId - ID của LostFoundItem
+ * @param {object} options - { force: boolean }
  */
 export async function analyzeItem(itemId, options = {}) {
   const { force = false } = options;
 
   const item = await LostFoundItem.findById(itemId);
   if (!item) {
-    throw new Error(`Item not found: ${itemId}`);
+    throw new Error(`Item không tồn tại: ${itemId}`);
   }
 
-  // Skip if already analyzed (unless force)
+  // Bỏ qua nếu đã phân tích (trừ khi force)
   if (!force && item.analysisStatus === 'COMPLETED') {
-    logger.info(`Item ${itemId} already analyzed, skipping`);
+    logger.info(`Item ${itemId} đã được phân tích trước đó, bỏ qua`);
     return { status: 'skipped', item };
   }
 
-  // Skip if no images
+  // Bỏ qua nếu không có ảnh
   if (!item.images?.length) {
     item.analysisStatus = 'SKIPPED';
     await item.save();
-    logger.info(`Item ${itemId} has no images, skipping analysis`);
+    logger.info(`Item ${itemId} không có ảnh, bỏ qua phân tích`);
     return { status: 'skipped', reason: 'no_images', item };
   }
 
-  // Mark as processing
+  const provider = providers[PROVIDER];
+  if (!provider) {
+    throw new Error(`Provider AI không hợp lệ: ${PROVIDER}`);
+  }
+
+  // Đánh dấu đang xử lý
   item.analysisStatus = 'PROCESSING';
   await item.save();
 
-  const provider = providers[PROVIDER];
-  if (!provider) {
-    throw new Error(`Unknown image analysis provider: ${PROVIDER}`);
-  }
+  try {
+    logger.info(`Bắt đầu phân tích item ${itemId} với provider=${PROVIDER}`);
 
-  let retries = 0;
-  let lastError = null;
+    // BUG FIX #3 (phần 2): withRetry CHỈ bọc provider call AI.
+    // Không bọc toàn bộ analyzeItem vì các bước DB đã ghi không nên retry lại.
+    const results = await withRetry(
+      () => provider(item.images),
+      MAX_RETRIES,
+      RETRY_BASE_DELAY_MS
+    );
 
-  while (retries < MAX_RETRIES) {
-    try {
-      logger.info(`Analyzing item ${itemId} with provider=${PROVIDER}, attempt=${retries + 1}`);
+    // Lấy kết quả tốt nhất (confidence cao nhất)
+    const best = results.reduce(
+      (a, b) => (a.confidence > b.confidence ? a : b),
+      { detectedType: '', studentId: '', text: '', confidence: 0 }
+    );
 
-      const results = await provider(item.images);
+    // Cập nhật item với kết quả phân tích
+    item.analysisStatus = 'COMPLETED';
+    item.detectedType = best.detectedType;
+    item.analysisConfidence = best.confidence;
+    item.extracted = {
+      // BUG FIX #8: KHÔNG gọi lại extractStudentId(best.text) ở đây.
+      // tesseractAnalyze đã gọi extractStudentId(text) và lưu vào best.studentId.
+      // Gọi 2 lần với cùng input sẽ cho cùng kết quả nhưng tốn CPU không cần thiết.
+      studentId: best.studentId,
+      text: best.text,
+    };
+    item.analysisMetadata = {
+      provider: PROVIDER,
+      analyzedAt: new Date().toISOString(),
+      rawResults: results,
+    };
 
-      // Take the best result (highest confidence)
-      const best = results.reduce((a, b) => (a.confidence > b.confidence ? a : b), {
-        detectedType: '',
-        studentId: '',
-        text: '',
-        confidence: 0,
-      });
-
-      // Update item with analysis results
-      item.analysisStatus = 'COMPLETED';
-      item.detectedType = best.detectedType;
-      item.analysisConfidence = best.confidence;
-      item.extracted = {
-        studentId: extractStudentId(best.text) || best.studentId,
-        text: best.text,
-      };
-      item.analysisMetadata = {
-        provider: PROVIDER,
-        analyzedAt: new Date().toISOString(),
-        rawResults: results,
-      };
-
-      // Auto-suggest category if currently 'OTHER'
-      if (item.category === 'OTHER' && best.detectedType) {
-        const suggestedCategory = inferCategory(best.detectedType);
-        if (suggestedCategory !== 'OTHER') {
-          item.category = suggestedCategory;
-          logger.info(`Auto-categorized item ${itemId} as ${suggestedCategory} (detected: ${best.detectedType})`);
-        }
-      }
-
-      // Auto-suggest tags from detected type
-      if (best.detectedType && (!item.tags || item.tags.length === 0)) {
-        item.tags = [best.detectedType.toLowerCase()];
-      }
-
-      await item.save();
-
-      // Publish analyzed event
-      await publishLostFoundAnalyzed({
-        itemId: item._id.toString(),
-        userId: item.userId.toString(),
-        type: item.type,
-        title: item.title,
-        detectedType: item.detectedType,
-        studentId: item.extracted.studentId,
-        confidence: item.analysisConfidence,
-        category: item.category,
-      });
-
-      // Run post-analysis matching
-      try {
-        const matches = await findMatches(itemId, { limit: 5, minScore: MATCH_THRESHOLD });
-        if (matches.length > 0) {
-          await publishLostFoundMatch({
-            itemId: item._id.toString(),
-            userId: item.userId.toString(),
-            type: item.type,
-            title: item.title,
-            matches: matches.map((m) => ({
-              itemId: m.item._id.toString(),
-              title: m.item.title,
-              score: m.score,
-              ownerId: m.item.userId.toString(),
-            })),
-          });
-        }
-      } catch (matchErr) {
-        logger.warn(`Post-analysis matching failed for item ${itemId}: ${matchErr.message}`);
-      }
-
-      logger.info(`Analysis completed for item ${itemId}: type=${best.detectedType}, confidence=${best.confidence}`);
-
-      return {
-        status: 'completed',
-        detectedType: item.detectedType,
-        studentId: item.extracted.studentId,
-        confidence: item.analysisConfidence,
-        category: item.category,
-      };
-    } catch (err) {
-      lastError = err;
-      retries++;
-      logger.warn(`Analysis attempt ${retries} failed for item ${itemId}: ${err.message}`);
-
-      if (retries < MAX_RETRIES) {
-        await new Promise((r) => setTimeout(r, RETRY_DELAY_MS * retries)); // Exponential backoff
+    // Tự động gợi ý category nếu đang là 'OTHER'
+    if (item.category === 'OTHER' && best.detectedType) {
+      const suggestedCategory = inferCategory(best.detectedType);
+      if (suggestedCategory !== 'OTHER') {
+        item.category = suggestedCategory;
+        logger.info(
+          `Auto-categorized item ${itemId} → ${suggestedCategory} (detected: ${best.detectedType})`
+        );
       }
     }
+
+    // Tự động thêm tags từ detectedType
+    if (best.detectedType && (!item.tags || item.tags.length === 0)) {
+      item.tags = [best.detectedType.toLowerCase()];
+    }
+
+    await item.save();
+
+    // BUG FIX #8: Evict cache detail để frontend nhận data mới nhất sau AI xong
+    // (tránh stale cache trong 5 phút khi analysisStatus còn là PROCESSING)
+    await cache.del(`lostfound:detail:${itemId}`);
+    logger.debug(`[Cache] Evicted lostfound:detail:${itemId} sau khi AI phân tích xong`);
+
+    // Publish sự kiện analyzed
+    await publishLostFoundAnalyzed({
+      itemId: item._id.toString(),
+      userId: item.userId.toString(),
+      type: item.type,
+      title: item.title,
+      detectedType: item.detectedType,
+      studentId: item.extracted.studentId,
+      confidence: item.analysisConfidence,
+      category: item.category,
+    });
+
+    // Chạy matching sau khi phân tích (category & tags đã được cập nhật bởi AI)
+    try {
+      const matches = await findMatches(itemId, { limit: 5, minScore: MATCH_THRESHOLD });
+      if (matches.length > 0) {
+        await publishLostFoundMatch({
+          itemId: item._id.toString(),
+          userId: item.userId.toString(),
+          type: item.type,
+          title: item.title,
+          matches: matches.map((m) => ({
+            itemId: m.item._id.toString(),
+            title: m.item.title,
+            score: m.score,
+            ownerId: m.item.userId.toString(),
+          })),
+        });
+      }
+    } catch (matchErr) {
+      logger.warn(`Post-analysis matching thất bại cho item ${itemId}: ${matchErr.message}`);
+    }
+
+    logger.info(
+      `Phân tích hoàn thành cho item ${itemId}: ` +
+      `type=${best.detectedType}, confidence=${best.confidence.toFixed(3)}`
+    );
+
+    return {
+      status: 'completed',
+      detectedType: item.detectedType,
+      studentId: item.extracted.studentId,
+      confidence: item.analysisConfidence,
+      category: item.category,
+    };
+  } catch (err) {
+    // Lưu trạng thái thất bại
+    item.analysisStatus = 'FAILED';
+    item.analysisMetadata = {
+      provider: PROVIDER,
+      failedAt: new Date().toISOString(),
+      error: err.message,
+    };
+    await item.save();
+
+    logger.error(`Phân tích thất bại sau ${MAX_RETRIES} lần retry cho item ${itemId}: ${err.message}`);
+
+    return { status: 'failed', error: err.message };
   }
-
-  // All retries failed
-  item.analysisStatus = 'FAILED';
-  item.analysisMetadata = {
-    provider: PROVIDER,
-    failedAt: new Date().toISOString(),
-    error: lastError?.message,
-    retries,
-  };
-  await item.save();
-
-  logger.error(`Analysis failed for item ${itemId} after ${retries} retries: ${lastError?.message}`);
-
-  return {
-    status: 'failed',
-    error: lastError?.message,
-  };
 }
 
 /**
- * Queue an item for async analysis (non-blocking).
- * In production, this would push to a job queue (Bull, BullMQ, etc.)
- * For now, fire-and-forget with error logging.
+ * Xếp hàng phân tích bất đồng bộ (non-blocking).
+ * Sử dụng fire-and-forget với error logging.
+ * Production: nên dùng BullMQ hoặc Redis Queue.
  */
 export function queueAnalysis(itemId) {
   analyzeItem(itemId).catch((err) => {
-    logger.error(`Queued analysis failed for item ${itemId}: ${err.message}`);
+    logger.error(`Queued analysis thất bại cho item ${itemId}: ${err.message}`);
   });
+}
+
+/**
+ * BUG FIX #11: Cleanup các item bị stuck ở trạng thái PROCESSING quá lâu.
+ *
+ * Nếu service crash giữa chừng khi analysisStatus = 'PROCESSING',
+ * item sẽ bị stuck vĩnh viễn và không bao giờ được retry.
+ *
+ * Nên gọi hàm này một lần khi service khởi động và mỗi 10 phút (cron job).
+ *
+ * @param {number} maxAgeMinutes - Sau bao nhiêu phút thì coi là stuck (default: 10)
+ */
+export async function cleanupStuckProcessing(maxAgeMinutes = 10) {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+
+  try {
+    const result = await (await import('../models/LostFound.js')).LostFoundItem.updateMany(
+      {
+        analysisStatus: 'PROCESSING',
+        updatedAt: { $lt: cutoff }, // stuck > maxAgeMinutes phút
+      },
+      {
+        $set: {
+          analysisStatus: 'PENDING', // reset về PENDING để có thể retry
+          'analysisMetadata.stuckResetAt': new Date().toISOString(),
+        },
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      logger.warn(
+        `[Cleanup] Reset ${result.modifiedCount} item bị stuck PROCESSING > ${maxAgeMinutes}ph về PENDING`
+      );
+    }
+
+    return result.modifiedCount;
+  } catch (err) {
+    logger.error(`[Cleanup] cleanupStuckProcessing thất bại: ${err.message}`);
+    return 0;
+  }
 }

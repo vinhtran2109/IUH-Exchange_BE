@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { config } from '../config/index.js';
+import { logger } from './logger.js';
 
 const SALT_ROUNDS = 10;
 
@@ -70,4 +71,44 @@ export function compareToken(token, hash) {
   // Bug #9 fix: Use timingSafeEqual to prevent timing attacks
   if (tokenHash.length !== hash.length) return false;
   return crypto.timingSafeEqual(Buffer.from(tokenHash), Buffer.from(hash));
+}
+
+/**
+ * Retry với Exponential Backoff — chỉ retry lỗi tạm thời.
+ *
+ * BUG FIX: Không retry lỗi 4xx (client errors) vì dữ liệu đầu vào sai,
+ * retry vô ích chỉ tốn tài nguyên và làm hệ thống chậm hơn.
+ * Chỉ retry: network error (không có status), 5xx (server error), 429 (rate limited).
+ *
+ * @param {Function} fn - Hàm async cần thực thi
+ * @param {number} maxRetries - Số lần thử lại tối đa (default: 3)
+ * @param {number} baseDelayMs - Độ trễ ban đầu ms, tăng lũy thừa (default: 3000 = 3s)
+ * @returns {Promise<any>} Kết quả của fn khi thành công
+ * @throws {Error} Lỗi cuối cùng nếu hết số lần retry
+ */
+export async function withRetry(fn, maxRetries = 3, baseDelayMs = 3000) {
+  let attempt = 0;
+  while (attempt < maxRetries) {
+    try {
+      return await fn();
+    } catch (error) {
+      const statusCode = error?.response?.status || error?.statusCode;
+      // Chỉ retry lỗi tạm thời: network/timeout, 5xx, 429
+      const isRetryable =
+        !statusCode ||        // Network error / timeout (không có HTTP status)
+        statusCode >= 500 ||  // Server error (5xx)
+        statusCode === 429;   // Too Many Requests — rate limited
+
+      attempt++;
+      if (!isRetryable || attempt >= maxRetries) throw error;
+
+      const delay = baseDelayMs * attempt; // 3s → 6s → 9s (Exponential Backoff)
+      logger.warn(
+        `[withRetry] Lần ${attempt}/${maxRetries} thất bại ` +
+        `(status=${statusCode || 'network_error'}). Thử lại sau ${delay / 1000}s. ` +
+        `Lỗi: ${error.message}`
+      );
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
 }

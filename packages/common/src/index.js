@@ -19,7 +19,7 @@ export { AuditLog } from './models/AuditLog.js';
 
 export { config } from './config/index.js';
 export { logger } from './utils/logger.js';
-export { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, verifyToken, parsePagination, hashToken, compareToken } from './utils/helpers.js';
+export { hashPassword, comparePassword, generateAccessToken, generateRefreshToken, verifyToken, parsePagination, hashToken, compareToken, withRetry } from './utils/helpers.js';
 export { connectMongo } from './utils/mongo.js';
 export { getSupabase, pingSupabase, SupabaseModel, baseRow, valueOrNull } from './utils/supabaseModel.js';
 export { createRedis, getRedis } from './utils/redis.js';
