@@ -701,124 +701,170 @@ const AdminDashboard: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const overviewCardClass = 'rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md';
+  const sectionCardClass = 'rounded-2xl border border-slate-200 bg-white shadow-sm';
+  const iconButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
+  const secondaryActionClass = 'inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
+
+  const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) => (
+    <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+        <Icon size={22} />
+      </div>
+      <div className="text-sm font-bold text-slate-800">{title}</div>
+      <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  );
+
+  const HealthRow = ({ label, value, tone = 'emerald' }: { label: string; value: string | number; tone?: 'emerald' | 'amber' | 'blue' }) => {
+    const toneClass = {
+      emerald: 'bg-emerald-500',
+      amber: 'bg-amber-500',
+      blue: 'bg-blue-500',
+    }[tone];
+
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3.5 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${toneClass}`} />
+          <span className="truncate text-sm font-semibold text-slate-700">{label}</span>
+        </div>
+        <span className="ml-3 rounded-lg bg-slate-50 px-2 py-1 text-xs font-black text-slate-700">{value}</span>
+      </div>
+    );
+  };
+
   const renderOverview = () => (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Tổng sinh viên', value: stats.user?.total || 0, icon: Users },
           { label: 'Bài chờ duyệt', value: stats.product?.pending || 0, icon: PackageCheck },
           { label: 'Tố cáo chờ xử lý', value: reports.length, icon: AlertTriangle },
           { label: 'Sự kiện DLQ', value: dlqEvents.length, icon: Server },
         ].map((item) => (
-          <div key={item.label} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
-              <item.icon size={22} />
+          <div key={item.label} className={`${overviewCardClass} min-h-[156px] p-6`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <item.icon size={26} strokeWidth={2.2} />
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500">Live</span>
             </div>
-            <div className="text-3xl font-black text-slate-900">{item.value.toLocaleString('vi-VN')}</div>
-            <div className="text-sm text-slate-500 mt-1">{item.label}</div>
+            <div className="mt-5 text-3xl font-black leading-none tracking-tight text-slate-950">{item.value.toLocaleString('vi-VN')}</div>
+            <div className="mt-2 text-sm font-bold text-slate-700">{item.label}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Hàng đợi duyệt bài</h3>
-              <p className="text-sm text-slate-500">Bài đăng sản phẩm cần xử lý sớm.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Hàng đợi duyệt bài</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Bài đăng sản phẩm cần xử lý sớm.</p>
             </div>
-            <button onClick={() => setActiveTab('products')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('products')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {products.slice(0, 5).map((product) => (
-              <div key={getEntityId(product)} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 p-4">
-                <div>
-                  <div className="font-bold text-slate-900">{product.title}</div>
-                  <div className="text-sm text-slate-500 mt-1">{currency(product.price)} • {product.sellerId}</div>
+              <div key={getEntityId(product)} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">Chờ duyệt</span>
+                    <span className="truncate text-sm font-black text-slate-950">{product.title}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                    <span className="font-bold text-slate-700">{currency(product.price)}</span>
+                    <span className="h-1 w-1 rounded-full bg-slate-300" />
+                    <span className="font-mono text-xs">{product.sellerId}</span>
+                  </div>
                 </div>
-                <button onClick={() => openProductDetail(getEntityId(product))} className="p-2 rounded-xl hover:bg-indigo-50 text-slate-500 hover:text-indigo-600">
+                <button onClick={() => openProductDetail(getEntityId(product))} className={iconButtonClass} title="Xem chi tiết">
                   <Eye size={16} />
                 </button>
               </div>
             ))}
-            {products.length === 0 && <div className="text-sm text-slate-400">Không có bài sản phẩm nào đang chờ duyệt.</div>}
+            {products.length === 0 && <EmptyState icon={PackageCheck} title="Không có bài chờ duyệt" description="Hàng đợi đang trống. Các bài đăng mới cần duyệt sẽ xuất hiện tại đây." />}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Tố cáo mới</h3>
-              <p className="text-sm text-slate-500">Danh sách các báo cáo đang chờ quản trị viên xử lý.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Tố cáo mới</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Danh sách báo cáo đang chờ quản trị viên xử lý.</p>
             </div>
-            <button onClick={() => setActiveTab('reports')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('reports')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {reports.slice(0, 5).map((report) => (
-              <div key={getEntityId(report)} className="rounded-2xl border border-slate-100 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-bold text-slate-900">{reportTargetLabel(report.targetType)}</div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
+              <div key={getEntityId(report)} className="rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-black text-slate-950">{reportTargetLabel(report.targetType)}</div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">{report.reason}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
                 </div>
-                <p className="text-sm text-slate-600 mt-2 line-clamp-2">{report.reason}</p>
-                <div className="text-xs text-slate-400 mt-2">{formatDate(report.createdAt)}</div>
+                <div className="mt-3 text-xs font-medium text-slate-500">{formatDate(report.createdAt)}</div>
               </div>
             ))}
-            {reports.length === 0 && <div className="text-sm text-slate-400">Không có tố cáo nào đang chờ xử lý.</div>}
+            {reports.length === 0 && <EmptyState icon={MessageSquareWarning} title="Không có tố cáo đang chờ" description="Khi sinh viên gửi báo cáo mới, mục này sẽ nổi bật để quản trị viên xử lý nhanh." />}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Tin thất lạc / nhặt được mới</h3>
-              <p className="text-sm text-slate-500">Quản trị viên có thể mở chi tiết hoặc gỡ bài ngay từ đây.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Tin thất lạc / nhặt được mới</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Mở chi tiết hoặc gỡ bài ngay từ bảng tổng quan.</p>
             </div>
-            <button onClick={() => setActiveTab('lostFound')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('lostFound')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {lostFoundItems.slice(0, 5).map((item) => (
-              <div key={getEntityId(item)} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 p-4">
-                <div>
+              <div key={getEntityId(item)} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.type === 'LOST' ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>{lostFoundTypeLabel(item.type)}</span>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badgeClass(item.status)}`}>{statusLabel(item.status)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${item.type === 'LOST' ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100' : 'bg-blue-50 text-blue-700 ring-1 ring-blue-100'}`}>{lostFoundTypeLabel(item.type)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${badgeClass(item.status)}`}>{statusLabel(item.status)}</span>
                   </div>
-                  <div className="font-bold text-slate-900 mt-2">{item.title}</div>
-                  <div className="text-sm text-slate-500 mt-1">{item.location || 'Không rõ vị trí'}</div>
+                  <div className="mt-2 truncate font-black text-slate-950">{item.title}</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500"><MapPin size={14} /> {item.location || 'Không rõ vị trí'}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => openLostFoundDetail(getEntityId(item))} className="p-2 rounded-xl hover:bg-indigo-50 text-slate-500 hover:text-indigo-600">
+                  <button onClick={() => openLostFoundDetail(getEntityId(item))} className={iconButtonClass} title="Xem chi tiết">
                     <Eye size={16} />
                   </button>
-                  <button onClick={() => handleDeleteLostFound(getEntityId(item))} className="p-2 rounded-xl hover:bg-rose-50 text-slate-500 hover:text-rose-600">
+                  <button onClick={() => handleDeleteLostFound(getEntityId(item))} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700" title="Gỡ bài">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
             ))}
-            {lostFoundItems.length === 0 && <div className="text-sm text-slate-400">Không có tin thất lạc / nhặt được nào.</div>}
+            {lostFoundItems.length === 0 && <EmptyState icon={MapPin} title="Không có tin thất lạc mới" description="Các tin mất hoặc nhặt được gần đây sẽ được gom ở khu vực này." />}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-lg font-black text-slate-900 mb-4">Sức khỏe hệ thống</h3>
-          <div className="space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="text-xs uppercase font-bold text-slate-400 mb-1">DLQ</div>
-              <div className="text-2xl font-black text-slate-900">{dlqEvents.length}</div>
-              <div className="text-sm text-slate-500 mt-1">Sự kiện cần thử lại hoặc bỏ qua.</div>
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Sức khỏe hệ thống</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Trạng thái dịch vụ và hàng đợi lỗi.</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Ổn định</span>
+          </div>
+          <div className="space-y-4">
+            <HealthRow label="API Gateway" value="Online" tone="emerald" />
+            <HealthRow label="WebSocket" value="Online" tone="emerald" />
+            <HealthRow label="DLQ cần xử lý" value={dlqEvents.length} tone={dlqEvents.length > 0 ? 'amber' : 'emerald'} />
+            <div className="grid grid-cols-2 gap-3 pt-1">
               {Object.entries(dlqStats).map(([key, value]) => (
-                <div key={key} className="rounded-2xl border border-slate-100 p-4">
-                  <div className="text-xs uppercase font-bold text-slate-400">{key}</div>
-                  <div className="text-lg font-black text-slate-900 mt-1">{value}</div>
-                </div>
+                <HealthRow key={key} label={key} value={value} tone={Number(value) > 0 ? 'amber' : 'emerald'} />
               ))}
-              {Object.keys(dlqStats).length === 0 && <div className="text-sm text-slate-400 col-span-2">Chưa có thống kê DLQ.</div>}
+              {Object.keys(dlqStats).length === 0 && <div className="col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Chưa có thống kê DLQ.</div>}
             </div>
           </div>
         </div>
@@ -1807,39 +1853,39 @@ const AdminDashboard: React.FC = () => {
   );
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-8 lg:pl-[284px] lg:pr-8">
-      <aside className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[260px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
+    <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-8 lg:pl-[292px] lg:pr-10">
+      <aside className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[264px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-100 px-6 py-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-900 text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
                 <Shield size={22} />
               </div>
               <div>
-                <div className="text-sm font-black text-slate-900">Quản trị IUH</div>
+                <div className="text-sm font-black text-slate-950">Quản trị IUH</div>
                 <div className="text-xs font-medium text-slate-400">IUH Exchange</div>
               </div>
             </div>
           </div>
 
-          <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+          <nav className="flex-1 space-y-7 overflow-y-auto px-4 py-5">
             {['Bảng chính', 'Quản trị', 'Kiểm duyệt', 'Hệ thống'].map((group) => (
               <div key={group}>
-                <div className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
-                <div className="space-y-1">
+                <div className="mb-2.5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
+                <div className="space-y-1.5">
                   {ADMIN_TABS.filter((tab) => tab.group === group).map((tab) => {
                     const active = activeTab === tab.id;
                     return (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as AdminTab)}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${
+                        className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition-colors ${
                           active
-                            ? 'bg-slate-900 text-white shadow-sm'
-                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                            ? 'bg-slate-950 text-white shadow-sm ring-1 ring-slate-900'
+                            : 'text-slate-500 hover:bg-blue-50 hover:text-slate-900'
                         }`}
                       >
-                        <tab.icon size={17} className={active ? 'text-teal-300' : 'text-slate-400'} />
+                        <tab.icon size={18} strokeWidth={2} className={active ? 'text-blue-200' : 'text-slate-400'} />
                         <span>{tab.label}</span>
                       </button>
                     );
@@ -1850,7 +1896,7 @@ const AdminDashboard: React.FC = () => {
           </nav>
 
           <div className="border-t border-slate-100 p-4">
-            <div className="rounded-lg bg-slate-50 p-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-wider text-slate-400">Trạng thái</div>
               <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-700">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -1860,14 +1906,14 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </aside>
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
             <Shield size={24} />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Trung tâm quản trị</h1>
-            <p className="text-slate-500 font-medium text-sm">Kiểm duyệt, quản lý người dùng, tố cáo và sức khỏe hệ thống</p>
+            <h1 className="text-3xl font-black tracking-tight text-slate-950">Trung tâm quản trị</h1>
+            <p className="mt-1 text-sm font-medium text-slate-500">Kiểm duyệt, quản lý người dùng, tố cáo và sức khỏe hệ thống</p>
           </div>
         </div>
       </div>
