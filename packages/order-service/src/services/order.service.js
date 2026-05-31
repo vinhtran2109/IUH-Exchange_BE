@@ -18,6 +18,7 @@ import crypto from 'crypto';
 
 const IDEMPOTENCY_TTL_SECONDS = 86400; // 24 hours
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:3002';
+const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
 
 /**
  * Valid status transitions for an order.
@@ -46,6 +47,88 @@ function buildGatewayHeaders(userId) {
     'x-user-role': role,
     'x-user-email': email,
     'x-gateway-signature': signature,
+  };
+}
+
+function buildInternalHeaders(userId) {
+  const token = process.env.INTERNAL_SERVICE_TOKEN || process.env.GATEWAY_SECRET || process.env.JWT_SECRET || 'dev-secret';
+  return {
+    ...buildGatewayHeaders(userId),
+    'x-internal-service': 'order-service',
+    'x-internal-token': token,
+  };
+}
+
+function productSnapshot(product) {
+  if (!product) return null;
+  return {
+    id: product.id || product._id,
+    _id: product._id || product.id,
+    title: product.title || '',
+    description: product.description || '',
+    price: product.price,
+    imageUrls: product.imageUrls || [],
+    category: product.category,
+    condition: product.condition,
+    status: product.status,
+    sellerId: product.sellerId,
+  };
+}
+
+function userSnapshot(user) {
+  if (!user) return null;
+  return {
+    id: user.id || user._id,
+    _id: user._id || user.id,
+    name: user.name || '',
+    studentId: user.studentId || '',
+    avatarUrl: user.avatarUrl || '',
+    karmaPoint: user.karmaPoint,
+    role: user.role,
+  };
+}
+
+async function fetchProductSnapshot(productId, actorId) {
+  if (!productId) return null;
+  try {
+    const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/${productId}`, {
+      headers: buildInternalHeaders(actorId || 'order-service'),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.success) return null;
+    return productSnapshot(body.data);
+  } catch (err) {
+    logger.warn(`[OrderDetail] Product snapshot unavailable: productId=${productId}, error=${err.message}`);
+    return null;
+  }
+}
+
+async function fetchUserSnapshot(userId) {
+  if (!userId) return null;
+  try {
+    const response = await fetch(`${USER_SERVICE_URL}/api/v1/users/${userId}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.success) return null;
+    return userSnapshot(body.data);
+  } catch (err) {
+    logger.warn(`[OrderDetail] User snapshot unavailable: userId=${userId}, error=${err.message}`);
+    return null;
+  }
+}
+
+async function enrichOrderDetail(order) {
+  const [product, buyer, seller] = await Promise.all([
+    fetchProductSnapshot(order.productId, order.sellerId || order.buyerId),
+    fetchUserSnapshot(order.buyerId),
+    fetchUserSnapshot(order.sellerId),
+  ]);
+
+  return {
+    ...order,
+    product,
+    buyer,
+    seller,
+    productTitle: product?.title || order.productTitle || '',
   };
 }
 
@@ -659,7 +742,7 @@ export class OrderService {
     if (!canView) {
       throw new ForbiddenException('Bạn không có quyền xem đơn hàng này');
     }
-    return order;
+    return enrichOrderDetail(order);
   }
 
   async getReviewEligibility(orderId, userId) {

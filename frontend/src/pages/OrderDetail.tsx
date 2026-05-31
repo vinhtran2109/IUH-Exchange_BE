@@ -48,6 +48,8 @@ const OrderDetail: React.FC = () => {
   const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
   const initialOrder = (location.state as any)?.initialOrder || null;
 
+  const getOrderProductId = (source: any) => String(source?.productId?.id || source?.productId?._id || source?.product?.id || source?.product?._id || source?.productId || '');
+
   const fetchDetail = async (silent = false) => {
     if (!id) return;
     if (!silent) setLoading(true);
@@ -72,13 +74,18 @@ const OrderDetail: React.FC = () => {
       if (res.success) {
         const currentOrder = res.data;
         setOrder(currentOrder);
+        if (currentOrder.product) setProduct(currentOrder.product);
 
         const [productRes, paymentRes] = await Promise.allSettled([
-          productService.getProductById(currentOrder.productId),
+          productService.getProductById(getOrderProductId(currentOrder)),
           orderService.getPaymentDetails(id),
         ]);
 
-        if (productRes.status === 'fulfilled' && productRes.value.success) setProduct(productRes.value.data);
+        if (productRes.status === 'fulfilled' && productRes.value.success) {
+          setProduct(productRes.value.data);
+        } else if (currentOrder.product) {
+          setProduct(currentOrder.product);
+        }
         if (paymentRes.status === 'fulfilled' && paymentRes.value.success) setPayment(paymentRes.value.data);
       }
     } catch (error) {
@@ -318,6 +325,11 @@ const OrderDetail: React.FC = () => {
 
   const isSeller = !!(user?.id && order?.sellerId && user.id === order.sellerId);
   const isBuyer = !!(user?.id && order?.buyerId && user.id === order.buyerId);
+  const orderProductId = getOrderProductId(order);
+  const buyerDisplayName = order?.buyer?.name || order?.buyerName || (isBuyer ? user?.name : '') || order?.buyerId;
+  const productTitle = product?.title || order?.product?.title || order?.productTitle || 'Đang tải...';
+  const productDescription = product?.description || order?.product?.description || '';
+  const productImageUrl = product?.imageUrls?.[0] || order?.product?.imageUrls?.[0] || '';
 
   const currentStatus = (order?.status || 'PENDING') as OrderStatusKey;
   const paymentMethod = payment?.paymentMethod || order?.paymentMethod;
@@ -640,8 +652,8 @@ const OrderDetail: React.FC = () => {
             </h3>
             <div className="flex items-center gap-4 rounded-lg border border-slate-100 bg-slate-50 p-4">
               <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-                {product?.imageUrls?.[0] ? (
-                  <img src={product.imageUrls[0]} alt={product?.title} className="h-full w-full object-cover" />
+                {productImageUrl ? (
+                  <img src={productImageUrl} alt={productTitle} className="h-full w-full object-cover" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-300">
                     <ShoppingBag size={24} />
@@ -649,10 +661,10 @@ const OrderDetail: React.FC = () => {
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <h4 className="truncate text-sm font-semibold text-slate-800">{product?.title || 'Đang tải...'}</h4>
-                <p className="truncate text-xs text-slate-500">{product?.description}</p>
+                <h4 className="truncate text-sm font-semibold text-slate-800">{productTitle}</h4>
+                <p className="truncate text-xs text-slate-500">{productDescription}</p>
                 <button
-                  onClick={() => navigate(`/products/${order.productId}`)}
+                  onClick={() => navigate(`/products/${orderProductId}`)}
                   className="mt-1 flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
                 >
                   Xem bài đăng <ExternalLink size={11} />
@@ -669,7 +681,7 @@ const OrderDetail: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
                   <span className="text-slate-500">Họ tên</span>
-                  <span className="font-medium text-slate-700">{isBuyer ? user?.name : order.buyerId}</span>
+                  <span className="font-medium text-slate-700">{buyerDisplayName}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
                   <span className="text-slate-500">Ghi chú</span>
