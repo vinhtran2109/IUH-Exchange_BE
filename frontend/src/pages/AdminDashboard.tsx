@@ -16,7 +16,6 @@ import {
   RefreshCw,
   Search,
   Send,
-  Server,
   Shield,
   ShieldCheck,
   ShoppingBag,
@@ -31,10 +30,8 @@ import {
   adminService,
   type AdminOrderData,
   type AuditLogData,
-  type DlqEventData,
   type LostFoundAdminData,
   type ReportData,
-  type ReportedMessageData,
   type UserAdminData,
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
@@ -48,11 +45,10 @@ const PERMISSION_LABELS: Record<string, string> = {
   CAN_APPROVE_POST: 'Duyệt bài',
 };
 
-type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'orders' | 'chatReports' | 'dlq' | 'analytics' | 'email' | 'audit';
+type AdminTab = 'overview' | 'users' | 'reports' | 'lostFound' | 'products' | 'orders' | 'analytics' | 'email' | 'audit';
 type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECTED';
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
-type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
 type OrderFilter = 'ALL' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
 
 const ADMIN_TABS = [
@@ -63,10 +59,8 @@ const ADMIN_TABS = [
   { id: 'reports', label: 'Tố cáo', group: 'Kiểm duyệt', icon: AlertTriangle },
   { id: 'lostFound', label: 'Đồ thất lạc', group: 'Kiểm duyệt', icon: MapPin },
   { id: 'email', label: 'Soạn email', group: 'Hệ thống', icon: Mail },
-  { id: 'dlq', label: 'DLQ', group: 'Hệ thống', icon: Server },
   { id: 'audit', label: 'Nhật ký hệ thống', group: 'Hệ thống', icon: ShieldCheck },
   { id: 'orders', label: 'Đơn hàng', group: 'Bảng chính', icon: ShoppingBag },
-  { id: 'chatReports', label: 'Tin nhắn', group: 'Bảng chính', icon: MessageSquareWarning },
 ] as const;
 
 const formatDate = (value?: string) => {
@@ -243,7 +237,6 @@ const AdminDashboard: React.FC = () => {
   const [reportFilter, setReportFilter] = useState<ReportFilter>('ALL');
   const [reportTargetType, setReportTargetType] = useState<'ALL' | 'USER' | 'PRODUCT' | 'LOST_FOUND'>('ALL');
   const [lostFoundTypeFilter, setLostFoundTypeFilter] = useState<LostFoundTypeFilter>('ALL');
-  const [dlqFilter, setDlqFilter] = useState<DlqFilter>('ALL');
   const [orderFilter, setOrderFilter] = useState<OrderFilter>('ALL');
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [emailTo, setEmailTo] = useState('');
@@ -256,11 +249,8 @@ const AdminDashboard: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
-  const [dlqEvents, setDlqEvents] = useState<DlqEventData[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogData[]>([]);
   const [adminOrders, setAdminOrders] = useState<AdminOrderData[]>([]);
-  const [reportedMessages, setReportedMessages] = useState<ReportedMessageData[]>([]);
-  const [dlqStats, setDlqStats] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<any>({ user: {}, product: {} });
 
   const [permUser, setPermUser] = useState<UserAdminData | null>(null);
@@ -287,42 +277,36 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     void fetchData();
-  }, [activeTab, productFilter, reportFilter, reportTargetType, lostFoundTypeFilter, dlqFilter, user, isLoading, navigate]);
+  }, [activeTab, productFilter, reportFilter, reportTargetType, lostFoundTypeFilter, user, isLoading, navigate]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       if (activeTab === 'overview') {
-        const [uStats, pStats, reportRes, productRes, lostFoundRes, dlqRes] = await Promise.all([
+        const [uStats, pStats, reportRes, productRes, lostFoundRes] = await Promise.all([
           adminService.getUserStats(),
           adminService.getProductStats(),
           adminService.getReports('PENDING', 1, 6),
           adminService.getAdminProducts('PENDING_APPROVAL', 1, 6),
           adminService.getAdminLostFoundItems('ALL', 'OPEN', 1, 6),
-          adminService.getDlqEvents(1, 6),
         ]);
         setStats({ user: uStats.data, product: pStats.data });
         setReports(reportRes.data?.content || []);
         setProducts(productRes.data?.content || []);
         setLostFoundItems(lostFoundRes.data?.content || []);
-        setDlqEvents(dlqRes.data?.content || []);
-        setDlqStats(dlqRes.data?.stats || {});
         return;
       }
 
       if (activeTab === 'analytics') {
-        const [uStats, pStats, reportRes, lostFoundRes, dlqRes] = await Promise.all([
+        const [uStats, pStats, reportRes, lostFoundRes] = await Promise.all([
           adminService.getUserStats(),
           adminService.getProductStats(),
           adminService.getReports('ALL', 1, 100),
           adminService.getAdminLostFoundItems('ALL', 'ALL', 1, 100),
-          adminService.getDlqEvents(1, 100),
         ]);
         setStats({ user: uStats.data, product: pStats.data });
         setReports(reportRes.data?.content || []);
         setLostFoundItems(lostFoundRes.data?.content || []);
-        setDlqEvents(dlqRes.data?.content || []);
-        setDlqStats(dlqRes.data?.stats || {});
         return;
       }
 
@@ -365,24 +349,10 @@ const AdminDashboard: React.FC = () => {
         return;
       }
 
-      if (activeTab === 'chatReports') {
-        const res = await adminService.getReportedMessages('PENDING', 1, 100);
-        if (res.success) setReportedMessages(res.data?.content || []);
-        return;
-      }
-
       if (activeTab === 'audit') {
         const res = await adminService.getAuditLogs(1, 100);
         if (res.success) setAuditLogs(res.data?.content || []);
         return;
-      }
-
-      if (activeTab === 'dlq') {
-        const res = await adminService.getDlqEvents(1, 100, dlqFilter === 'ALL' ? undefined : dlqFilter);
-        if (res.success) {
-          setDlqEvents(res.data.content || []);
-          setDlqStats(res.data.stats || {});
-        }
       }
     } catch (error) {
       console.error('Không thể tải dữ liệu quản trị', error);
@@ -600,25 +570,6 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleRetryDlq = async (eventId: string) => {
-    try {
-      const res = await adminService.retryDlqEvent(eventId);
-      if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể thử lại sự kiện'));
-    }
-  };
-
-  const handleDismissDlq = async (eventId: string) => {
-    if (!window.confirm('Xác nhận bỏ qua sự kiện DLQ này?')) return;
-    try {
-      const res = await adminService.dismissDlqEvent(eventId);
-      if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể bỏ qua sự kiện'));
-    }
-  };
-
   const handleSendEmail = async (event: React.FormEvent) => {
     event.preventDefault();
     setEmailSending(true);
@@ -749,7 +700,7 @@ const AdminDashboard: React.FC = () => {
           { label: 'Tổng sinh viên', value: stats.user?.total || 0, icon: Users },
           { label: 'Bài chờ duyệt', value: stats.product?.pending || 0, icon: PackageCheck },
           { label: 'Tố cáo chờ xử lý', value: reports.length, icon: AlertTriangle },
-          { label: 'Sự kiện DLQ', value: dlqEvents.length, icon: Server },
+          { label: 'Tin thất lạc', value: lostFoundItems.length, icon: MapPin },
         ].map((item) => (
           <div key={item.label} className={`${overviewCardClass} min-h-[156px] p-6`}>
             <div className="flex items-start justify-between gap-4">
@@ -867,13 +818,7 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-4">
             <HealthRow label="API Gateway" value="Online" tone="emerald" />
             <HealthRow label="WebSocket" value="Online" tone="emerald" />
-            <HealthRow label="DLQ cần xử lý" value={dlqEvents.length} tone={dlqEvents.length > 0 ? 'amber' : 'emerald'} />
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              {Object.entries(dlqStats).map(([key, value]) => (
-                <HealthRow key={key} label={key} value={value} tone={Number(value) > 0 ? 'amber' : 'emerald'} />
-              ))}
-              {Object.keys(dlqStats).length === 0 && <div className="col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Chưa có thống kê DLQ.</div>}
-            </div>
+            <HealthRow label="Kiểm duyệt" value={products.length > 0 || reports.length > 0 ? 'Cần theo dõi' : 'Ổn định'} tone={products.length > 0 || reports.length > 0 ? 'amber' : 'emerald'} />
           </div>
         </div>
       </div>
@@ -893,7 +838,6 @@ const AdminDashboard: React.FC = () => {
     const ignoredReports = reportCounts.DISMISSED || 0;
     const lostCount = lostFoundCounts.LOST || 0;
     const foundCount = lostFoundCounts.FOUND || 0;
-    const dlqCount = dlqEvents.length;
 
     const productDistribution = [
       { label: 'Đang bán', value: availableProducts, color: '#10b981', bg: 'bg-emerald-500' },
@@ -904,7 +848,6 @@ const AdminDashboard: React.FC = () => {
 
     const moderationLoad = [
       { label: 'Tố cáo', value: totalReports, color: 'bg-rose-500' },
-      { label: 'DLQ', value: dlqCount, color: 'bg-sky-500' },
       { label: 'Thất lạc', value: lostCount, color: 'bg-pink-500' },
       { label: 'Nhặt được', value: foundCount, color: 'bg-cyan-500' },
       { label: 'Chờ duyệt', value: pendingProducts, color: 'bg-violet-500' },
@@ -914,7 +857,7 @@ const AdminDashboard: React.FC = () => {
       { label: 'Sinh viên', value: stats.user?.total || 0, helper: 'Tài khoản trong hệ thống', icon: Users, tone: 'text-blue-700 bg-blue-50 border-blue-100' },
       { label: 'Sản phẩm', value: productTotal, helper: 'Tổng bài đăng sản phẩm', icon: PackageCheck, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
       { label: 'Tố cáo', value: totalReports, helper: 'Báo cáo trong chu kỳ hiện tại', icon: AlertTriangle, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
-      { label: 'DLQ', value: dlqCount, helper: 'Sự kiện cần theo dõi', icon: Server, tone: 'text-slate-700 bg-slate-50 border-slate-200' },
+      { label: 'Thất lạc', value: lostFoundItems.length, helper: 'Tin mất hoặc nhặt được', icon: MapPin, tone: 'text-cyan-700 bg-cyan-50 border-cyan-100' },
     ];
 
     const reportStatus = [
@@ -1860,53 +1803,6 @@ const AdminDashboard: React.FC = () => {
     );
   };
 
-  const renderReportedMessages = () => (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Kiểm duyệt tin nhắn</h2>
-        <p className="mt-1 text-sm text-slate-500">Xử lý các tin nhắn bị người dùng báo cáo trong chat.</p>
-      </div>
-      <div className="grid gap-4">
-        {reportedMessages.map((message) => (
-          <div key={message._id} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <div className="text-xs font-bold uppercase text-slate-400">{message.senderId} {'->'} {message.receiverId}</div>
-                <p className="mt-2 text-sm font-medium text-slate-800">{message.content}</p>
-                <div className="mt-3 text-xs text-rose-600">
-                  {(message.reports || []).map((report) => report.reason).join(' | ') || 'Đã báo cáo'}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    await adminService.resolveReportedMessage(message._id, 'REVIEWED');
-                    await fetchData();
-                  }}
-                  className="rounded-xl bg-indigo-50 px-4 py-2 text-xs font-black text-indigo-700"
-                >
-                  Đã xem
-                </button>
-                <button
-                  onClick={async () => {
-                    await adminService.resolveReportedMessage(message._id, 'DISMISSED');
-                    await fetchData();
-                  }}
-                  className="rounded-xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
-                >
-                  Bỏ qua
-                </button>
-              </div>
-            </div>
-          </div>
-        ))}
-        {reportedMessages.length === 0 && (
-          <div className="rounded-3xl border border-dashed border-slate-200 bg-white p-10 text-center text-sm text-slate-400">Không có tin nhắn đang chờ xử lý.</div>
-        )}
-      </div>
-    </div>
-  );
-
   const renderEmailCompose = () => (
     <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
       <form onSubmit={handleSendEmail} className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -2001,84 +1897,6 @@ const AdminDashboard: React.FC = () => {
       </aside>
     </div>
   );
-
-  const renderDlq = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { label: 'Chờ xử lý', value: dlqStats.PENDING || 0 },
-          { label: 'Đang thử lại', value: dlqStats.RETRYING || 0 },
-          { label: 'Thử lại lỗi', value: dlqStats.RETRY_FAILED || 0 },
-        ].map((item) => (
-          <div key={item.label} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-            <div className="text-xs uppercase text-slate-400 font-bold">{item.label}</div>
-            <div className="text-3xl font-black text-slate-900 mt-2">{item.value}</div>
-          </div>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {['ALL', 'PENDING', 'RETRYING', 'RETRY_FAILED'].map((status) => (
-          <button
-            key={status}
-            type="button"
-            onClick={() => setDlqFilter(status as DlqFilter)}
-            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${dlqFilter === status ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'}`}
-          >
-            {statusLabel(status)}
-          </button>
-        ))}
-      </div>
-
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-sm uppercase tracking-wider text-slate-500">
-              <th className="p-4 font-bold">Chủ đề</th>
-              <th className="p-4 font-bold">Trạng thái</th>
-              <th className="p-4 font-bold">Số lần thử</th>
-              <th className="p-4 font-bold">Tạo lúc</th>
-              <th className="p-4 font-bold">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dlqEvents.map((event) => {
-              const eventId = getEntityId(event);
-              return (
-                <tr key={eventId} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="p-4">
-                    <div className="font-bold text-slate-800">{event.topic}</div>
-                    <div className="text-xs text-slate-400 break-all">{event.key || eventId}</div>
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeClass(event.status)}`}>{statusLabel(event.status)}</span>
-                  </td>
-                  <td className="p-4 text-sm text-slate-500">{event.retryCount || 0}</td>
-                  <td className="p-4 text-sm text-slate-500">{formatDate(event.createdAt)}</td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <button onClick={() => handleRetryDlq(eventId)} className="px-4 py-2 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold hover:bg-sky-100 inline-flex items-center gap-2">
-                        <RefreshCw size={14} /> Thử lại
-                      </button>
-                      <button onClick={() => handleDismissDlq(eventId)} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">
-                        Bỏ qua
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {dlqEvents.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-10 text-center text-slate-400">Chưa có sự kiện DLQ cho bộ lọc hiện tại.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-8 lg:pl-[292px] lg:pr-10">
       <aside className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[264px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
@@ -2153,7 +1971,6 @@ const AdminDashboard: React.FC = () => {
           { id: 'products', label: 'Duyệt bài', icon: PackageCheck },
           { id: 'reports', label: 'Tố cáo', icon: AlertTriangle },
           { id: 'lostFound', label: 'Đồ thất lạc', icon: MapPin },
-          { id: 'dlq', label: 'DLQ', icon: Server },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -2182,8 +1999,6 @@ const AdminDashboard: React.FC = () => {
         renderAdminOrders()
       ) : activeTab === 'reports' ? (
         renderReports()
-      ) : activeTab === 'chatReports' ? (
-        renderReportedMessages()
       ) : activeTab === 'lostFound' ? (
         renderLostFound()
       ) : activeTab === 'audit' ? (
@@ -2191,7 +2006,7 @@ const AdminDashboard: React.FC = () => {
       ) : activeTab === 'email' ? (
         renderEmailCompose()
       ) : (
-        renderDlq()
+        renderOverview()
       )}
 
       {permUser && (
