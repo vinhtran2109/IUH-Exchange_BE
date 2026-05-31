@@ -27,14 +27,24 @@ function adminOnly(req, _res, next) {
   next();
 }
 
+function canModerateLostFound(req, _res, next) {
+  if (
+    req.user?.role === 'ADMIN' ||
+    (req.user?.role === 'MODERATOR' && req.user?.permissions?.includes('CAN_REPORT'))
+  ) {
+    return next();
+  }
+  throw new ForbiddenException('Lost-found moderation access required');
+}
+
 // Public: browse items (optional auth to know user if logged in)
 router.get('/', optionalAuth, listItems);
 
 // Admin: list/delete all items
-router.get('/admin', authenticate, adminOnly, listAdminItems);
+router.get('/admin', authenticate, canModerateLostFound, listAdminItems);
 router.get('/admin/heatmap', authenticate, adminOnly, getHeatmapData);
-router.post('/admin/bulk-moderate', authenticate, adminOnly, bulkModerate);
-router.delete('/admin/:id', authenticate, adminOnly, deleteItemAsAdmin);
+router.post('/admin/bulk-moderate', authenticate, canModerateLostFound, bulkModerate);
+router.delete('/admin/:id', authenticate, canModerateLostFound, deleteItemAsAdmin);
 
 // Protected: mutations require authentication
 router.post('/', authenticate, authorize('CAN_REPORT'), ocrRateLimit, createItem);

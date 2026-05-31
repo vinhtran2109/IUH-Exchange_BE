@@ -1,6 +1,7 @@
-import { authenticate, authorize } from '@iuh-exchange/common';
+import { authenticate, authorize, verifyGatewaySignature } from '@iuh-exchange/common';
 import { Router } from 'express';
 import {
+  createMessage,
   getConversationHistory,
   getUserConversations,
   markConversationAsRead,
@@ -13,8 +14,17 @@ import {
 
 const router = Router();
 
-router.use(authenticate);
+function authenticateOrGateway(req, res, next) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    return authenticate(req, res, next);
+  }
+  return verifyGatewaySignature(req, res, next);
+}
 
+router.use(authenticateOrGateway);
+
+router.post('/messages', createMessage);
 router.get('/admin/reported-messages', listReportedMessages);
 router.patch('/admin/reported-messages/:id/resolve', resolveReportedMessage);
 router.post('/messages/:id/report', authorize('CAN_REPORT'), reportMessage);

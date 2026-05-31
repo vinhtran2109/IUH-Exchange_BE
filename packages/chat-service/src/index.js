@@ -25,9 +25,9 @@ app.get('/health', (_req, res) => {
 app.get('/metrics', metricsHandler);
 
 // ── REST API routes ──
+app.use('/api/v1/chat', chatRoutes);
 app.use('/api/v1/chat', chatUploadRoutes);
 app.use('/api/v1/chat', aiAssistantRoutes);
-app.use('/api/v1/chat', chatRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);

@@ -14,6 +14,61 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function buildConversationId(userId1, userId2) {
+  return [String(userId1), String(userId2)].sort().join(':');
+}
+
+function sanitizeProductContext(productContext) {
+  if (!productContext?.id || !productContext?.title) return null;
+
+  return {
+    id: String(productContext.id).slice(0, 128),
+    title: String(productContext.title).slice(0, 240),
+    price: Number.isFinite(Number(productContext.price)) ? Number(productContext.price) : 0,
+    imageUrl: productContext.imageUrl ? String(productContext.imageUrl).slice(0, 1000) : '',
+  };
+}
+
+/**
+ * POST /api/v1/chat/messages
+ * Internal message creation endpoint used by the WebSocket gateway.
+ */
+export async function createMessage(req, res, next) {
+  try {
+    const userId = String(req.user?.sub || req.body?.senderId || '');
+    const { receiverId, recipientId, content, conversationId: providedConvId, messageType, fileUrl, fileName, productContext } = req.body;
+    const targetUserId = String(receiverId || recipientId || '');
+    const text = typeof content === 'string' ? content.trim() : '';
+
+    if (!userId || !targetUserId) {
+      throw new BadRequestException('senderId and receiverId are required');
+    }
+
+    if (!text && !fileUrl) {
+      throw new BadRequestException('Message content or fileUrl is required');
+    }
+
+    if (text.length > 5000) {
+      throw new BadRequestException('Message content exceeds maximum length of 5000 characters');
+    }
+
+    const safeProductContext = sanitizeProductContext(productContext);
+    const message = await ChatMessage.create({
+      senderId: userId,
+      receiverId: targetUserId,
+      content: text || fileName || 'Image',
+      conversationId: providedConvId || buildConversationId(userId, targetUserId),
+      messageType: safeProductContext ? 'PRODUCT_CONTEXT' : (messageType || (fileUrl ? 'IMAGE' : 'TEXT')),
+      ...(fileUrl ? { fileUrl, fileName: fileName || null } : {}),
+      ...(safeProductContext ? { productContext: safeProductContext } : {}),
+    });
+
+    res.status(201).json(ApiResponse.created(message.toObject(), 'Message created'));
+  } catch (err) {
+    next(err);
+  }
+}
+
 /**
  * GET /api/v1/chat/conversations
  * Get paginated list of user's conversations with last message and unread count.

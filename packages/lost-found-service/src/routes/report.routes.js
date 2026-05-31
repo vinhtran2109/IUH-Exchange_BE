@@ -22,8 +22,15 @@ function adminOnly(req, _res, next) {
   next();
 }
 
+function moderatorOrAdmin(req, _res, next) {
+  if (!req.user || !['ADMIN', 'MODERATOR'].includes(req.user.role)) {
+    throw new ForbiddenException('Moderator access required');
+  }
+  next();
+}
+
 // Admin only: list & resolve reports
-router.get('/admin', authenticate, adminOnly, listReports);
-router.patch('/admin/:reportId/resolve', authenticate, adminOnly, resolveReport);
+router.get('/admin', authenticate, moderatorOrAdmin, listReports);
+router.patch('/admin/:reportId/resolve', authenticate, moderatorOrAdmin, resolveReport);
 
 export default router;

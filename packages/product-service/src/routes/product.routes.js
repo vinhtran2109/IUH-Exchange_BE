@@ -42,10 +42,20 @@ function adminOnly(req, _res, next) {
   next();
 }
 
-router.get('/admin/pending', authenticate, adminOnly, validateQuery(paginationSchema), asyncHandler(getPendingProducts));
-router.get('/admin', authenticate, adminOnly, validateQuery(adminProductListSchema), asyncHandler(listAdminProducts));
-router.patch('/admin/:id/resolve', authenticate, adminOnly, asyncHandler(resolveProduct));
-router.delete('/admin/:id', authenticate, adminOnly, asyncHandler(deleteProductAsAdmin));
+function canModerateProducts(req, _res, next) {
+  if (
+    req.user?.role === 'ADMIN' ||
+    (req.user?.role === 'MODERATOR' && req.user?.permissions?.includes('CAN_APPROVE_POST'))
+  ) {
+    return next();
+  }
+  return next(new ForbiddenException('Product moderation access required'));
+}
+
+router.get('/admin/pending', authenticate, canModerateProducts, validateQuery(paginationSchema), asyncHandler(getPendingProducts));
+router.get('/admin', authenticate, canModerateProducts, validateQuery(adminProductListSchema), asyncHandler(listAdminProducts));
+router.patch('/admin/:id/resolve', authenticate, canModerateProducts, asyncHandler(resolveProduct));
+router.delete('/admin/:id', authenticate, canModerateProducts, asyncHandler(deleteProductAsAdmin));
 router.get('/admin/stats', authenticate, adminOnly, asyncHandler(getProductStats));
 
 router.get('/search', validateQuery(searchSchema), asyncHandler(searchProductsHandler));
