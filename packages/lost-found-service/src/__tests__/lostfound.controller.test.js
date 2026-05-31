@@ -45,6 +45,7 @@ vi.mock('../services/matching.service.js', () => ({
 }));
 
 vi.mock('../services/kafka.service.js', () => ({
+  publishLostFoundMatch: vi.fn().mockResolvedValue(true),
   publishLostFoundEvent: vi.fn().mockResolvedValue(true),
 }));
 

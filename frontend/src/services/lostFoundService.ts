@@ -26,6 +26,7 @@ export interface LostFoundItem {
   location: string;
   contactInfo: string;
   studentId: string;        // MSSV của người đăng tin
+  userId?: string;
   status: ItemStatus;
   imageUrls: string[];
   createdAt: string;
@@ -86,6 +87,12 @@ export const lostFoundService = {
   // Đăng tin mới
   createItem: async (data: Partial<LostFoundItem>) => {
     const response = await api.post("/lost-found", data);
+    return response.data;
+  },
+
+  // Cập nhật tin
+  updateItem: async (id: string, data: Partial<LostFoundItem>) => {
+    const response = await api.put(`/lost-found/${id}`, data);
     return response.data;
   },
 

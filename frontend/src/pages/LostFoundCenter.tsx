@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { MapPin, Calendar, Plus, Package, HelpCircle, CheckCircle2, Search, Filter, X } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 import type { LostFoundItem } from '../services/lostFoundService';
+import { useToast } from '../components/Toast';
 
 const AREAS = [
   { label: 'Tất cả', value: '' },
@@ -23,17 +24,21 @@ const LostFoundCenter: React.FC = () => {
   const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const { error: toastError } = useToast();
 
-  useEffect(() => { fetchItems(); }, [activeTab]);
-
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
       const response = await lostFoundService.getItems(activeTab);
       if (response.success) setItems(response.data.content || []);
-    } catch (error) { console.error("Failed to fetch items:", error); }
+    } catch (error) {
+      console.error("Failed to fetch items:", error);
+      toastError('Không thể tải danh sách. Vui lòng thử lại.');
+    }
     finally { setLoading(false); }
-  };
+  }, [activeTab, toastError]);
+
+  useEffect(() => { void fetchItems(); }, [fetchItems]);
 
   /* Client-side filtering (search + area) */
   const filtered = useMemo(() => {
@@ -177,7 +182,7 @@ const LostFoundCenter: React.FC = () => {
               >
                 <Link to={`/lost-found/${item.id}`} className="block group h-full">
                   <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:border-indigo-200 hover:shadow-md transition-all h-full">
-                    <div className="relative aspect-[4/3] bg-slate-50 overflow-hidden">
+                    <div className="relative bg-slate-50 overflow-hidden" style={{ aspectRatio: '4 / 3' }}>
                       {item.imageUrls?.length > 0 ? (
                         <img src={item.imageUrls[0]} alt={item.title} className="w-full h-full object-cover" />
                       ) : (
@@ -190,7 +195,7 @@ const LostFoundCenter: React.FC = () => {
                         {item.type === ItemType.LOST ? 'Tìm đồ rơi' : 'Nhặt được'}
                       </span>
                       {/* Status badge */}
-                      {(item as any).status && (item as any).status !== 'OPEN' && (
+                      {item.status && item.status !== 'OPEN' && (
                         <span className="absolute top-2.5 right-2.5 px-2 py-0.5 bg-slate-700/80 text-white text-[10px] font-semibold rounded-lg">
                           Đã giải quyết
                         </span>
@@ -198,7 +203,7 @@ const LostFoundCenter: React.FC = () => {
                     </div>
                     <div className="p-4">
                       <h3 className="font-semibold text-slate-800 text-sm truncate mb-1 group-hover:text-indigo-700 transition-colors">{item.title}</h3>
-                      <p className="text-slate-500 text-xs line-clamp-2 mb-3">{item.description}</p>
+                      <p className="text-slate-500 text-xs line-clamp-2 mb-3">{item.description || ''}</p>
                       <div className="flex items-center gap-3 text-xs text-slate-400">
                         <span className="flex items-center gap-1"><MapPin size={12} className="text-indigo-400" /> {item.location}</span>
                         <span className="flex items-center gap-1"><Calendar size={12} /> {new Date(item.createdAt).toLocaleDateString('vi-VN')}</span>

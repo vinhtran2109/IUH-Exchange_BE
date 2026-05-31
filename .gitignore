@@ -1,5 +1,6 @@
 # ── Environment files ──
 .env
+.env.production
 *.env.local
 *.env.production
 
@@ -31,3 +32,5 @@ firebase-service-account.json
 # ── Load test results ──
 tests/load/results/
 *.jtl
+
+iuhexchange-firebase-adminsdk-fbsvc-6dede7d24b.json

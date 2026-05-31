@@ -21,6 +21,7 @@ import { chatService } from '../services/chatService';
 /* ─── Map type → route ─────────────────────────────────────────────────────── */
 const getNotifLink = (n: Notification): string | null => {
   const t = n.type?.toUpperCase() || '';
+  if (n.link) return n.link;
   if (!n.targetId) return null;
   if (t.includes('ORDER')) return `/orders/${n.targetId}`;
   if (t === 'PRODUCT' || t.includes('PRODUCT')) return `/products/${n.targetId}`;

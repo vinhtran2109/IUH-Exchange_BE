@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
 import lostFoundRoutes from './routes/lostfound.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import { initKafka } from './services/kafka.service.js';
@@ -28,15 +28,52 @@ app.use('/api/v1/reports', reportRoutes);
 app.use(errorHandler);
 
 // ── Bootstrap ──
-await connectMongo(MONGODB_URI);
-await initKafka();
+try {
+  await connectMongo(MONGODB_URI);
+} catch (err) {
+  logger.error('[lost-found-service] MongoDB connection failed:', err.message);
+  process.exit(1);
+}
+try {
+  await initKafka();
+} catch (err) {
+  logger.error('[lost-found-service] Kafka init failed:', err.message);
+  process.exit(1);
+}
 
 // BUG FIX #11: Cleanup các item bị stuck PROCESSING khi service khởi động.
 // Nếu service crash giữa chừng, item sẽ bị stuck vĩnh viễn → reset về PENDING.
-await cleanupStuckProcessing(10);
+try {
+  await cleanupStuckProcessing(10);
+} catch (err) {
+  logger.error('[lost-found-service] Cleanup stuck processing failed:', err.message);
+}
 // Cron job: chạy lại mỗi 10 phút để bắt các case mới
-setInterval(() => cleanupStuckProcessing(10), 10 * 60 * 1000);
+const stuckProcessingTimer = setInterval(() => cleanupStuckProcessing(10), 10 * 60 * 1000);
+stuckProcessingTimer.unref();
 
-app.listen(PORT, () => {
+import { createServer } from 'http';
+const server = createServer(app);
+safeListen(server, PORT, () => {
   logger.info(`🚀 Lost & Found Service running on port ${PORT}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[lost-found-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[lost-found-service] Uncaught exception:', err);
+  process.exit(1);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[lost-found-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[lost-found-service] Uncaught exception:', err);
+  process.exit(1);
 });

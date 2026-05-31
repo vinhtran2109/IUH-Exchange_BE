@@ -7,6 +7,7 @@ export interface Notification {
   message: string;
   type: string; // ORDER, CHAT, SYSTEM, KARMA, REPORT, PRODUCT
   targetId?: string;
+  link?: string;
   isRead: boolean;
   createdAt: string;
 }

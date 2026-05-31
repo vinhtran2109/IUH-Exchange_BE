@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, logger, pingSupabase, errorHandler, getRedis, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, pingSupabase, errorHandler, getRedis, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
 import { OrderService } from './services/order.service.js';
 import { initProducer, startSagaConsumer } from './services/saga.service.js';
 import { createOrderRoutes } from './routes/order.routes.js';
@@ -11,7 +11,12 @@ const PORT = process.env.PORT || 3003;
 const redis = getRedis();
 
 // Initialize Kafka producer
-await initProducer();
+try {
+  await initProducer();
+} catch (err) {
+  logger.error('[order-service] Kafka producer init failed:', err.message);
+  process.exit(1);
+}
 
 // Create service instances
 const orderService = new OrderService();
@@ -53,13 +58,30 @@ app.use('/api/v1/orders', paymentRoutes);
 app.use(errorHandler);
 
 // Connect DB and start server
-await pingSupabase();
+try {
+  await pingSupabase();
+} catch (err) {
+  logger.error('[order-service] Supabase connection failed:', err.message);
+  process.exit(1);
+}
 
-app.listen(PORT, () => {
+import { createServer } from 'http';
+const server = createServer(app);
+safeListen(server, PORT, () => {
   logger.info(`Order Service running on port ${PORT}`);
 });
 
 // Kafka group joins can take seconds; keep HTTP available while the consumer starts.
 startSagaConsumer(orderService).catch((err) => {
   logger.error(`Saga consumer failed to start: ${err.message}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[order-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[order-service] Uncaught exception:', err);
+  process.exit(1);
 });

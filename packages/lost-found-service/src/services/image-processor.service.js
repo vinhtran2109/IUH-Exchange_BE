@@ -398,8 +398,8 @@ export async function analyzeItem(itemId, options = {}) {
  * Sử dụng fire-and-forget với error logging.
  * Production: nên dùng BullMQ hoặc Redis Queue.
  */
-export function queueAnalysis(itemId) {
-  analyzeItem(itemId).catch((err) => {
+export function queueAnalysis(itemId, options = {}) {
+  analyzeItem(itemId, options).catch((err) => {
     logger.error(`Queued analysis thất bại cho item ${itemId}: ${err.message}`);
   });
 }

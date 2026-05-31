@@ -1,10 +1,11 @@
-FROM node:20-alpine
+FROM node:20.11.1-alpine3.19
 
 WORKDIR /app
 
 # Copy common lib first
 COPY packages/common ./packages/common
 COPY package.json ./
+COPY package-lock.json ./
 
 # Copy service
 COPY packages/api-gateway ./packages/api-gateway

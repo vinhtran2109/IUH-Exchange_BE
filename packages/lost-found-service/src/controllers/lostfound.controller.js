@@ -13,6 +13,7 @@ import { LostFoundItem } from '../models/LostFound.js';
 import { ConsentLog } from '../models/ConsentLog.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
 import { findMatches, autoMatchOnCreate, calculateMatchScore } from '../services/matching.service.js';
+import { publishLostFoundMatch } from '../services/kafka.service.js';
 import { queueAnalysis } from '../services/image-processor.service.js';
 import { publishLostFoundEvent } from '../services/kafka.service.js';
 
@@ -84,15 +85,56 @@ const uploadUrlSchema = z.object({
 
 // ── Response Mapper ──
 
-function mapItem(item) {
+function mapItem(item, userProfile = null) {
   const obj = item.toObject ? item.toObject() : item;
+  const userId = obj.userId?.toString() || obj.userId;
   return {
     ...obj,
     id: obj._id?.toString() || obj.id,
     imageUrls: obj.images || [],
-    studentId: obj.userId?.toString() || obj.userId,
+    studentId: userProfile?.studentId || userId,
+    userId: userId,
+    userName: userProfile?.name || '',
     claims: obj.claims || [],
   };
+}
+
+/**
+ * Lấy thông tin user từ user-service để hiển thị MSSV thật.
+ */
+const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+const userCache = new Map(); // simple in-memory cache
+const USER_CACHE_TTL = 60_000; // 1 phút
+
+async function fetchUserProfile(userId) {
+  if (!userId) return null;
+  const uid = userId.toString();
+  const cached = userCache.get(uid);
+  if (cached && Date.now() - cached.ts < USER_CACHE_TTL) return cached.data;
+
+  try {
+    const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${uid}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const user = json?.data;
+    if (!user) return null;
+    const profile = { name: user.name || '', studentId: user.studentId || '' };
+    userCache.set(uid, { data: profile, ts: Date.now() });
+    return profile;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch lấy nhiều user profiles song song.
+ */
+async function fetchUserProfiles(userIds) {
+  const unique = [...new Set(userIds.filter(Boolean).map((id) => id.toString()))];
+  const results = await Promise.all(unique.map((id) => fetchUserProfile(id)));
+  const map = {};
+  unique.forEach((id, i) => { map[id] = results[i]; });
+  return map;
 }
 
 // ── Controllers ──
@@ -159,8 +201,12 @@ export async function listItems(req, res, next) {
       LostFoundItem.countDocuments(filter),
     ]);
 
+    // Lấy thông tin user để hiển thị MSSV thật
+    const userIds = items.map((it) => it.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     const pageData = new PageResponse({
-      content: items.map(mapItem),
+      content: items.map((it) => mapItem(it, profiles[it.userId?.toString()])),
       page,
       size,
       totalElements: total,
@@ -204,8 +250,12 @@ export async function listAdminItems(req, res, next) {
       LostFoundItem.countDocuments(filter),
     ]);
 
+    // Lấy thông tin user để hiển thị MSSV thật
+    const userIds = items.map((it) => it.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     const pageData = new PageResponse({
-      content: items.map(mapItem),
+      content: items.map((it) => mapItem(it, profiles[it.userId?.toString()])),
       page,
       size,
       totalElements: total,
@@ -235,7 +285,8 @@ export async function getItemById(req, res, next) {
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
 
-    const response = ApiResponse.ok(mapItem(item));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    const response = ApiResponse.ok(mapItem(item, profile));
     // TTL 5 phút — analyzeItem() sẽ evict key này sau khi AI phân tích xong (BUG FIX #8)
     await cache.set(cacheKey, response, 300);
     res.json(response);
@@ -306,13 +357,33 @@ export async function createItem(req, res, next) {
     // Chạy matching với data hiện tại (trước khi AI cập nhật)
     const matches = await autoMatchOnCreate(item);
 
+    // Publish Kafka event để notification-service gửi thông báo match
+    if (matches.length > 0) {
+      await publishLostFoundMatch({
+        itemId: item._id.toString(),
+        userId: item.userId.toString(),
+        type: item.type,
+        title: item.title,
+        matches: matches.map((m) => ({
+          itemId: m.item._id.toString(),
+          title: m.item.title,
+          score: m.score,
+          ownerId: m.item.userId.toString(),
+        })),
+      });
+    }
+
     // Evict cache danh sách vì có item mới
     await evictListCache();
 
+    const allUserIds = [item.userId?.toString(), ...matches.map((m) => m.item.userId?.toString())];
+    const profiles = await fetchUserProfiles(allUserIds);
+    const profile = profiles[item.userId?.toString()];
+
     res.status(201).json(ApiResponse.created({
-      ...mapItem(item),
+      ...mapItem(item, profile),
       matches: matches.map((m) => ({
-        item: mapItem(m.item),
+        item: mapItem(m.item, profiles[m.item.userId?.toString()]),
         score: m.score,
       })),
     }));
@@ -327,7 +398,11 @@ export async function createItem(req, res, next) {
  */
 export async function updateItem(req, res, next) {
   try {
-    const data = updateItemSchema.parse(req.body);
+    const rawData = { ...req.body };
+    if (rawData.imageUrls && !rawData.images) {
+      rawData.images = rawData.imageUrls;
+    }
+    const data = updateItemSchema.parse(rawData);
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
 
@@ -341,13 +416,28 @@ export async function updateItem(req, res, next) {
     }
 
     Object.assign(item, data);
+
+    const shouldReanalyze = Array.isArray(data.images);
+    if (shouldReanalyze) {
+      item.analysisStatus = item.images?.length ? 'PENDING' : 'SKIPPED';
+      item.detectedType = '';
+      item.analysisConfidence = 0;
+      item.extracted = { studentId: '', text: '' };
+      item.analysisMetadata = {};
+    }
+
     await item.save();
 
     // BUG FIX #2: Evict cả danh sách và detail sau khi cập nhật
     await Promise.all([evictListCache(), evictItemCache(item._id.toString())]);
 
+    if (shouldReanalyze && item.images?.length) {
+      queueAnalysis(item._id.toString(), { force: true });
+    }
+
     logger.info(`LostFoundItem updated: ${item._id} by user ${req.user.sub}`);
-    res.json(ApiResponse.ok(mapItem(item)));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.json(ApiResponse.ok(mapItem(item, profile)));
   } catch (err) {
     next(err);
   }
@@ -454,7 +544,8 @@ export async function claimItem(req, res, next) {
     });
 
     logger.info(`LostFoundItem claimed: ${item._id} by user ${req.user.sub}`);
-    res.status(201).json(ApiResponse.created(mapItem(item), 'Claim submitted for owner verification'));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.status(201).json(ApiResponse.created(mapItem(item, profile), 'Claim submitted for owner verification'));
   } catch (err) {
     next(err);
   }
@@ -530,7 +621,8 @@ export async function reviewClaim(req, res, next) {
       }
     }
 
-    res.json(ApiResponse.ok(mapItem(item), 'Claim reviewed'));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.json(ApiResponse.ok(mapItem(item, profile), 'Claim reviewed'));
   } catch (err) {
     next(err);
   }
@@ -566,11 +658,15 @@ export async function getMatches(req, res, next) {
 
     const matches = await findMatches(req.params.id, { limit, minScore });
 
+    // Batch lấy profiles cho source item + tất cả match items
+    const allUserIds = [item.userId?.toString(), ...matches.map((m) => m.item.userId?.toString())];
+    const profiles = await fetchUserProfiles(allUserIds);
+
     res.json(
       ApiResponse.ok({
-        sourceItem: mapItem(item),
+        sourceItem: mapItem(item, profiles[item.userId?.toString()]),
         matches: matches.map((m) => ({
-          item: mapItem(m.item),
+          item: mapItem(m.item, profiles[m.item.userId?.toString()]),
           score: m.score,
         })),
         totalMatches: matches.length,
@@ -820,10 +916,14 @@ export async function previewMatches(req, res, next) {
     scored.sort((a, b) => b.score - a.score);
     const topMatches = scored.slice(0, 10);
 
+    // Batch lấy profiles cho match items
+    const userIds = topMatches.map((m) => m.item.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     res.json(
       ApiResponse.ok({
         matches: topMatches.map((m) => ({
-          item: mapItem(m.item),
+          item: mapItem(m.item, profiles[m.item.userId?.toString()]),
           score: m.score,
         })),
         totalMatches: topMatches.length,

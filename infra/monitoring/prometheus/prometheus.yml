@@ -41,3 +41,8 @@ scrape_configs:
     static_configs:
       - targets: ['notification-service:3004']
     metrics_path: '/metrics'
+
+  - job_name: 'ws-gateway'
+    static_configs:
+      - targets: ['ws-gateway:3007']
+    metrics_path: '/metrics'

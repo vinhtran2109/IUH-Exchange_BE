@@ -1,9 +1,10 @@
-FROM node:20-alpine
+FROM node:20.11.1-alpine3.19
 
 WORKDIR /app
 
 COPY packages/common ./packages/common
 COPY package.json ./
+COPY package-lock.json ./
 COPY packages/order-service ./packages/order-service
 
 RUN apk add --no-cache curl

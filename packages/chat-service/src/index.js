@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
 import { initSocketService } from './services/socket.service.js';
 import chatRoutes from './routes/chat.routes.js';
 import chatUploadRoutes from './routes/chat-upload.routes.js';
@@ -36,7 +36,23 @@ app.use(errorHandler);
 initSocketService(httpServer);
 
 // ── Start ──
-await connectMongo(MONGODB_URI);
-httpServer.listen(PORT, () => {
+try {
+  await connectMongo(MONGODB_URI);
+} catch (err) {
+  logger.error('[chat-service] MongoDB connection failed:', err.message);
+  process.exit(1);
+}
+
+safeListen(httpServer, PORT, () => {
   logger.info(`🚀 Chat Service running on port ${PORT}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[chat-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[chat-service] Uncaught exception:', err);
+  process.exit(1);
 });
