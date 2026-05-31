@@ -38,7 +38,6 @@ import {
   type UserAdminData,
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
-import { SimpleBarChart, SimpleDonutChart, SimpleLineChart } from '../components/charts/SimpleCharts';
 
 const ALL_PERMISSIONS = ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT', 'CAN_BAN', 'CAN_APPROVE_POST'];
 const PERMISSION_LABELS: Record<string, string> = {
@@ -54,6 +53,7 @@ type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECT
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
 type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
+type OrderFilter = 'ALL' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
 
 const ADMIN_TABS = [
   { id: 'overview', label: 'Tổng quan', group: 'Bảng chính', icon: TrendingUp },
@@ -209,6 +209,12 @@ const shortId = (value?: string) => {
   return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
 };
 
+const readableOrderCode = (value?: string) => {
+  if (!value) return 'ĐH-00000';
+  const tail = value.replace(/[^a-fA-F0-9]/g, '').slice(-5).toUpperCase();
+  return `ĐH-${tail.padStart(5, '0')}`;
+};
+
 const paymentMethodLabel = (method?: string) => {
   switch (method) {
     case 'BANK_TRANSFER':
@@ -238,6 +244,8 @@ const AdminDashboard: React.FC = () => {
   const [reportTargetType, setReportTargetType] = useState<'ALL' | 'USER' | 'PRODUCT' | 'LOST_FOUND'>('ALL');
   const [lostFoundTypeFilter, setLostFoundTypeFilter] = useState<LostFoundTypeFilter>('ALL');
   const [dlqFilter, setDlqFilter] = useState<DlqFilter>('ALL');
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>('ALL');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
@@ -701,124 +709,170 @@ const AdminDashboard: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const overviewCardClass = 'rounded-2xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md';
+  const sectionCardClass = 'rounded-2xl border border-slate-200 bg-white shadow-sm';
+  const iconButtonClass = 'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
+  const secondaryActionClass = 'inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
+
+  const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) => (
+    <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+        <Icon size={22} />
+      </div>
+      <div className="text-sm font-bold text-slate-800">{title}</div>
+      <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">{description}</p>
+    </div>
+  );
+
+  const HealthRow = ({ label, value, tone = 'emerald' }: { label: string; value: string | number; tone?: 'emerald' | 'amber' | 'blue' }) => {
+    const toneClass = {
+      emerald: 'bg-emerald-500',
+      amber: 'bg-amber-500',
+      blue: 'bg-blue-500',
+    }[tone];
+
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-slate-100 bg-white px-3.5 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${toneClass}`} />
+          <span className="truncate text-sm font-semibold text-slate-700">{label}</span>
+        </div>
+        <span className="ml-3 rounded-lg bg-slate-50 px-2 py-1 text-xs font-black text-slate-700">{value}</span>
+      </div>
+    );
+  };
+
   const renderOverview = () => (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
         {[
           { label: 'Tổng sinh viên', value: stats.user?.total || 0, icon: Users },
           { label: 'Bài chờ duyệt', value: stats.product?.pending || 0, icon: PackageCheck },
           { label: 'Tố cáo chờ xử lý', value: reports.length, icon: AlertTriangle },
           { label: 'Sự kiện DLQ', value: dlqEvents.length, icon: Server },
         ].map((item) => (
-          <div key={item.label} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
-              <item.icon size={22} />
+          <div key={item.label} className={`${overviewCardClass} min-h-[156px] p-6`}>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                <item.icon size={26} strokeWidth={2.2} />
+              </div>
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-bold text-slate-500">Live</span>
             </div>
-            <div className="text-3xl font-black text-slate-900">{item.value.toLocaleString('vi-VN')}</div>
-            <div className="text-sm text-slate-500 mt-1">{item.label}</div>
+            <div className="mt-5 text-3xl font-black leading-none tracking-tight text-slate-950">{item.value.toLocaleString('vi-VN')}</div>
+            <div className="mt-2 text-sm font-bold text-slate-700">{item.label}</div>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Hàng đợi duyệt bài</h3>
-              <p className="text-sm text-slate-500">Bài đăng sản phẩm cần xử lý sớm.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Hàng đợi duyệt bài</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Bài đăng sản phẩm cần xử lý sớm.</p>
             </div>
-            <button onClick={() => setActiveTab('products')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('products')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {products.slice(0, 5).map((product) => (
-              <div key={getEntityId(product)} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 p-4">
-                <div>
-                  <div className="font-bold text-slate-900">{product.title}</div>
-                  <div className="text-sm text-slate-500 mt-1">{currency(product.price)} • {product.sellerId}</div>
+              <div key={getEntityId(product)} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-black text-amber-700">Chờ duyệt</span>
+                    <span className="truncate text-sm font-black text-slate-950">{product.title}</span>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+                    <span className="font-bold text-slate-700">{currency(product.price)}</span>
+                    <span className="h-1 w-1 rounded-full bg-slate-300" />
+                    <span className="font-mono text-xs">{product.sellerId}</span>
+                  </div>
                 </div>
-                <button onClick={() => openProductDetail(getEntityId(product))} className="p-2 rounded-xl hover:bg-indigo-50 text-slate-500 hover:text-indigo-600">
+                <button onClick={() => openProductDetail(getEntityId(product))} className={iconButtonClass} title="Xem chi tiết">
                   <Eye size={16} />
                 </button>
               </div>
             ))}
-            {products.length === 0 && <div className="text-sm text-slate-400">Không có bài sản phẩm nào đang chờ duyệt.</div>}
+            {products.length === 0 && <EmptyState icon={PackageCheck} title="Không có bài chờ duyệt" description="Hàng đợi đang trống. Các bài đăng mới cần duyệt sẽ xuất hiện tại đây." />}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Tố cáo mới</h3>
-              <p className="text-sm text-slate-500">Danh sách các báo cáo đang chờ quản trị viên xử lý.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Tố cáo mới</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Danh sách báo cáo đang chờ quản trị viên xử lý.</p>
             </div>
-            <button onClick={() => setActiveTab('reports')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('reports')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {reports.slice(0, 5).map((report) => (
-              <div key={getEntityId(report)} className="rounded-2xl border border-slate-100 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-bold text-slate-900">{reportTargetLabel(report.targetType)}</div>
-                  <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
+              <div key={getEntityId(report)} className="rounded-2xl border border-amber-100 bg-amber-50/30 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-black text-slate-950">{reportTargetLabel(report.targetType)}</div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-700">{report.reason}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
                 </div>
-                <p className="text-sm text-slate-600 mt-2 line-clamp-2">{report.reason}</p>
-                <div className="text-xs text-slate-400 mt-2">{formatDate(report.createdAt)}</div>
+                <div className="mt-3 text-xs font-medium text-slate-500">{formatDate(report.createdAt)}</div>
               </div>
             ))}
-            {reports.length === 0 && <div className="text-sm text-slate-400">Không có tố cáo nào đang chờ xử lý.</div>}
+            {reports.length === 0 && <EmptyState icon={MessageSquareWarning} title="Không có tố cáo đang chờ" description="Khi sinh viên gửi báo cáo mới, mục này sẽ nổi bật để quản trị viên xử lý nhanh." />}
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-6">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <div className="flex items-center justify-between mb-4">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-4">
             <div>
-              <h3 className="text-lg font-black text-slate-900">Tin thất lạc / nhặt được mới</h3>
-              <p className="text-sm text-slate-500">Quản trị viên có thể mở chi tiết hoặc gỡ bài ngay từ đây.</p>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Tin thất lạc / nhặt được mới</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Mở chi tiết hoặc gỡ bài ngay từ bảng tổng quan.</p>
             </div>
-            <button onClick={() => setActiveTab('lostFound')} className="text-sm font-bold text-indigo-600 hover:text-indigo-700">Mở tab</button>
+            <button onClick={() => setActiveTab('lostFound')} className={secondaryActionClass}>Mở tab</button>
           </div>
           <div className="space-y-3">
             {lostFoundItems.slice(0, 5).map((item) => (
-              <div key={getEntityId(item)} className="flex items-start justify-between gap-3 rounded-2xl border border-slate-100 p-4">
-                <div>
+              <div key={getEntityId(item)} className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${item.type === 'LOST' ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>{lostFoundTypeLabel(item.type)}</span>
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badgeClass(item.status)}`}>{statusLabel(item.status)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${item.type === 'LOST' ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100' : 'bg-blue-50 text-blue-700 ring-1 ring-blue-100'}`}>{lostFoundTypeLabel(item.type)}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-xs font-black ${badgeClass(item.status)}`}>{statusLabel(item.status)}</span>
                   </div>
-                  <div className="font-bold text-slate-900 mt-2">{item.title}</div>
-                  <div className="text-sm text-slate-500 mt-1">{item.location || 'Không rõ vị trí'}</div>
+                  <div className="mt-2 truncate font-black text-slate-950">{item.title}</div>
+                  <div className="mt-1 flex items-center gap-1.5 text-sm text-slate-500"><MapPin size={14} /> {item.location || 'Không rõ vị trí'}</div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => openLostFoundDetail(getEntityId(item))} className="p-2 rounded-xl hover:bg-indigo-50 text-slate-500 hover:text-indigo-600">
+                  <button onClick={() => openLostFoundDetail(getEntityId(item))} className={iconButtonClass} title="Xem chi tiết">
                     <Eye size={16} />
                   </button>
-                  <button onClick={() => handleDeleteLostFound(getEntityId(item))} className="p-2 rounded-xl hover:bg-rose-50 text-slate-500 hover:text-rose-600">
+                  <button onClick={() => handleDeleteLostFound(getEntityId(item))} className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700" title="Gỡ bài">
                     <Trash2 size={16} />
                   </button>
                 </div>
               </div>
             ))}
-            {lostFoundItems.length === 0 && <div className="text-sm text-slate-400">Không có tin thất lạc / nhặt được nào.</div>}
+            {lostFoundItems.length === 0 && <EmptyState icon={MapPin} title="Không có tin thất lạc mới" description="Các tin mất hoặc nhặt được gần đây sẽ được gom ở khu vực này." />}
           </div>
         </div>
 
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-lg font-black text-slate-900 mb-4">Sức khỏe hệ thống</h3>
+        <div className={`${sectionCardClass} p-6`}>
+          <div className="mb-5 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black tracking-tight text-slate-950">Sức khỏe hệ thống</h3>
+              <p className="mt-1 text-sm leading-6 text-slate-500">Trạng thái dịch vụ và hàng đợi lỗi.</p>
+            </div>
+            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Ổn định</span>
+          </div>
           <div className="space-y-4">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <div className="text-xs uppercase font-bold text-slate-400 mb-1">DLQ</div>
-              <div className="text-2xl font-black text-slate-900">{dlqEvents.length}</div>
-              <div className="text-sm text-slate-500 mt-1">Sự kiện cần thử lại hoặc bỏ qua.</div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+            <HealthRow label="API Gateway" value="Online" tone="emerald" />
+            <HealthRow label="WebSocket" value="Online" tone="emerald" />
+            <HealthRow label="DLQ cần xử lý" value={dlqEvents.length} tone={dlqEvents.length > 0 ? 'amber' : 'emerald'} />
+            <div className="grid grid-cols-2 gap-3 pt-1">
               {Object.entries(dlqStats).map(([key, value]) => (
-                <div key={key} className="rounded-2xl border border-slate-100 p-4">
-                  <div className="text-xs uppercase font-bold text-slate-400">{key}</div>
-                  <div className="text-lg font-black text-slate-900 mt-1">{value}</div>
-                </div>
+                <HealthRow key={key} label={key} value={value} tone={Number(value) > 0 ? 'amber' : 'emerald'} />
               ))}
-              {Object.keys(dlqStats).length === 0 && <div className="text-sm text-slate-400 col-span-2">Chưa có thống kê DLQ.</div>}
+              {Object.keys(dlqStats).length === 0 && <div className="col-span-2 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">Chưa có thống kê DLQ.</div>}
             </div>
           </div>
         </div>
@@ -826,64 +880,228 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
-  const renderAnalytics = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SimpleDonutChart
-          title="Phân bố sản phẩm"
-          data={[
-            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Chờ duyệt', value: stats.product?.pending || 0, color: '#f59e0b' },
-            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#6366f1' },
-            { label: 'Khac', value: Math.max(0, (stats.product?.total || 0) - (stats.product?.available || 0) - (stats.product?.pending || 0) - (stats.product?.sold || 0)), color: '#ef4444' },
-          ]}
-        />
-        <SimpleBarChart
-          title="Khối lượng kiểm duyệt"
-          data={[
-            { label: 'Tố cáo', value: reports.length, color: '#f43f5e' },
-            { label: 'DLQ', value: dlqEvents.length, color: '#0ea5e9' },
-            { label: 'Thất lạc', value: lostFoundCounts.LOST || 0, color: '#fb7185' },
-            { label: 'Nhặt được', value: lostFoundCounts.FOUND || 0, color: '#38bdf8' },
-            { label: 'Chờ duyệt', value: stats.product?.pending || 0, color: '#8b5cf6' },
-          ]}
-        />
-      </div>
+  const renderAnalytics = () => {
+    const productTotal = stats.product?.total || 0;
+    const availableProducts = stats.product?.available || 0;
+    const pendingProducts = stats.product?.pending || 0;
+    const soldProducts = stats.product?.sold || 0;
+    const otherProducts = Math.max(0, productTotal - availableProducts - pendingProducts - soldProducts);
+    const totalReports = reports.length;
+    const openReports = reportCounts.PENDING || 0;
+    const reviewedReports = reportCounts.REVIEWED || 0;
+    const resolvedReports = reportCounts.RESOLVED || 0;
+    const ignoredReports = reportCounts.DISMISSED || 0;
+    const lostCount = lostFoundCounts.LOST || 0;
+    const foundCount = lostFoundCounts.FOUND || 0;
+    const dlqCount = dlqEvents.length;
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SimpleBarChart
-          title="Tổng quan hệ thống"
-          data={[
-            { label: 'Sinh viên', value: stats.user?.total || 0, color: '#6366f1' },
-            { label: 'Sản phẩm', value: stats.product?.total || 0, color: '#f59e0b' },
-            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#ef4444' },
-          ]}
-        />
-        <SimpleDonutChart
-          title="Trạng thái tố cáo"
-          data={[
-            { label: 'Chờ xử lý', value: reportCounts.PENDING || 0, color: '#f59e0b' },
-            { label: 'Đã xem', value: reportCounts.REVIEWED || 0, color: '#0ea5e9' },
-            { label: 'Đã xử lý', value: reportCounts.RESOLVED || 0, color: '#10b981' },
-            { label: 'Bỏ qua', value: reportCounts.DISMISSED || 0, color: '#94a3b8' },
-          ]}
-        />
-      </div>
+    const productDistribution = [
+      { label: 'Đang bán', value: availableProducts, color: '#10b981', bg: 'bg-emerald-500' },
+      { label: 'Chờ duyệt', value: pendingProducts, color: '#f59e0b', bg: 'bg-amber-500' },
+      { label: 'Đã bán', value: soldProducts, color: '#6366f1', bg: 'bg-indigo-500' },
+      { label: 'Khác', value: otherProducts, color: '#ef4444', bg: 'bg-rose-500' },
+    ];
 
-      <SimpleLineChart
-        title="Đường theo dõi nhanh"
-        data={[
-          { label: 'Sinh viên', value: stats.user?.total || 0 },
-          { label: 'Sản phẩm', value: stats.product?.total || 0 },
-          { label: 'Tố cáo', value: reports.length || 0 },
-          { label: 'DLQ', value: dlqEvents.length || 0 },
-          { label: 'Đồ thất lạc', value: lostFoundItems.length || 0 },
-        ]}
-        color="#6366f1"
-      />
-    </div>
-  );
+    const moderationLoad = [
+      { label: 'Tố cáo', value: totalReports, color: 'bg-rose-500' },
+      { label: 'DLQ', value: dlqCount, color: 'bg-sky-500' },
+      { label: 'Thất lạc', value: lostCount, color: 'bg-pink-500' },
+      { label: 'Nhặt được', value: foundCount, color: 'bg-cyan-500' },
+      { label: 'Chờ duyệt', value: pendingProducts, color: 'bg-violet-500' },
+    ];
+
+    const systemOverview = [
+      { label: 'Sinh viên', value: stats.user?.total || 0, helper: 'Tài khoản trong hệ thống', icon: Users, tone: 'text-blue-700 bg-blue-50 border-blue-100' },
+      { label: 'Sản phẩm', value: productTotal, helper: 'Tổng bài đăng sản phẩm', icon: PackageCheck, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+      { label: 'Tố cáo', value: totalReports, helper: 'Báo cáo trong chu kỳ hiện tại', icon: AlertTriangle, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
+      { label: 'DLQ', value: dlqCount, helper: 'Sự kiện cần theo dõi', icon: Server, tone: 'text-slate-700 bg-slate-50 border-slate-200' },
+    ];
+
+    const reportStatus = [
+      { label: 'Chờ xử lý', value: openReports, color: 'bg-amber-500' },
+      { label: 'Đã xem', value: reviewedReports, color: 'bg-sky-500' },
+      { label: 'Đã xử lý', value: resolvedReports, color: 'bg-emerald-500' },
+      { label: 'Bỏ qua', value: ignoredReports, color: 'bg-slate-400' },
+    ];
+
+    const maxModeration = Math.max(...moderationLoad.map((item) => item.value), 1);
+    const maxSystem = Math.max(...systemOverview.map((item) => item.value), 1);
+    const completionRate = productTotal > 0 ? Math.round((soldProducts / productTotal) * 100) : 0;
+    const reviewBacklogRate = productTotal > 0 ? Math.round((pendingProducts / productTotal) * 100) : 0;
+    const reportResolvedRate = totalReports > 0 ? Math.round(((reviewedReports + resolvedReports + ignoredReports) / totalReports) * 100) : 100;
+
+    const DonutPanel = ({ title, subtitle, data, total }: { title: string; subtitle: string; data: Array<{ label: string; value: number; color: string; bg: string }>; total: number }) => {
+      let accumulated = 0;
+      const safeTotal = total || 1;
+      const gradient = data.map((item) => {
+        const start = (accumulated / safeTotal) * 360;
+        accumulated += item.value;
+        const end = (accumulated / safeTotal) * 360;
+        return item.color + ' ' + start + 'deg ' + end + 'deg';
+      }).join(', ');
+
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-black text-slate-950">{title}</h3>
+              <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{total.toLocaleString('vi-VN')}</span>
+          </div>
+          <div className="grid gap-6 md:grid-cols-[180px_1fr] md:items-center">
+            <div className="relative mx-auto h-44 w-44 rounded-full" style={{ background: total > 0 ? 'conic-gradient(' + gradient + ')' : '#e2e8f0' }}>
+              <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner">
+                <span className="text-3xl font-black text-slate-950">{total.toLocaleString('vi-VN')}</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Tổng</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {data.map((item) => {
+                const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                return (
+                  <div key={item.label}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={'h-2.5 w-2.5 shrink-0 rounded-full ' + item.bg} />
+                        <span className="truncate font-bold text-slate-700">{item.label}</span>
+                      </div>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')} <span className="text-xs text-slate-400">{percent}%</span></span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className={'h-2 rounded-full ' + item.bg} style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-950">Phân tích hệ thống</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Tập trung vào tải kiểm duyệt, trạng thái sản phẩm và những điểm cần quản trị viên chú ý.</p>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2 text-sm font-black text-emerald-700">
+              <CheckCircle size={16} />
+              Dữ liệu đang hoạt động
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {[
+              { label: 'Tỉ lệ bán xong', value: completionRate + '%', helper: soldProducts.toLocaleString('vi-VN') + ' / ' + productTotal.toLocaleString('vi-VN') + ' sản phẩm', icon: TrendingUp, tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+              { label: 'Tồn đọng duyệt', value: reviewBacklogRate + '%', helper: pendingProducts.toLocaleString('vi-VN') + ' bài chờ duyệt', icon: Clock3, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+              { label: 'Tố cáo đã xem', value: reportResolvedRate + '%', helper: totalReports.toLocaleString('vi-VN') + ' tố cáo trong mẫu', icon: ShieldCheck, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+            ].map((item) => (
+              <div key={item.label} className={'rounded-2xl border p-5 ' + item.tone}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-wide opacity-80">{item.label}</div>
+                    <div className="mt-2 text-4xl font-black leading-none">{item.value}</div>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80">
+                    <item.icon size={24} />
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-semibold opacity-80">{item.helper}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <DonutPanel title="Phân bố sản phẩm" subtitle="Nhìn nhanh tỉ trọng bài đang bán, chờ duyệt và đã bán." data={productDistribution} total={productTotal} />
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Khối lượng kiểm duyệt</h3>
+              <p className="mt-1 text-sm text-slate-500">Các hàng đợi mà quản trị viên cần theo dõi thường xuyên.</p>
+            </div>
+            <div className="space-y-4">
+              {moderationLoad.map((item) => {
+                const width = Math.max(4, Math.round((item.value / maxModeration) * 100));
+                return (
+                  <div key={item.label}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="font-bold text-slate-700">{item.label}</span>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-100">
+                      <div className={'h-3 rounded-full ' + item.color} style={{ width: width + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Tổng quan hệ thống</h3>
+              <p className="mt-1 text-sm text-slate-500">Các chỉ số lõi được đặt cùng một thang để dễ so sánh.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {systemOverview.map((item) => {
+                const percent = Math.max(4, Math.round((item.value / maxSystem) * 100));
+                return (
+                  <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-slate-950">{item.label}</div>
+                        <div className="mt-1 text-xs font-medium text-slate-500">{item.helper}</div>
+                      </div>
+                      <div className={'flex h-10 w-10 items-center justify-center rounded-xl border ' + item.tone}>
+                        <item.icon size={20} />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-3xl font-black text-slate-950">{item.value.toLocaleString('vi-VN')}</div>
+                    <div className="mt-3 h-2 rounded-full bg-white">
+                      <div className="h-2 rounded-full bg-blue-600" style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Trạng thái tố cáo</h3>
+              <p className="mt-1 text-sm text-slate-500">Theo dõi mức độ xử lý của đội ngũ quản trị.</p>
+            </div>
+            <div className="space-y-4">
+              {reportStatus.map((item) => {
+                const percent = totalReports > 0 ? Math.round((item.value / totalReports) * 100) : 0;
+                return (
+                  <div key={item.label} className="rounded-xl border border-slate-100 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-2 font-bold text-slate-700">
+                        <span className={'h-2.5 w-2.5 rounded-full ' + item.color} />
+                        {item.label}
+                      </div>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')} <span className="text-xs text-slate-400">{percent}%</span></span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className={'h-2 rounded-full ' + item.color} style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderUsers = () => (
     <div>
@@ -1443,144 +1661,199 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
+    const orderCounts = {
+      all: adminOrders.length,
+      waiting: adminOrders.filter((order) => order.status === 'AWAITING_SELLER').length,
+      completed: completedCount,
+      cancelled: adminOrders.filter((order) => order.status === 'CANCELLED').length,
+      disputed: needsActionCount,
+    };
+
+    const orderFilters: Array<{ value: OrderFilter; label: string; count: number }> = [
+      { value: 'ALL', label: 'Tất cả', count: orderCounts.all },
+      { value: 'AWAITING_SELLER', label: 'Đang chờ', count: orderCounts.waiting },
+      { value: 'COMPLETED', label: 'Hoàn tất', count: orderCounts.completed },
+      { value: 'CANCELLED', label: 'Đã hủy', count: orderCounts.cancelled },
+      { value: 'DISPUTED', label: 'Có tranh chấp', count: orderCounts.disputed },
+    ];
+
+    const orderStatusBadgeClass = (order: AdminOrderData) => {
+      if (order.paymentStatus === 'UNPAID') return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
+      if (order.status === 'COMPLETED') return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100';
+      if (order.status === 'CANCELLED') return 'bg-rose-50 text-rose-700 ring-1 ring-rose-100';
+      return 'bg-blue-50 text-blue-700 ring-1 ring-blue-100';
+    };
+
+    const disputeMeta = (order: AdminOrderData) => {
+      if (order.paymentIssueStatus === 'OPEN') {
+        return { label: 'Cần can thiệp', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100', description: 'Khiếu nại thanh toán đang mở.' };
+      }
+      if (order.disputeStatus === 'OPEN') {
+        return { label: 'Đang xem xét', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-100', description: 'Tranh chấp đang cần quản trị viên kết luận.' };
+      }
+      if (order.disputeStatus === 'RESOLVED' || order.paymentIssueStatus === 'RESOLVED') {
+        return { label: 'Đã giải quyết', className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', description: 'Vụ việc đã có kết quả xử lý.' };
+      }
+      return { label: 'Không cần xử lý', className: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200', description: 'Không có tranh chấp hoặc khiếu nại đang mở.' };
+    };
+
+    const visibleOrders = adminOrders.filter((order) => {
+      const productTitle = order.productTitle || order.product?.title || '';
+      const buyerName = order.buyerName || order.buyer?.name || '';
+      const sellerName = order.sellerName || order.seller?.name || '';
+      const matchesFilter =
+        orderFilter === 'ALL' ||
+        (orderFilter === 'DISPUTED' && (order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN')) ||
+        order.status === orderFilter;
+
+      const normalized = orderSearchQuery.trim().toLowerCase();
+      if (!matchesFilter) return false;
+      if (!normalized) return true;
+      return [readableOrderCode(order._id), order._id, order.productId, productTitle, buyerName, sellerName, order.buyerId, order.sellerId]
+        .some((value) => String(value || '').toLowerCase().includes(normalized));
+    });
+
     return (
       <div className="space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Đơn hàng và tranh chấp</h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">
-                Ưu tiên các đơn có khiếu nại thanh toán hoặc tranh chấp. Những đơn bình thường sẽ hiện rõ là không cần xử lý.
+              <h2 className="text-xl font-black text-slate-950">Đơn hàng và tranh chấp</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Theo dõi đơn có khiếu nại thanh toán, tranh chấp và trạng thái bàn giao. Ưu tiên hiển thị sản phẩm, giá và việc cần xử lý.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={fetchData}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-            >
+            <button type="button" onClick={fetchData} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
               <RefreshCw size={15} />
               Làm mới
             </button>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
-              <div className="text-xs font-bold uppercase text-rose-500">Cần xử lý</div>
-              <div className="mt-1 text-2xl font-black text-rose-700">{needsActionCount}</div>
-              <div className="text-xs text-rose-500">Tranh chấp hoặc thanh toán đang mở</div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {[
+              { label: 'Cần xử lý', value: needsActionCount, helper: 'Tranh chấp hoặc thanh toán đang mở', icon: AlertTriangle, className: 'border-rose-100 bg-rose-50 text-rose-700' },
+              { label: 'Đang chờ', value: waitingSellerCount, helper: 'Chờ người bán xác nhận', icon: Clock3, className: 'border-blue-100 bg-blue-50 text-blue-700' },
+              { label: 'Hoàn tất', value: completedCount, helper: 'Đơn đã kết thúc thành công', icon: CheckCircle, className: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+            ].map((item) => (
+              <div key={item.label} className={'rounded-2xl border p-5 ' + item.className}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-wide opacity-80">{item.label}</div>
+                    <div className="mt-2 text-4xl font-black leading-none">{item.value}</div>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80">
+                    <item.icon size={24} />
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-semibold opacity-80">{item.helper}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input value={orderSearchQuery} onChange={(event) => setOrderSearchQuery(event.target.value)} placeholder="Tìm theo mã đơn, sản phẩm, người mua hoặc người bán..." className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50" />
             </div>
-            <div className="rounded-xl border border-sky-100 bg-sky-50 p-4">
-              <div className="text-xs font-bold uppercase text-sky-500">Đang chờ</div>
-              <div className="mt-1 text-2xl font-black text-sky-700">{waitingSellerCount}</div>
-              <div className="text-xs text-sky-500">Chờ người bán xác nhận</div>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-              <div className="text-xs font-bold uppercase text-emerald-500">Hoàn tất</div>
-              <div className="mt-1 text-2xl font-black text-emerald-700">{completedCount}</div>
-              <div className="text-xs text-emerald-500">Đơn đã kết thúc thành công</div>
+            <div className="flex flex-wrap gap-2">
+              {orderFilters.map((filter) => {
+                const active = orderFilter === filter.value;
+                return (
+                  <button key={filter.value} type="button" onClick={() => setOrderFilter(filter.value)} className={'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition-colors ' + (active ? 'bg-slate-950 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700')}>
+                    {filter.label}
+                    <span className={'rounded-full px-2 py-0.5 text-[11px] font-black ' + (active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500')}>{filter.count}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          {adminOrders.map((order) => {
+          {visibleOrders.map((order) => {
             const hasPaymentIssue = order.paymentIssueStatus === 'OPEN';
             const hasDispute = order.disputeStatus === 'OPEN';
             const needsAction = hasPaymentIssue || hasDispute;
-            const actionTitle = hasPaymentIssue ? 'Cần xử lý thanh toán' : hasDispute ? 'Cần xử lý tranh chấp' : 'Không cần xử lý';
-            const actionDescription = hasPaymentIssue
-              ? 'Người dùng báo có vấn đề thanh toán. Kiểm tra bằng chứng rồi chọn một hướng xử lý.'
-              : hasDispute
-                ? 'Đơn có tranh chấp đang mở. Chọn kết luận phù hợp để đóng vụ việc.'
-                : order.status === 'AWAITING_SELLER'
-                  ? 'Đơn đang chờ người bán xác nhận, admin chỉ cần theo dõi.'
-                  : 'Không có khiếu nại thanh toán hoặc tranh chấp đang mở.';
+            const productTitle = order.productTitle || order.product?.title || 'Sản phẩm ' + shortId(order.productId);
+            const buyerLabel = order.buyerName || order.buyer?.name || 'Người mua ' + shortId(order.buyerId);
+            const sellerLabel = order.sellerName || order.seller?.name || 'Người bán ' + shortId(order.sellerId);
+            const dispute = disputeMeta(order);
 
             return (
-              <div key={order._id} className={`rounded-2xl border bg-white p-4 shadow-sm ${needsAction ? 'border-amber-200' : 'border-slate-200'}`}>
-                <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1.25fr]">
-                  <div>
+              <div key={order._id} className={'rounded-2xl border bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ' + (needsAction ? 'border-amber-200' : 'border-slate-200')}>
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-black text-slate-700">{readableOrderCode(order._id)}</span>
+                      <span className={'rounded-full px-3 py-1 text-xs font-black ' + orderStatusBadgeClass(order)}>{order.paymentStatus === 'UNPAID' ? 'Chưa thanh toán' : statusLabel(order.status)}</span>
+                      <span className={'rounded-full px-3 py-1 text-xs font-black ' + dispute.className}>{dispute.label}</span>
+                    </div>
+                    <h3 className="truncate text-lg font-black tracking-tight text-slate-950" title={productTitle}>{productTitle}</h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                      <span className="text-2xl font-black text-slate-950">{currency(order.price)}</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>Tạo lúc {formatDate(order.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[380px]">
+                    <button type="button" onClick={() => openUserDetail(order.buyerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
+                      <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người mua</div>
+                      <div className="mt-1 truncate text-sm font-black text-slate-800">{buyerLabel}</div>
+                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.buyerId)}</div>
+                    </button>
+                    <button type="button" onClick={() => openUserDetail(order.sellerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
+                      <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người bán</div>
+                      <div className="mt-1 truncate text-sm font-black text-slate-800">{sellerLabel}</div>
+                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.sellerId)}</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={'rounded-full px-3 py-1 text-xs font-black ' + badgeClass(order.paymentStatus)}>{statusLabel(order.paymentStatus)}</span>
+                    <span className="text-sm font-medium text-slate-500">{paymentMethodLabel(order.paymentMethod)}</span>
+                    {order.cancellationCategory && <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Lý do hủy: {statusLabel(order.cancellationCategory)}</span>}
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 px-3.5 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs font-bold text-slate-600">#{shortId(order._id)}</span>
-                      {needsAction && <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-black text-amber-700">Cần admin</span>}
+                      <span className={'rounded-full px-2.5 py-1 text-[11px] font-black ' + dispute.className}>{dispute.label}</span>
+                      <span className="text-sm font-medium text-slate-600">{dispute.description}</span>
                     </div>
-                    <div className="mt-3 text-xs font-bold uppercase text-slate-400">Sản phẩm</div>
-                    <div className="mt-1 break-all font-mono text-xs text-slate-600">{shortId(order.productId)}</div>
-                    <div className="mt-3 text-xl font-black text-slate-900">{currency(order.price)}</div>
-                    <div className="text-xs text-slate-400">Tạo lúc {formatDate(order.createdAt)}</div>
+                    {(order.paymentIssueReason || order.disputeReason) && <p className="mt-2 line-clamp-2 text-sm text-slate-700">{order.paymentIssueReason || order.disputeReason}</p>}
                   </div>
 
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <div className="text-xs font-bold uppercase text-slate-400">Người mua</div>
-                    <button type="button" onClick={() => openUserDetail(order.buyerId)} className="mt-1 break-all text-left font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800">
-                      {shortId(order.buyerId)}
-                    </button>
-                    <div className="mt-3 text-xs font-bold uppercase text-slate-400">Người bán</div>
-                    <button type="button" onClick={() => openUserDetail(order.sellerId)} className="mt-1 break-all text-left font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800">
-                      {shortId(order.sellerId)}
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs font-bold uppercase text-slate-400">Trạng thái đơn</div>
-                      <span className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black ${badgeClass(order.status)}`}>{statusLabel(order.status)}</span>
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold uppercase text-slate-400">Thanh toán</div>
-                      <span className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black ${badgeClass(order.paymentStatus)}`}>{statusLabel(order.paymentStatus)}</span>
-                      <div className="mt-1 text-xs text-slate-500">{paymentMethodLabel(order.paymentMethod)}</div>
-                    </div>
-                    {order.cancellationCategory && (
-                      <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                        Lý do hủy: {statusLabel(order.cancellationCategory)}
-                      </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {hasPaymentIssue ? (
+                      <>
+                        <button onClick={() => resolvePaymentIssue(order, 'CONFIRM_PAID', 'Admin xác nhận người bán đã nhận tiền.')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Xác nhận tiền</button>
+                        <button onClick={() => resolvePaymentIssue(order, 'REFUND', 'Admin duyệt hoàn tiền cho người mua.')} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100">Hoàn tiền</button>
+                        <button onClick={() => resolvePaymentIssue(order, 'REJECT', 'Không đủ căn cứ để xử lý khiếu nại thanh toán.')} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Từ chối</button>
+                      </>
+                    ) : hasDispute ? (
+                      <>
+                        <button onClick={() => resolveDispute(order, 'RESOLVED', 'Người bán có lỗi, admin xử lý có lợi cho người mua.', 'SELLER_FAULT', order.paymentStatus === 'PAID' ? 'REFUND' : 'NONE')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Bảo vệ người mua</button>
+                        <button onClick={() => resolveDispute(order, 'REJECTED', 'Không đủ căn cứ, tranh chấp bị từ chối.', 'BUYER_FAULT')} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Bảo vệ người bán</button>
+                        <button onClick={() => resolveDispute(order, 'RESOLVED', 'Admin ghi nhận hai bên tự thỏa thuận, không áp dụng chế tài.', 'NO_FAULT')} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100">Đóng không phạt</button>
+                      </>
+                    ) : (
+                      <span className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">Không có thao tác bắt buộc</span>
                     )}
-                  </div>
-
-                  <div className="rounded-xl border border-slate-100 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className={`text-sm font-black ${needsAction ? 'text-amber-700' : 'text-slate-700'}`}>{actionTitle}</div>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{actionDescription}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${needsAction ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {needsAction ? 'OPEN' : 'OK'}
-                      </span>
-                    </div>
-
-                    {(order.paymentIssueReason || order.disputeReason) && (
-                      <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                        <div className="text-xs font-bold uppercase text-slate-400">Nội dung người dùng gửi</div>
-                        <p className="mt-1 text-sm text-slate-700">{order.paymentIssueReason || order.disputeReason}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {hasPaymentIssue ? (
-                        <>
-                          <button onClick={() => resolvePaymentIssue(order, 'CONFIRM_PAID', 'Admin xác nhận người bán đã nhận tiền.')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Xác nhận đã nhận tiền</button>
-                          <button onClick={() => resolvePaymentIssue(order, 'REFUND', 'Admin duyệt hoàn tiền cho người mua.')} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100">Hoàn tiền</button>
-                          <button onClick={() => resolvePaymentIssue(order, 'REJECT', 'Không đủ căn cứ để xử lý khiếu nại thanh toán.')} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Từ chối</button>
-                        </>
-                      ) : hasDispute ? (
-                        <>
-                          <button onClick={() => resolveDispute(order, 'RESOLVED', 'Người bán có lỗi, admin xử lý có lợi cho người mua.', 'SELLER_FAULT', order.paymentStatus === 'PAID' ? 'REFUND' : 'NONE')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Bảo vệ người mua</button>
-                          <button onClick={() => resolveDispute(order, 'REJECTED', 'Không đủ căn cứ, tranh chấp bị từ chối.', 'BUYER_FAULT')} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Bảo vệ người bán</button>
-                          <button onClick={() => resolveDispute(order, 'RESOLVED', 'Admin ghi nhận hai bên tự thỏa thuận, không áp dụng chế tài.', 'NO_FAULT')} className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100">Đóng không phạt</button>
-                        </>
-                      ) : (
-                        <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">Không có thao tác bắt buộc</span>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
             );
           })}
 
-          {adminOrders.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</div>
+          {visibleOrders.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
+              <div className="text-sm font-black text-slate-700">Không tìm thấy đơn hàng phù hợp</div>
+              <p className="mt-1 text-sm text-slate-400">Thử đổi từ khóa tìm kiếm hoặc chọn bộ lọc khác.</p>
+            </div>
           )}
         </div>
       </div>
@@ -1807,39 +2080,39 @@ const AdminDashboard: React.FC = () => {
   );
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-8 lg:pl-[284px] lg:pr-8">
-      <aside className="mb-6 rounded-lg border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[260px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
+    <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-8 lg:pl-[292px] lg:pr-10">
+      <aside className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[264px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-100 px-6 py-6">
             <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-900 text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-sm">
                 <Shield size={22} />
               </div>
               <div>
-                <div className="text-sm font-black text-slate-900">Quản trị IUH</div>
+                <div className="text-sm font-black text-slate-950">Quản trị IUH</div>
                 <div className="text-xs font-medium text-slate-400">IUH Exchange</div>
               </div>
             </div>
           </div>
 
-          <nav className="flex-1 space-y-6 overflow-y-auto px-4 py-5">
+          <nav className="flex-1 space-y-7 overflow-y-auto px-4 py-5">
             {['Bảng chính', 'Quản trị', 'Kiểm duyệt', 'Hệ thống'].map((group) => (
               <div key={group}>
-                <div className="mb-2 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
-                <div className="space-y-1">
+                <div className="mb-2.5 px-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">{group}</div>
+                <div className="space-y-1.5">
                   {ADMIN_TABS.filter((tab) => tab.group === group).map((tab) => {
                     const active = activeTab === tab.id;
                     return (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as AdminTab)}
-                        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-bold transition ${
+                        className={`flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-left text-sm font-bold transition-colors ${
                           active
-                            ? 'bg-slate-900 text-white shadow-sm'
-                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
+                            ? 'bg-slate-950 text-white shadow-sm ring-1 ring-slate-900'
+                            : 'text-slate-500 hover:bg-blue-50 hover:text-slate-900'
                         }`}
                       >
-                        <tab.icon size={17} className={active ? 'text-teal-300' : 'text-slate-400'} />
+                        <tab.icon size={18} strokeWidth={2} className={active ? 'text-blue-200' : 'text-slate-400'} />
                         <span>{tab.label}</span>
                       </button>
                     );
@@ -1850,7 +2123,7 @@ const AdminDashboard: React.FC = () => {
           </nav>
 
           <div className="border-t border-slate-100 p-4">
-            <div className="rounded-lg bg-slate-50 p-4">
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
               <div className="text-xs font-black uppercase tracking-wider text-slate-400">Trạng thái</div>
               <div className="mt-2 flex items-center gap-2 text-sm font-bold text-slate-700">
                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -1860,14 +2133,14 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
       </aside>
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
             <Shield size={24} />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Trung tâm quản trị</h1>
-            <p className="text-slate-500 font-medium text-sm">Kiểm duyệt, quản lý người dùng, tố cáo và sức khỏe hệ thống</p>
+            <h1 className="text-3xl font-black tracking-tight text-slate-950">Trung tâm quản trị</h1>
+            <p className="mt-1 text-sm font-medium text-slate-500">Kiểm duyệt, quản lý người dùng, tố cáo và sức khỏe hệ thống</p>
           </div>
         </div>
       </div>
