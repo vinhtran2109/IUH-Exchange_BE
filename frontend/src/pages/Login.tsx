@@ -56,8 +56,16 @@ const Login: React.FC = () => {
         setError(response.message || 'Đăng nhập thất bại. Vui lòng thử lại!');
       }
     } catch (err: any) {
-      const apiError = err?.response?.data?.message || err?.response?.data?.error || err?.response?.data || (typeof err === 'string' ? err : '');
-      setError(apiError || 'Lỗi: Không thể kết nối tới máy chủ. Vui lòng thử lại sau!');
+      const status = err?.response?.status;
+      const apiMessage = err?.response?.data?.message || err?.response?.data?.error || err?.response?.data;
+
+      if (status === 401 || status === 404) {
+        setError('Email hoặc mật khẩu không đúng');
+      } else if (typeof apiMessage === 'string' && apiMessage.trim()) {
+        setError(apiMessage);
+      } else {
+        setError('Lỗi: Không thể kết nối tới máy chủ. Vui lòng thử lại sau!');
+      }
     } finally {
       setLoading(false);
     }
