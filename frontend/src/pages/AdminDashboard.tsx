@@ -38,7 +38,6 @@ import {
   type UserAdminData,
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
-import { SimpleBarChart, SimpleDonutChart, SimpleLineChart } from '../components/charts/SimpleCharts';
 
 const ALL_PERMISSIONS = ['CAN_POST', 'CAN_CHAT', 'CAN_REPORT', 'CAN_BAN', 'CAN_APPROVE_POST'];
 const PERMISSION_LABELS: Record<string, string> = {
@@ -881,64 +880,228 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
-  const renderAnalytics = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SimpleDonutChart
-          title="Phân bố sản phẩm"
-          data={[
-            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Chờ duyệt', value: stats.product?.pending || 0, color: '#f59e0b' },
-            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#6366f1' },
-            { label: 'Khac', value: Math.max(0, (stats.product?.total || 0) - (stats.product?.available || 0) - (stats.product?.pending || 0) - (stats.product?.sold || 0)), color: '#ef4444' },
-          ]}
-        />
-        <SimpleBarChart
-          title="Khối lượng kiểm duyệt"
-          data={[
-            { label: 'Tố cáo', value: reports.length, color: '#f43f5e' },
-            { label: 'DLQ', value: dlqEvents.length, color: '#0ea5e9' },
-            { label: 'Thất lạc', value: lostFoundCounts.LOST || 0, color: '#fb7185' },
-            { label: 'Nhặt được', value: lostFoundCounts.FOUND || 0, color: '#38bdf8' },
-            { label: 'Chờ duyệt', value: stats.product?.pending || 0, color: '#8b5cf6' },
-          ]}
-        />
-      </div>
+  const renderAnalytics = () => {
+    const productTotal = stats.product?.total || 0;
+    const availableProducts = stats.product?.available || 0;
+    const pendingProducts = stats.product?.pending || 0;
+    const soldProducts = stats.product?.sold || 0;
+    const otherProducts = Math.max(0, productTotal - availableProducts - pendingProducts - soldProducts);
+    const totalReports = reports.length;
+    const openReports = reportCounts.PENDING || 0;
+    const reviewedReports = reportCounts.REVIEWED || 0;
+    const resolvedReports = reportCounts.RESOLVED || 0;
+    const ignoredReports = reportCounts.DISMISSED || 0;
+    const lostCount = lostFoundCounts.LOST || 0;
+    const foundCount = lostFoundCounts.FOUND || 0;
+    const dlqCount = dlqEvents.length;
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <SimpleBarChart
-          title="Tổng quan hệ thống"
-          data={[
-            { label: 'Sinh viên', value: stats.user?.total || 0, color: '#6366f1' },
-            { label: 'Sản phẩm', value: stats.product?.total || 0, color: '#f59e0b' },
-            { label: 'Đang bán', value: stats.product?.available || 0, color: '#10b981' },
-            { label: 'Đã bán', value: stats.product?.sold || 0, color: '#ef4444' },
-          ]}
-        />
-        <SimpleDonutChart
-          title="Trạng thái tố cáo"
-          data={[
-            { label: 'Chờ xử lý', value: reportCounts.PENDING || 0, color: '#f59e0b' },
-            { label: 'Đã xem', value: reportCounts.REVIEWED || 0, color: '#0ea5e9' },
-            { label: 'Đã xử lý', value: reportCounts.RESOLVED || 0, color: '#10b981' },
-            { label: 'Bỏ qua', value: reportCounts.DISMISSED || 0, color: '#94a3b8' },
-          ]}
-        />
-      </div>
+    const productDistribution = [
+      { label: 'Đang bán', value: availableProducts, color: '#10b981', bg: 'bg-emerald-500' },
+      { label: 'Chờ duyệt', value: pendingProducts, color: '#f59e0b', bg: 'bg-amber-500' },
+      { label: 'Đã bán', value: soldProducts, color: '#6366f1', bg: 'bg-indigo-500' },
+      { label: 'Khác', value: otherProducts, color: '#ef4444', bg: 'bg-rose-500' },
+    ];
 
-      <SimpleLineChart
-        title="Đường theo dõi nhanh"
-        data={[
-          { label: 'Sinh viên', value: stats.user?.total || 0 },
-          { label: 'Sản phẩm', value: stats.product?.total || 0 },
-          { label: 'Tố cáo', value: reports.length || 0 },
-          { label: 'DLQ', value: dlqEvents.length || 0 },
-          { label: 'Đồ thất lạc', value: lostFoundItems.length || 0 },
-        ]}
-        color="#6366f1"
-      />
-    </div>
-  );
+    const moderationLoad = [
+      { label: 'Tố cáo', value: totalReports, color: 'bg-rose-500' },
+      { label: 'DLQ', value: dlqCount, color: 'bg-sky-500' },
+      { label: 'Thất lạc', value: lostCount, color: 'bg-pink-500' },
+      { label: 'Nhặt được', value: foundCount, color: 'bg-cyan-500' },
+      { label: 'Chờ duyệt', value: pendingProducts, color: 'bg-violet-500' },
+    ];
+
+    const systemOverview = [
+      { label: 'Sinh viên', value: stats.user?.total || 0, helper: 'Tài khoản trong hệ thống', icon: Users, tone: 'text-blue-700 bg-blue-50 border-blue-100' },
+      { label: 'Sản phẩm', value: productTotal, helper: 'Tổng bài đăng sản phẩm', icon: PackageCheck, tone: 'text-amber-700 bg-amber-50 border-amber-100' },
+      { label: 'Tố cáo', value: totalReports, helper: 'Báo cáo trong chu kỳ hiện tại', icon: AlertTriangle, tone: 'text-rose-700 bg-rose-50 border-rose-100' },
+      { label: 'DLQ', value: dlqCount, helper: 'Sự kiện cần theo dõi', icon: Server, tone: 'text-slate-700 bg-slate-50 border-slate-200' },
+    ];
+
+    const reportStatus = [
+      { label: 'Chờ xử lý', value: openReports, color: 'bg-amber-500' },
+      { label: 'Đã xem', value: reviewedReports, color: 'bg-sky-500' },
+      { label: 'Đã xử lý', value: resolvedReports, color: 'bg-emerald-500' },
+      { label: 'Bỏ qua', value: ignoredReports, color: 'bg-slate-400' },
+    ];
+
+    const maxModeration = Math.max(...moderationLoad.map((item) => item.value), 1);
+    const maxSystem = Math.max(...systemOverview.map((item) => item.value), 1);
+    const completionRate = productTotal > 0 ? Math.round((soldProducts / productTotal) * 100) : 0;
+    const reviewBacklogRate = productTotal > 0 ? Math.round((pendingProducts / productTotal) * 100) : 0;
+    const reportResolvedRate = totalReports > 0 ? Math.round(((reviewedReports + resolvedReports + ignoredReports) / totalReports) * 100) : 100;
+
+    const DonutPanel = ({ title, subtitle, data, total }: { title: string; subtitle: string; data: Array<{ label: string; value: number; color: string; bg: string }>; total: number }) => {
+      let accumulated = 0;
+      const safeTotal = total || 1;
+      const gradient = data.map((item) => {
+        const start = (accumulated / safeTotal) * 360;
+        accumulated += item.value;
+        const end = (accumulated / safeTotal) * 360;
+        return item.color + ' ' + start + 'deg ' + end + 'deg';
+      }).join(', ');
+
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-base font-black text-slate-950">{title}</h3>
+              <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{total.toLocaleString('vi-VN')}</span>
+          </div>
+          <div className="grid gap-6 md:grid-cols-[180px_1fr] md:items-center">
+            <div className="relative mx-auto h-44 w-44 rounded-full" style={{ background: total > 0 ? 'conic-gradient(' + gradient + ')' : '#e2e8f0' }}>
+              <div className="absolute inset-8 flex flex-col items-center justify-center rounded-full bg-white text-center shadow-inner">
+                <span className="text-3xl font-black text-slate-950">{total.toLocaleString('vi-VN')}</span>
+                <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Tổng</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {data.map((item) => {
+                const percent = total > 0 ? Math.round((item.value / total) * 100) : 0;
+                return (
+                  <div key={item.label}>
+                    <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={'h-2.5 w-2.5 shrink-0 rounded-full ' + item.bg} />
+                        <span className="truncate font-bold text-slate-700">{item.label}</span>
+                      </div>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')} <span className="text-xs text-slate-400">{percent}%</span></span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className={'h-2 rounded-full ' + item.bg} style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-950">Phân tích hệ thống</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">Tập trung vào tải kiểm duyệt, trạng thái sản phẩm và những điểm cần quản trị viên chú ý.</p>
+            </div>
+            <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3.5 py-2 text-sm font-black text-emerald-700">
+              <CheckCircle size={16} />
+              Dữ liệu đang hoạt động
+            </div>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {[
+              { label: 'Tỉ lệ bán xong', value: completionRate + '%', helper: soldProducts.toLocaleString('vi-VN') + ' / ' + productTotal.toLocaleString('vi-VN') + ' sản phẩm', icon: TrendingUp, tone: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+              { label: 'Tồn đọng duyệt', value: reviewBacklogRate + '%', helper: pendingProducts.toLocaleString('vi-VN') + ' bài chờ duyệt', icon: Clock3, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+              { label: 'Tố cáo đã xem', value: reportResolvedRate + '%', helper: totalReports.toLocaleString('vi-VN') + ' tố cáo trong mẫu', icon: ShieldCheck, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+            ].map((item) => (
+              <div key={item.label} className={'rounded-2xl border p-5 ' + item.tone}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-wide opacity-80">{item.label}</div>
+                    <div className="mt-2 text-4xl font-black leading-none">{item.value}</div>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80">
+                    <item.icon size={24} />
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-semibold opacity-80">{item.helper}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+          <DonutPanel title="Phân bố sản phẩm" subtitle="Nhìn nhanh tỉ trọng bài đang bán, chờ duyệt và đã bán." data={productDistribution} total={productTotal} />
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Khối lượng kiểm duyệt</h3>
+              <p className="mt-1 text-sm text-slate-500">Các hàng đợi mà quản trị viên cần theo dõi thường xuyên.</p>
+            </div>
+            <div className="space-y-4">
+              {moderationLoad.map((item) => {
+                const width = Math.max(4, Math.round((item.value / maxModeration) * 100));
+                return (
+                  <div key={item.label}>
+                    <div className="mb-2 flex items-center justify-between text-sm">
+                      <span className="font-bold text-slate-700">{item.label}</span>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')}</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-slate-100">
+                      <div className={'h-3 rounded-full ' + item.color} style={{ width: width + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Tổng quan hệ thống</h3>
+              <p className="mt-1 text-sm text-slate-500">Các chỉ số lõi được đặt cùng một thang để dễ so sánh.</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {systemOverview.map((item) => {
+                const percent = Math.max(4, Math.round((item.value / maxSystem) * 100));
+                return (
+                  <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-black text-slate-950">{item.label}</div>
+                        <div className="mt-1 text-xs font-medium text-slate-500">{item.helper}</div>
+                      </div>
+                      <div className={'flex h-10 w-10 items-center justify-center rounded-xl border ' + item.tone}>
+                        <item.icon size={20} />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-3xl font-black text-slate-950">{item.value.toLocaleString('vi-VN')}</div>
+                    <div className="mt-3 h-2 rounded-full bg-white">
+                      <div className="h-2 rounded-full bg-blue-600" style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h3 className="text-base font-black text-slate-950">Trạng thái tố cáo</h3>
+              <p className="mt-1 text-sm text-slate-500">Theo dõi mức độ xử lý của đội ngũ quản trị.</p>
+            </div>
+            <div className="space-y-4">
+              {reportStatus.map((item) => {
+                const percent = totalReports > 0 ? Math.round((item.value / totalReports) * 100) : 0;
+                return (
+                  <div key={item.label} className="rounded-xl border border-slate-100 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                      <div className="flex items-center gap-2 font-bold text-slate-700">
+                        <span className={'h-2.5 w-2.5 rounded-full ' + item.color} />
+                        {item.label}
+                      </div>
+                      <span className="font-black text-slate-950">{item.value.toLocaleString('vi-VN')} <span className="text-xs text-slate-400">{percent}%</span></span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-100">
+                      <div className={'h-2 rounded-full ' + item.color} style={{ width: percent + '%' }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderUsers = () => (
     <div>
