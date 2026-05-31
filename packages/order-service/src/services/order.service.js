@@ -132,6 +132,21 @@ async function enrichOrderDetail(order) {
   };
 }
 
+async function enrichAdminOrderSummary(order) {
+  const [product, buyer, seller] = await Promise.all([
+    order.productTitle ? null : fetchProductSnapshot(order.productId, order.sellerId || order.buyerId),
+    fetchUserSnapshot(order.buyerId),
+    fetchUserSnapshot(order.sellerId),
+  ]);
+
+  return {
+    ...order,
+    productTitle: order.productTitle || product?.title || '',
+    buyerName: buyer?.name || '',
+    sellerName: seller?.name || '',
+  };
+}
+
 async function getAcceptedOfferCheckout(offerId, buyerId) {
   const response = await fetch(`${PRODUCT_SERVICE_URL}/api/v1/products/offers/${offerId}/checkout`, {
     headers: buildGatewayHeaders(buyerId),
@@ -1126,8 +1141,10 @@ export class OrderService {
       Order.countDocuments(filter),
     ]);
 
+    const content = await Promise.all(orders.map((order) => enrichAdminOrderSummary(order)));
+
     return {
-      content: orders,
+      content,
       page,
       size,
       totalElements,

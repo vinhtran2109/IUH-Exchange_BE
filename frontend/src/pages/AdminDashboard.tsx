@@ -54,6 +54,7 @@ type ProductFilter = 'ALL' | 'PENDING_APPROVAL' | 'AVAILABLE' | 'SOLD' | 'REJECT
 type ReportFilter = 'ALL' | 'PENDING' | 'REVIEWED' | 'RESOLVED' | 'DISMISSED';
 type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
 type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
+type OrderFilter = 'ALL' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
 
 const ADMIN_TABS = [
   { id: 'overview', label: 'Tổng quan', group: 'Bảng chính', icon: TrendingUp },
@@ -209,6 +210,12 @@ const shortId = (value?: string) => {
   return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
 };
 
+const readableOrderCode = (value?: string) => {
+  if (!value) return 'ĐH-00000';
+  const tail = value.replace(/[^a-fA-F0-9]/g, '').slice(-5).toUpperCase();
+  return `ĐH-${tail.padStart(5, '0')}`;
+};
+
 const paymentMethodLabel = (method?: string) => {
   switch (method) {
     case 'BANK_TRANSFER':
@@ -238,6 +245,8 @@ const AdminDashboard: React.FC = () => {
   const [reportTargetType, setReportTargetType] = useState<'ALL' | 'USER' | 'PRODUCT' | 'LOST_FOUND'>('ALL');
   const [lostFoundTypeFilter, setLostFoundTypeFilter] = useState<LostFoundTypeFilter>('ALL');
   const [dlqFilter, setDlqFilter] = useState<DlqFilter>('ALL');
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>('ALL');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [emailTo, setEmailTo] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
@@ -1489,144 +1498,199 @@ const AdminDashboard: React.FC = () => {
       }
     };
 
+    const orderCounts = {
+      all: adminOrders.length,
+      waiting: adminOrders.filter((order) => order.status === 'AWAITING_SELLER').length,
+      completed: completedCount,
+      cancelled: adminOrders.filter((order) => order.status === 'CANCELLED').length,
+      disputed: needsActionCount,
+    };
+
+    const orderFilters: Array<{ value: OrderFilter; label: string; count: number }> = [
+      { value: 'ALL', label: 'Tất cả', count: orderCounts.all },
+      { value: 'AWAITING_SELLER', label: 'Đang chờ', count: orderCounts.waiting },
+      { value: 'COMPLETED', label: 'Hoàn tất', count: orderCounts.completed },
+      { value: 'CANCELLED', label: 'Đã hủy', count: orderCounts.cancelled },
+      { value: 'DISPUTED', label: 'Có tranh chấp', count: orderCounts.disputed },
+    ];
+
+    const orderStatusBadgeClass = (order: AdminOrderData) => {
+      if (order.paymentStatus === 'UNPAID') return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
+      if (order.status === 'COMPLETED') return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100';
+      if (order.status === 'CANCELLED') return 'bg-rose-50 text-rose-700 ring-1 ring-rose-100';
+      return 'bg-blue-50 text-blue-700 ring-1 ring-blue-100';
+    };
+
+    const disputeMeta = (order: AdminOrderData) => {
+      if (order.paymentIssueStatus === 'OPEN') {
+        return { label: 'Cần can thiệp', className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-100', description: 'Khiếu nại thanh toán đang mở.' };
+      }
+      if (order.disputeStatus === 'OPEN') {
+        return { label: 'Đang xem xét', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-100', description: 'Tranh chấp đang cần quản trị viên kết luận.' };
+      }
+      if (order.disputeStatus === 'RESOLVED' || order.paymentIssueStatus === 'RESOLVED') {
+        return { label: 'Đã giải quyết', className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', description: 'Vụ việc đã có kết quả xử lý.' };
+      }
+      return { label: 'Không cần xử lý', className: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200', description: 'Không có tranh chấp hoặc khiếu nại đang mở.' };
+    };
+
+    const visibleOrders = adminOrders.filter((order) => {
+      const productTitle = order.productTitle || order.product?.title || '';
+      const buyerName = order.buyerName || order.buyer?.name || '';
+      const sellerName = order.sellerName || order.seller?.name || '';
+      const matchesFilter =
+        orderFilter === 'ALL' ||
+        (orderFilter === 'DISPUTED' && (order.disputeStatus === 'OPEN' || order.paymentIssueStatus === 'OPEN')) ||
+        order.status === orderFilter;
+
+      const normalized = orderSearchQuery.trim().toLowerCase();
+      if (!matchesFilter) return false;
+      if (!normalized) return true;
+      return [readableOrderCode(order._id), order._id, order.productId, productTitle, buyerName, sellerName, order.buyerId, order.sellerId]
+        .some((value) => String(value || '').toLowerCase().includes(normalized));
+    });
+
     return (
       <div className="space-y-6">
         <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Đơn hàng và tranh chấp</h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-500">
-                Ưu tiên các đơn có khiếu nại thanh toán hoặc tranh chấp. Những đơn bình thường sẽ hiện rõ là không cần xử lý.
+              <h2 className="text-xl font-black text-slate-950">Đơn hàng và tranh chấp</h2>
+              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-500">
+                Theo dõi đơn có khiếu nại thanh toán, tranh chấp và trạng thái bàn giao. Ưu tiên hiển thị sản phẩm, giá và việc cần xử lý.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={fetchData}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-            >
+            <button type="button" onClick={fetchData} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700">
               <RefreshCw size={15} />
               Làm mới
             </button>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
-              <div className="text-xs font-bold uppercase text-rose-500">Cần xử lý</div>
-              <div className="mt-1 text-2xl font-black text-rose-700">{needsActionCount}</div>
-              <div className="text-xs text-rose-500">Tranh chấp hoặc thanh toán đang mở</div>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {[
+              { label: 'Cần xử lý', value: needsActionCount, helper: 'Tranh chấp hoặc thanh toán đang mở', icon: AlertTriangle, className: 'border-rose-100 bg-rose-50 text-rose-700' },
+              { label: 'Đang chờ', value: waitingSellerCount, helper: 'Chờ người bán xác nhận', icon: Clock3, className: 'border-blue-100 bg-blue-50 text-blue-700' },
+              { label: 'Hoàn tất', value: completedCount, helper: 'Đơn đã kết thúc thành công', icon: CheckCircle, className: 'border-emerald-100 bg-emerald-50 text-emerald-700' },
+            ].map((item) => (
+              <div key={item.label} className={'rounded-2xl border p-5 ' + item.className}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-black uppercase tracking-wide opacity-80">{item.label}</div>
+                    <div className="mt-2 text-4xl font-black leading-none">{item.value}</div>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/80">
+                    <item.icon size={24} />
+                  </div>
+                </div>
+                <div className="mt-3 text-sm font-semibold opacity-80">{item.helper}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input value={orderSearchQuery} onChange={(event) => setOrderSearchQuery(event.target.value)} placeholder="Tìm theo mã đơn, sản phẩm, người mua hoặc người bán..." className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-4 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50" />
             </div>
-            <div className="rounded-xl border border-sky-100 bg-sky-50 p-4">
-              <div className="text-xs font-bold uppercase text-sky-500">Đang chờ</div>
-              <div className="mt-1 text-2xl font-black text-sky-700">{waitingSellerCount}</div>
-              <div className="text-xs text-sky-500">Chờ người bán xác nhận</div>
-            </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-              <div className="text-xs font-bold uppercase text-emerald-500">Hoàn tất</div>
-              <div className="mt-1 text-2xl font-black text-emerald-700">{completedCount}</div>
-              <div className="text-xs text-emerald-500">Đơn đã kết thúc thành công</div>
+            <div className="flex flex-wrap gap-2">
+              {orderFilters.map((filter) => {
+                const active = orderFilter === filter.value;
+                return (
+                  <button key={filter.value} type="button" onClick={() => setOrderFilter(filter.value)} className={'inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-bold transition-colors ' + (active ? 'bg-slate-950 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700')}>
+                    {filter.label}
+                    <span className={'rounded-full px-2 py-0.5 text-[11px] font-black ' + (active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500')}>{filter.count}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
 
         <div className="space-y-3">
-          {adminOrders.map((order) => {
+          {visibleOrders.map((order) => {
             const hasPaymentIssue = order.paymentIssueStatus === 'OPEN';
             const hasDispute = order.disputeStatus === 'OPEN';
             const needsAction = hasPaymentIssue || hasDispute;
-            const actionTitle = hasPaymentIssue ? 'Cần xử lý thanh toán' : hasDispute ? 'Cần xử lý tranh chấp' : 'Không cần xử lý';
-            const actionDescription = hasPaymentIssue
-              ? 'Người dùng báo có vấn đề thanh toán. Kiểm tra bằng chứng rồi chọn một hướng xử lý.'
-              : hasDispute
-                ? 'Đơn có tranh chấp đang mở. Chọn kết luận phù hợp để đóng vụ việc.'
-                : order.status === 'AWAITING_SELLER'
-                  ? 'Đơn đang chờ người bán xác nhận, admin chỉ cần theo dõi.'
-                  : 'Không có khiếu nại thanh toán hoặc tranh chấp đang mở.';
+            const productTitle = order.productTitle || order.product?.title || 'Sản phẩm ' + shortId(order.productId);
+            const buyerLabel = order.buyerName || order.buyer?.name || 'Người mua ' + shortId(order.buyerId);
+            const sellerLabel = order.sellerName || order.seller?.name || 'Người bán ' + shortId(order.sellerId);
+            const dispute = disputeMeta(order);
 
             return (
-              <div key={order._id} className={`rounded-2xl border bg-white p-4 shadow-sm ${needsAction ? 'border-amber-200' : 'border-slate-200'}`}>
-                <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr_1.25fr]">
-                  <div>
+              <div key={order._id} className={'rounded-2xl border bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md ' + (needsAction ? 'border-amber-200' : 'border-slate-200')}>
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1 font-mono text-xs font-black text-slate-700">{readableOrderCode(order._id)}</span>
+                      <span className={'rounded-full px-3 py-1 text-xs font-black ' + orderStatusBadgeClass(order)}>{order.paymentStatus === 'UNPAID' ? 'Chưa thanh toán' : statusLabel(order.status)}</span>
+                      <span className={'rounded-full px-3 py-1 text-xs font-black ' + dispute.className}>{dispute.label}</span>
+                    </div>
+                    <h3 className="truncate text-lg font-black tracking-tight text-slate-950" title={productTitle}>{productTitle}</h3>
+                    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+                      <span className="text-2xl font-black text-slate-950">{currency(order.price)}</span>
+                      <span className="h-1 w-1 rounded-full bg-slate-300" />
+                      <span>Tạo lúc {formatDate(order.createdAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[380px]">
+                    <button type="button" onClick={() => openUserDetail(order.buyerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
+                      <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người mua</div>
+                      <div className="mt-1 truncate text-sm font-black text-slate-800">{buyerLabel}</div>
+                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.buyerId)}</div>
+                    </button>
+                    <button type="button" onClick={() => openUserDetail(order.sellerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
+                      <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người bán</div>
+                      <div className="mt-1 truncate text-sm font-black text-slate-800">{sellerLabel}</div>
+                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.sellerId)}</div>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[1fr_1fr_auto] lg:items-center">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={'rounded-full px-3 py-1 text-xs font-black ' + badgeClass(order.paymentStatus)}>{statusLabel(order.paymentStatus)}</span>
+                    <span className="text-sm font-medium text-slate-500">{paymentMethodLabel(order.paymentMethod)}</span>
+                    {order.cancellationCategory && <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700">Lý do hủy: {statusLabel(order.cancellationCategory)}</span>}
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 px-3.5 py-3">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-lg bg-slate-100 px-2 py-1 font-mono text-xs font-bold text-slate-600">#{shortId(order._id)}</span>
-                      {needsAction && <span className="rounded-lg bg-amber-100 px-2 py-1 text-xs font-black text-amber-700">Cần admin</span>}
+                      <span className={'rounded-full px-2.5 py-1 text-[11px] font-black ' + dispute.className}>{dispute.label}</span>
+                      <span className="text-sm font-medium text-slate-600">{dispute.description}</span>
                     </div>
-                    <div className="mt-3 text-xs font-bold uppercase text-slate-400">Sản phẩm</div>
-                    <div className="mt-1 break-all font-mono text-xs text-slate-600">{shortId(order.productId)}</div>
-                    <div className="mt-3 text-xl font-black text-slate-900">{currency(order.price)}</div>
-                    <div className="text-xs text-slate-400">Tạo lúc {formatDate(order.createdAt)}</div>
+                    {(order.paymentIssueReason || order.disputeReason) && <p className="mt-2 line-clamp-2 text-sm text-slate-700">{order.paymentIssueReason || order.disputeReason}</p>}
                   </div>
 
-                  <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
-                    <div className="text-xs font-bold uppercase text-slate-400">Người mua</div>
-                    <button type="button" onClick={() => openUserDetail(order.buyerId)} className="mt-1 break-all text-left font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800">
-                      {shortId(order.buyerId)}
-                    </button>
-                    <div className="mt-3 text-xs font-bold uppercase text-slate-400">Người bán</div>
-                    <button type="button" onClick={() => openUserDetail(order.sellerId)} className="mt-1 break-all text-left font-mono text-xs font-bold text-indigo-600 hover:text-indigo-800">
-                      {shortId(order.sellerId)}
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div>
-                      <div className="text-xs font-bold uppercase text-slate-400">Trạng thái đơn</div>
-                      <span className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black ${badgeClass(order.status)}`}>{statusLabel(order.status)}</span>
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold uppercase text-slate-400">Thanh toán</div>
-                      <span className={`mt-1 inline-flex rounded-full px-3 py-1 text-xs font-black ${badgeClass(order.paymentStatus)}`}>{statusLabel(order.paymentStatus)}</span>
-                      <div className="mt-1 text-xs text-slate-500">{paymentMethodLabel(order.paymentMethod)}</div>
-                    </div>
-                    {order.cancellationCategory && (
-                      <div className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                        Lý do hủy: {statusLabel(order.cancellationCategory)}
-                      </div>
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    {hasPaymentIssue ? (
+                      <>
+                        <button onClick={() => resolvePaymentIssue(order, 'CONFIRM_PAID', 'Admin xác nhận người bán đã nhận tiền.')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Xác nhận tiền</button>
+                        <button onClick={() => resolvePaymentIssue(order, 'REFUND', 'Admin duyệt hoàn tiền cho người mua.')} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100">Hoàn tiền</button>
+                        <button onClick={() => resolvePaymentIssue(order, 'REJECT', 'Không đủ căn cứ để xử lý khiếu nại thanh toán.')} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Từ chối</button>
+                      </>
+                    ) : hasDispute ? (
+                      <>
+                        <button onClick={() => resolveDispute(order, 'RESOLVED', 'Người bán có lỗi, admin xử lý có lợi cho người mua.', 'SELLER_FAULT', order.paymentStatus === 'PAID' ? 'REFUND' : 'NONE')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Bảo vệ người mua</button>
+                        <button onClick={() => resolveDispute(order, 'REJECTED', 'Không đủ căn cứ, tranh chấp bị từ chối.', 'BUYER_FAULT')} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Bảo vệ người bán</button>
+                        <button onClick={() => resolveDispute(order, 'RESOLVED', 'Admin ghi nhận hai bên tự thỏa thuận, không áp dụng chế tài.', 'NO_FAULT')} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100">Đóng không phạt</button>
+                      </>
+                    ) : (
+                      <span className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">Không có thao tác bắt buộc</span>
                     )}
-                  </div>
-
-                  <div className="rounded-xl border border-slate-100 p-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className={`text-sm font-black ${needsAction ? 'text-amber-700' : 'text-slate-700'}`}>{actionTitle}</div>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">{actionDescription}</p>
-                      </div>
-                      <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${needsAction ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
-                        {needsAction ? 'OPEN' : 'OK'}
-                      </span>
-                    </div>
-
-                    {(order.paymentIssueReason || order.disputeReason) && (
-                      <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                        <div className="text-xs font-bold uppercase text-slate-400">Nội dung người dùng gửi</div>
-                        <p className="mt-1 text-sm text-slate-700">{order.paymentIssueReason || order.disputeReason}</p>
-                      </div>
-                    )}
-
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {hasPaymentIssue ? (
-                        <>
-                          <button onClick={() => resolvePaymentIssue(order, 'CONFIRM_PAID', 'Admin xác nhận người bán đã nhận tiền.')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Xác nhận đã nhận tiền</button>
-                          <button onClick={() => resolvePaymentIssue(order, 'REFUND', 'Admin duyệt hoàn tiền cho người mua.')} className="rounded-lg bg-blue-50 px-3 py-2 text-xs font-black text-blue-700 hover:bg-blue-100">Hoàn tiền</button>
-                          <button onClick={() => resolvePaymentIssue(order, 'REJECT', 'Không đủ căn cứ để xử lý khiếu nại thanh toán.')} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Từ chối</button>
-                        </>
-                      ) : hasDispute ? (
-                        <>
-                          <button onClick={() => resolveDispute(order, 'RESOLVED', 'Người bán có lỗi, admin xử lý có lợi cho người mua.', 'SELLER_FAULT', order.paymentStatus === 'PAID' ? 'REFUND' : 'NONE')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-black text-white hover:bg-emerald-700">Bảo vệ người mua</button>
-                          <button onClick={() => resolveDispute(order, 'REJECTED', 'Không đủ căn cứ, tranh chấp bị từ chối.', 'BUYER_FAULT')} className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 hover:bg-slate-200">Bảo vệ người bán</button>
-                          <button onClick={() => resolveDispute(order, 'RESOLVED', 'Admin ghi nhận hai bên tự thỏa thuận, không áp dụng chế tài.', 'NO_FAULT')} className="rounded-lg bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 hover:bg-sky-100">Đóng không phạt</button>
-                        </>
-                      ) : (
-                        <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">Không có thao tác bắt buộc</span>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
             );
           })}
 
-          {adminOrders.length === 0 && (
-            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center text-slate-400">Chưa có đơn hàng phù hợp.</div>
+          {visibleOrders.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-10 text-center">
+              <div className="text-sm font-black text-slate-700">Không tìm thấy đơn hàng phù hợp</div>
+              <p className="mt-1 text-sm text-slate-400">Thử đổi từ khóa tìm kiếm hoặc chọn bộ lọc khác.</p>
+            </div>
           )}
         </div>
       </div>
