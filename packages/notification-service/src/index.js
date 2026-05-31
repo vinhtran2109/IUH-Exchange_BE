@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
 import { initNotificationSocket } from './services/socket.service.js';
 import { startKafkaConsumer } from './services/kafka-consumer.service.js';
 import notificationRoutes from './routes/notification.routes.js';
@@ -39,7 +39,12 @@ app.use(errorHandler);
 initNotificationSocket();
 
 // ── Connect MongoDB ──
-await connectMongo(MONGODB_URI);
+try {
+  await connectMongo(MONGODB_URI);
+} catch (err) {
+  logger.error('[notification-service] MongoDB connection failed:', err.message);
+  process.exit(1);
+}
 
 // ── Start Kafka consumer ──
 try {
@@ -49,6 +54,16 @@ try {
 }
 
 // ── Start server ──
-httpServer.listen(PORT, () => {
+safeListen(httpServer, PORT, () => {
   logger.info(`🚀 Notification Service running on port ${PORT}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[notification-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[notification-service] Uncaught exception:', err);
+  process.exit(1);
 });

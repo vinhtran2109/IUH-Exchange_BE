@@ -8,6 +8,7 @@ import {
   auditLog,
   metricsMiddleware,
   metricsHandler,
+  safeListen,
 } from '@iuh-exchange/common';
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';
@@ -58,13 +59,30 @@ app.use('/api/v1/users', userRoutes);
 app.use(errorHandler);
 
 // ── Start ──
-if (AUDIT_MONGODB_URI) {
-  await connectMongo(AUDIT_MONGODB_URI);
+try {
+  if (AUDIT_MONGODB_URI) {
+    await connectMongo(AUDIT_MONGODB_URI);
+  }
+  await pingSupabase();
+  await initKafkaProducer();
+  await startKarmaConsumer();
+} catch (err) {
+  logger.error('[user-service] Startup failed:', err.message);
+  process.exit(1);
 }
-await pingSupabase();
-await initKafkaProducer();
-await startKarmaConsumer();
 
-app.listen(PORT, () => {
+import { createServer } from 'http';
+const server = createServer(app);
+safeListen(server, PORT, () => {
   logger.info(`🚀 User Service running on port ${PORT}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[user-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[user-service] Uncaught exception:', err);
+  process.exit(1);
 });

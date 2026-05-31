@@ -1,0 +1,49 @@
+# Development override to publish ports for local services
+services:
+  redis:
+    ports:
+      - "6379:6379"
+  zookeeper:
+    ports:
+      - "2181:2181"
+  kafka:
+    ports:
+      - "9092:9092"
+  elasticsearch:
+    ports:
+      - "9200:9200"
+  kibana:
+    ports:
+      - "5601:5601"
+  prometheus:
+    ports:
+      - "9090:9090"
+  grafana:
+    ports:
+      - "3100:3000"
+
+# Expose API/service ports so you can access them on localhost when running docker dev
+  api-gateway:
+    ports:
+      - "8080:8080"
+  user-service:
+    ports:
+      - "3001:3001"
+  product-service:
+    ports:
+      - "3002:3002"
+  order-service:
+    ports:
+      - "3003:3003"
+  notification-service:
+    ports:
+      - "3004:3004"
+  chat-service:
+    ports:
+      - "3005:3005"
+  lost-found-service:
+    ports:
+      - "3006:3006"
+  ws-gateway:
+    ports:
+      - "3007:3007"

@@ -26,3 +26,4 @@ export { createRedis, getRedis } from './utils/redis.js';
 export { cache } from './utils/cache.js';
 export { metricsMiddleware, metricsHandler, incrementCacheHit, incrementCacheMiss, setWsConnections } from './utils/metrics.js';
 export { createKafka, getKafka, createProducer, createConsumer } from './utils/kafka.js';
+export { safeListen } from './utils/safeListen.js';

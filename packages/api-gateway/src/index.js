@@ -25,6 +25,7 @@ import {
   getRedis,
   metricsMiddleware,
   metricsHandler,
+  safeListen,
 } from '@iuh-exchange/common';
 import { SERVICES, routes } from './config/routes.js';
 import { authFilter, optionalAuthFilter } from './middleware/auth-filter.js';
@@ -369,23 +370,45 @@ app.use(errorHandler);
 
 const CHAT_SERVICE_URL = SERVICES.chat;
 
-// SockJS HTTP-based transports: xhr-streaming, xhr-polling, eventsource,
-// htmlfile, jsonp-polling — these are normal HTTP requests that must be proxied.
-// SockJS also serves /ws/info (capabilities check) and /ws/{server}/{session}/{transport}.
+// Unified SockJS proxy — handles BOTH HTTP-based transports (xhr-streaming,
+// xhr-polling, etc.) AND WebSocket upgrade in a single proxy instance.
+// Using ws: true lets http-proxy-middleware manage the upgrade lifecycle
+// properly instead of a fragile manual server.on('upgrade') handler.
 const sockjsProxy = createProxyMiddleware({
   target: CHAT_SERVICE_URL,
   changeOrigin: true,
-  ws: false, // HTTP transports handled here; WebSocket upgrade handled separately
+  ws: true,
   timeout: 30_000,
   proxyTimeout: 30_000,
-  pathRewrite: (path) => path, // Keep /ws prefix intact — downstream expects it
+  pathRewrite: (path) => path,
   on: {
-    proxyReq(proxyReq) {
+    proxyReq(proxyReq, req) {
       proxyReq.setHeader('X-Forwarded-Proto', 'http');
+
+      // For WebSocket upgrade requests: verify JWT from query string
+      // and inject x-user-* headers so downstream services can trust them.
+      if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
+        const urlObj = new URL(req.url || '/', 'http://localhost');
+        const token = urlObj.searchParams.get('token')
+          || (req.headers.authorization?.startsWith('Bearer ')
+            ? req.headers.authorization.substring(7)
+            : null);
+
+        if (token) {
+          try {
+            const decoded = jwt.verify(token, config.jwt.secret);
+            proxyReq.setHeader('x-user-id', String(decoded.sub || decoded.userId || decoded.id || ''));
+            proxyReq.setHeader('x-user-role', decoded.role || 'GUEST');
+            proxyReq.setHeader('x-user-email', decoded.email || '');
+          } catch {
+            // Token invalid — the downstream service will reject the STOMP CONNECT
+          }
+        }
+      }
     },
     error(err, req, res) {
-      logger.error(`[ws-http] SockJS proxy error: ${err.message}`);
-      if (!res.headersSent) {
+      logger.error(`[ws] SockJS proxy error: ${err.message}`);
+      if (res && !res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: false,
@@ -398,91 +421,11 @@ const sockjsProxy = createProxyMiddleware({
   },
 });
 
-// Mount SockJS HTTP transport proxy at /ws
-app.use('/ws', (req, res, next) => {
-  // Restore full path — Express strips mount prefix (/ws) from req.url,
-  // but downstream service expects the full /ws/... path.
+// Mount unified proxy at /ws — handles both HTTP SockJS transports and WS upgrade
+app.use('/ws', (req, _res, next) => {
   req.url = req.originalUrl;
-
-  // WebSocket upgrade requests are handled by server.on('upgrade') below.
-  // This middleware handles only HTTP-based SockJS transports.
-  if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
-    return next();
-  }
-  sockjsProxy(req, res, next);
-});
-
-// WebSocket upgrade handler for SockJS websocket transport
-server.on('upgrade', (req, socket, head) => {
-  const { url } = req;
-
-  // SockJS websocket transport: /ws/<server_id>/<session_id>/websocket
-  if (url.startsWith('/ws/')) {
-    // Extract JWT from query string (SockJS doesn't support custom headers
-    // on WebSocket upgrade, so the client passes token as query param)
-    // Also check Authorization header for non-SockJS clients.
-    const urlObj = new URL(url, 'http://localhost');
-    const token = urlObj.searchParams.get('token')
-      || (req.headers.authorization?.startsWith('Bearer ')
-        ? req.headers.authorization.substring(7)
-        : null);
-
-    if (!token) {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-      req.headers['x-user-id'] = String(decoded.sub || decoded.userId || decoded.id || '');
-      req.headers['x-user-role'] = decoded.role || 'GUEST';
-      req.headers['x-user-email'] = decoded.email || '';
-    } catch {
-      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
-      socket.destroy();
-      return;
-    }
-
-    const targetUrl = new URL(CHAT_SERVICE_URL);
-    const proxyReq = http.request({
-      hostname: targetUrl.hostname,
-      port: targetUrl.port,
-      path: url,
-      method: req.method,
-      headers: req.headers,
-    });
-
-    proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-      socket.write(
-        `HTTP/1.1 101 Switching Protocols\r\n` +
-        Object.entries(proxyRes.headers)
-          .map(([k, v]) => `${k}: ${v}`)
-          .join('\r\n') +
-        '\r\n\r\n'
-      );
-      if (proxyHead?.length) socket.write(proxyHead);
-      proxySocket.pipe(socket);
-      socket.pipe(proxySocket);
-
-      proxySocket.on('error', () => socket.destroy());
-      socket.on('error', () => proxySocket.destroy());
-    });
-
-    proxyReq.on('error', (err) => {
-      logger.error(`[ws] Proxy error for ${url}: ${err.message}`);
-      socket.write('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-      socket.destroy();
-    });
-
-    proxyReq.end();
-    return;
-  }
-
-  // Unknown WebSocket path
-  socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
-  socket.destroy();
-});
+  next();
+}, sockjsProxy);
 
 // ────────────────────────────────────────────────────────
 // Graceful Shutdown
@@ -529,7 +472,7 @@ process.on('uncaughtException', (err) => {
 // ────────────────────────────────────────────────────────
 // Start
 // ────────────────────────────────────────────────────────
-server.listen(PORT, () => {
+safeListen(server, PORT, () => {
   logger.info(`🚀 API Gateway running on port ${PORT}`);
   logger.info(`   Environment: ${config.nodeEnv}`);
   logger.info(`   Services: ${Object.entries(SERVICES).map(([k, v]) => `${k}→${v}`).join(', ')}`);

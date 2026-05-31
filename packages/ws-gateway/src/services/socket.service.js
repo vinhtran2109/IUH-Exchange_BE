@@ -120,7 +120,7 @@ export function initSocketService(httpServer) {
   const sockServer = sockjs.createServer({
     prefix: '/ws',
     sockjs_url: 'https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js',
-    heartbeat_delay: 25000,
+    heartbeat_delay: 30000,
     disconnect_delay: 5000,
   });
 
@@ -158,11 +158,19 @@ export function initSocketService(httpServer) {
       authenticated: false,
       userId: null,
       userEmail: null,
+      heartbeatInterval: null,
+      lastHeartbeatReceived: Date.now(),
     };
 
     sessions.set(conn.id, sessionData);
 
     conn.on('data', (message) => {
+      // STOMP heartbeat from client: just a newline character
+      if (message.trim() === '') {
+        sessionData.lastHeartbeatReceived = Date.now();
+        return;
+      }
+
       // Bug #7 fix: Limit buffer size to prevent OOM attacks
       totalBytesReceived += Buffer.byteLength(message, 'utf8');
       if (totalBytesReceived > MAX_BUFFER_BYTES) {
@@ -176,6 +184,9 @@ export function initSocketService(httpServer) {
       while (accumulator.hasFrames()) {
         const frame = accumulator.nextFrame();
         if (!frame) break;
+
+        // Track any STOMP activity as heartbeat evidence
+        sessionData.lastHeartbeatReceived = Date.now();
 
         switch (frame.command) {
           case 'CONNECT':
@@ -204,16 +215,22 @@ export function initSocketService(httpServer) {
 
     conn.on('close', () => {
       const data = sessions.get(conn.id);
-      if (data && data.userId) {
-        const conns = userSessions.get(data.userId);
-        if (conns) {
-          conns.delete(conn.id);
-          if (conns.size === 0) {
-            userSessions.delete(data.userId);
-            broadcastPresence(data.userId, false);
-          }
+      if (data) {
+        if (data.heartbeatInterval) {
+          clearInterval(data.heartbeatInterval);
+          data.heartbeatInterval = null;
         }
-        logger.info(`WS disconnected: ${data.userId}`);
+        if (data.userId) {
+          const conns = userSessions.get(data.userId);
+          if (conns) {
+            conns.delete(conn.id);
+            if (conns.size === 0) {
+              userSessions.delete(data.userId);
+              broadcastPresence(data.userId, false);
+            }
+          }
+          logger.info(`WS disconnected: ${data.userId}`);
+        }
       }
       sessions.delete(conn.id);
     });
@@ -222,9 +239,13 @@ export function initSocketService(httpServer) {
   sockServer.installHandlers(httpServer, { prefix: '/ws' });
 
   // Bug #11 fix: Periodic cleanup of stale sessions every 60s
-  setInterval(() => {
+  const staleCleanupInterval = setInterval(() => {
     for (const [connId, data] of sessions.entries()) {
       if (data.conn.readyState !== 1 && data.conn.readyState !== 0) {
+        if (data.heartbeatInterval) {
+          clearInterval(data.heartbeatInterval);
+          data.heartbeatInterval = null;
+        }
         if (data.userId) {
           const conns = userSessions.get(data.userId);
           if (conns) {
@@ -239,6 +260,7 @@ export function initSocketService(httpServer) {
       }
     }
   }, 60_000);
+  staleCleanupInterval.unref();
 
   logger.info('SockJS + STOMP WS Gateway initialized on /ws');
 
@@ -280,6 +302,22 @@ function handleConnect(conn, frame, sessionData) {
       'heart-beat': '25000,25000',
       'user-id': userId,
     });
+
+    // Start STOMP heartbeat: send server heartbeat every 25s,
+    // close connection if client heartbeat is missing for 60s.
+    sessionData.lastHeartbeatReceived = Date.now();
+    sessionData.heartbeatInterval = setInterval(() => {
+      const elapsed = Date.now() - sessionData.lastHeartbeatReceived;
+      if (elapsed > 60000) {
+        logger.warn(`STOMP heartbeat timeout for user ${userId} (${elapsed}ms since last heartbeat)`);
+        conn.close(3000, 'Heartbeat timeout');
+        return;
+      }
+      // Send STOMP heartbeat to client
+      try {
+        conn.write('\n');
+      } catch (_e) { /* connection may have closed */ }
+    }, 25000);
 
     logger.info(`WS connected: ${userId}`);
     if (wasOffline) {

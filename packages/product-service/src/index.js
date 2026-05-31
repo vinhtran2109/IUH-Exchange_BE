@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler } from '@iuh-exchange/common';
+import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
 import productRoutes from './routes/product.routes.js';
 import reviewRoutes from './routes/review.routes.js';
 import wishlistRoutes from './routes/wishlist.routes.js';
@@ -47,10 +47,22 @@ app.use('/api/v1/products', trustRoutes);
 app.use(errorHandler);
 
 // Start HTTP as soon as critical dependencies are ready.
-await connectMongo(MONGODB_URI);
-await initKafkaProducer();
+try {
+  await connectMongo(MONGODB_URI);
+} catch (err) {
+  logger.error('[product-service] MongoDB connection failed:', err.message);
+  process.exit(1);
+}
+try {
+  await initKafkaProducer();
+} catch (err) {
+  logger.error('[product-service] Kafka producer init failed:', err.message);
+  process.exit(1);
+}
 
-app.listen(PORT, () => {
+import { createServer } from 'http';
+const server = createServer(app);
+safeListen(server, PORT, () => {
   logger.info(`Product Service running on port ${PORT}`);
 });
 
@@ -64,3 +76,23 @@ const reservationSweepTimer = setInterval(() => {
   releaseExpiredReservations().catch((err) => logger.error(`Reservation sweep failed: ${err.message}`));
 }, reservationSweepMs);
 reservationSweepTimer.unref?.();
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[product-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[product-service] Uncaught exception:', err);
+  process.exit(1);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[product-service] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[product-service] Uncaught exception:', err);
+  process.exit(1);
+});

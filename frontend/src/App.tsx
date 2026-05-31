@@ -82,6 +82,7 @@ const App: React.FC = () => {
           <Route path="login" element={<Login />} />
           <Route path="lost-found" element={<LostFoundCenter />} />
           <Route path="lost-found/new" element={<ReportLostFound />} />
+          <Route path="lost-found/:id/edit" element={<ReportLostFound />} />
           <Route path="lost-found/:id" element={<LostFoundDetail />} />
           <Route path="register" element={<Register />} />
           <Route path="profile" element={<Profile />} />

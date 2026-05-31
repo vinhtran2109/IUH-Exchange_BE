@@ -1,6 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
-import { config, logger, createRedis } from '@iuh-exchange/common';
+import { config, logger, createRedis, safeListen } from '@iuh-exchange/common';
 import { initSocketService } from './services/socket.service.js';
 
 const app = express();
@@ -52,6 +52,26 @@ app.get('/internal/online-users', requireInternalKey, (_req, res) => {
 });
 
 // ── Start ──
-httpServer.listen(PORT, () => {
+safeListen(httpServer, PORT, () => {
   logger.info(`🚀 WS Gateway running on port ${PORT}`);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[ws-gateway] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[ws-gateway] Uncaught exception:', err);
+  process.exit(1);
+});
+
+// ── Process Error Handlers ──
+process.on('unhandledRejection', (reason) => {
+  logger.error('[ws-gateway] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('[ws-gateway] Uncaught exception:', err);
+  process.exit(1);
 });

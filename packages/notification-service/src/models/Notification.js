@@ -12,6 +12,7 @@ const notificationSchema = new mongoose.Schema(
       index: true,
     },
     targetId: { type: String, default: null },
+    link: { type: String, default: null },
     isRead: { type: Boolean, default: false, index: true },
   },
   { timestamps: true },
