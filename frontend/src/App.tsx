@@ -18,6 +18,7 @@ import Products from './pages/Products';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminLogin from './pages/AdminLogin';
 import AdminWorkspace from './pages/AdminWorkspace';
+import ModerationDashboard from './pages/ModerationDashboard';
 import OrderDetail from './pages/OrderDetail';
 import KarmaHistory from './pages/KarmaHistory';
 import MyReports from './pages/MyReports';
@@ -57,6 +58,16 @@ const App: React.FC = () => {
             <ProtectedRoute requiredRole="ADMIN" redirectTo="/admin/login" unauthorizedTo="/">
               <AdminWorkspace>
                 <AdminDashboard />
+              </AdminWorkspace>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/moderation"
+          element={
+            <ProtectedRoute requiredRole={['ADMIN', 'MODERATOR']} redirectTo="/admin/login" unauthorizedTo="/">
+              <AdminWorkspace>
+                <ModerationDashboard />
               </AdminWorkspace>
             </ProtectedRoute>
           }

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'iuh-exchange-v2';
+const CACHE_NAME = 'iuh-exchange-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

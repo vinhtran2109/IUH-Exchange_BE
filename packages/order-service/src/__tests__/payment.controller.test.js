@@ -173,6 +173,36 @@ describe('payment.controller', () => {
       );
       await expect(paymentController.paymentCallback(req, res)).rejects.toThrow('không hợp lệ');
     });
+
+    it('should reject callback for cancelled order', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        status: 'CANCELLED',
+        paymentStatus: 'UNPAID',
+        paymentTransactionId: 'VNPAY_123_abc',
+      });
+
+      const { req, res } = mockReqRes(
+        { transactionId: 'VNPAY_123_abc', status: 'success' },
+        { id: 'order123' }
+      );
+      await expect(paymentController.paymentCallback(req, res)).rejects.toThrow('đã bị hủy');
+    });
+
+    it('should reject callback for refunded order', async () => {
+      mockOrderModel.findById.mockResolvedValue({
+        ...mockOrder,
+        status: 'COMPLETED',
+        paymentStatus: 'REFUNDED',
+        paymentTransactionId: 'VNPAY_123_abc',
+      });
+
+      const { req, res } = mockReqRes(
+        { transactionId: 'VNPAY_123_abc', status: 'success' },
+        { id: 'order123' }
+      );
+      await expect(paymentController.paymentCallback(req, res)).rejects.toThrow('đã được hoàn tiền');
+    });
   });
 
   describe('bank transfer payment', () => {

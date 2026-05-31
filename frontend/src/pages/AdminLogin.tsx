@@ -24,6 +24,10 @@ const AdminLogin: React.FC = () => {
     return <Navigate to="/admin" replace />;
   }
 
+  if (isAuthenticated && user?.role === 'MODERATOR') {
+    return <Navigate to="/moderation" replace />;
+  }
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setLoading(true);
@@ -50,7 +54,7 @@ const AdminLogin: React.FC = () => {
       const loggedInUser = data.user || data;
       const role = data.role || loggedInUser?.role;
 
-      if (role !== 'ADMIN') {
+      if (!['ADMIN', 'MODERATOR'].includes(role)) {
         try {
           await authService.logout();
         } catch {
@@ -69,10 +73,11 @@ const AdminLogin: React.FC = () => {
           studentId: data.studentId || loggedInUser.studentId || '',
           karmaPoint: data.karmaPoint || loggedInUser.karmaPoint || 0,
           avatarUrl: loggedInUser.avatarUrl,
+          permissions: data.permissions || loggedInUser.permissions || [],
         },
         data.accessToken
       );
-      navigate('/admin', { replace: true });
+      navigate(role === 'ADMIN' ? '/admin' : '/moderation', { replace: true });
     } catch (err: any) {
       const apiError = err?.response?.data?.message || err?.response?.data?.error;
       setError(apiError || 'Không thể kết nối đến máy chủ quản trị.');

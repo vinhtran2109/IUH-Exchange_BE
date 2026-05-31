@@ -4,7 +4,7 @@ import { useAuthStore } from '../store/authStore';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  requiredRole?: string;
+  requiredRole?: string | string[];
   redirectTo?: string;
   unauthorizedTo?: string;
 }
@@ -29,7 +29,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return <Navigate to={redirectTo} replace />;
   }
 
-  if (requiredRole && user.role !== requiredRole) {
+  const allowedRoles = Array.isArray(requiredRole) ? requiredRole : requiredRole ? [requiredRole] : [];
+  if (allowedRoles.length > 0 && !allowedRoles.includes(user.role)) {
     return <Navigate to={unauthorizedTo} replace />;
   }
 

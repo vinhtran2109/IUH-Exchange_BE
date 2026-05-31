@@ -200,8 +200,16 @@ export async function paymentCallback(req, res) {
   const order = await Order.findById(orderId);
   if (!order) throw new ResourceNotFoundException('Order', orderId);
 
+  if (order.status === 'CANCELLED') {
+    throw new BadRequestException('Đơn hàng đã bị hủy, không thể xác nhận thanh toán');
+  }
+
   if (order.paymentStatus === 'PAID') {
     throw new BadRequestException('Đơn hàng đã được thanh toán trước đó');
+  }
+
+  if (order.paymentStatus === 'REFUNDED') {
+    throw new BadRequestException('Đơn hàng đã được hoàn tiền, không thể xác nhận thanh toán');
   }
 
   if (!transactionId || transactionId !== order.paymentTransactionId) {

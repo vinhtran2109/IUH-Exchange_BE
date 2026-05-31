@@ -18,24 +18,38 @@ function requireAdmin(req, _res, next) {
   next();
 }
 
-router.use(authenticate, requireAdmin);
+function requireAdminOrModerator(req, _res, next) {
+  if (!req.user || !['ADMIN', 'MODERATOR'].includes(req.user.role)) {
+    return next(new ForbiddenException('Moderator access required'));
+  }
+  next();
+}
 
-router.get('/all', asyncHandler(adminCtrl.listUsers));
-router.get('/users', asyncHandler(adminCtrl.listUsers));
-router.get('/audit-logs', asyncHandler(adminCtrl.listAuditLogs));
+function requireBanPermission(req, _res, next) {
+  if (req.user?.role === 'ADMIN' || req.user?.permissions?.includes('CAN_BAN')) {
+    return next();
+  }
+  return next(new ForbiddenException('CAN_BAN permission required'));
+}
 
-router.post('/:id/ban', asyncHandler(adminCtrl.banUser));
-router.post('/:id/unban', asyncHandler(adminCtrl.unbanUser));
-router.patch('/:id/toggle-ban', asyncHandler(adminCtrl.toggleBanUser));
+router.use(authenticate);
 
-router.put('/:id/role', validate(updateRoleSchema), asyncHandler(adminCtrl.updateUserRole));
-router.put('/:id/permissions', validate(updatePermissionsSchema), asyncHandler(adminCtrl.updateUserPermissions));
-router.put('/:id/karma', validate(adjustKarmaSchema), asyncHandler(adminCtrl.adjustKarma));
-router.patch('/:id/student-verification', asyncHandler(adminCtrl.reviewStudentVerification));
+router.get('/all', requireAdminOrModerator, asyncHandler(adminCtrl.listUsers));
+router.get('/users', requireAdminOrModerator, asyncHandler(adminCtrl.listUsers));
+router.get('/audit-logs', requireAdmin, asyncHandler(adminCtrl.listAuditLogs));
 
-router.get('/stats', asyncHandler(adminCtrl.getUserStats));
-router.get('/:id/karma-history', asyncHandler(getUserKarmaHistory));
-router.get('/:id/detail', asyncHandler(adminCtrl.getUserDetail));
-router.delete('/:id', asyncHandler(adminCtrl.deleteUserAccount));
+router.post('/:id/ban', requireAdminOrModerator, requireBanPermission, asyncHandler(adminCtrl.banUser));
+router.post('/:id/unban', requireAdminOrModerator, requireBanPermission, asyncHandler(adminCtrl.unbanUser));
+router.patch('/:id/toggle-ban', requireAdminOrModerator, requireBanPermission, asyncHandler(adminCtrl.toggleBanUser));
+
+router.put('/:id/role', requireAdmin, validate(updateRoleSchema), asyncHandler(adminCtrl.updateUserRole));
+router.put('/:id/permissions', requireAdmin, validate(updatePermissionsSchema), asyncHandler(adminCtrl.updateUserPermissions));
+router.put('/:id/karma', requireAdmin, validate(adjustKarmaSchema), asyncHandler(adminCtrl.adjustKarma));
+router.patch('/:id/student-verification', requireAdmin, asyncHandler(adminCtrl.reviewStudentVerification));
+
+router.get('/stats', requireAdmin, asyncHandler(adminCtrl.getUserStats));
+router.get('/:id/karma-history', requireAdmin, asyncHandler(getUserKarmaHistory));
+router.get('/:id/detail', requireAdminOrModerator, asyncHandler(adminCtrl.getUserDetail));
+router.delete('/:id', requireAdmin, asyncHandler(adminCtrl.deleteUserAccount));
 
 export default router;
