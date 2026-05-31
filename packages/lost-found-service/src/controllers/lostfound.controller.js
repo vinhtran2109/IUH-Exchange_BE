@@ -7,13 +7,35 @@ import {
   BadRequestException,
   parsePagination,
   logger,
+  cache,
 } from '@iuh-exchange/common';
 import { LostFoundItem } from '../models/LostFound.js';
 import { ConsentLog } from '../models/ConsentLog.js';
 import { generatePresignedUploadUrl, deleteFileByUrl } from '../services/s3.service.js';
-import { findMatches, autoMatchOnCreate } from '../services/matching.service.js';
+import { findMatches, autoMatchOnCreate, calculateMatchScore } from '../services/matching.service.js';
+import { publishLostFoundMatch } from '../services/kafka.service.js';
 import { queueAnalysis } from '../services/image-processor.service.js';
 import { publishLostFoundEvent } from '../services/kafka.service.js';
+
+
+// ── Cache Helpers ──────────────────────────────────────────
+// Tập trung logic eviction để tránh bỏ sót ở bất kỳ write operation nào.
+
+/**
+ * Xoá cache toàn bộ danh sách lost-found.
+ * Phải gọi sau mỗi thao tác tạo/cập nhật/xoá item.
+ */
+async function evictListCache() {
+  await cache.delPattern('lostfound:list:*');
+}
+
+/**
+ * Xoá cache chi tiết 1 item cụ thể.
+ * Phải gọi sau khi update/delete item hoặc sau khi AI phân tích xong.
+ */
+async function evictItemCache(itemId) {
+  await cache.del(`lostfound:detail:${itemId}`);
+}
 
 // ── Validation Schemas ──
 
@@ -63,15 +85,56 @@ const uploadUrlSchema = z.object({
 
 // ── Response Mapper ──
 
-function mapItem(item) {
+function mapItem(item, userProfile = null) {
   const obj = item.toObject ? item.toObject() : item;
+  const userId = obj.userId?.toString() || obj.userId;
   return {
     ...obj,
     id: obj._id?.toString() || obj.id,
     imageUrls: obj.images || [],
-    studentId: obj.userId?.toString() || obj.userId,
+    studentId: userProfile?.studentId || userId,
+    userId: userId,
+    userName: userProfile?.name || '',
     claims: obj.claims || [],
   };
+}
+
+/**
+ * Lấy thông tin user từ user-service để hiển thị MSSV thật.
+ */
+const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://localhost:3001';
+const userCache = new Map(); // simple in-memory cache
+const USER_CACHE_TTL = 60_000; // 1 phút
+
+async function fetchUserProfile(userId) {
+  if (!userId) return null;
+  const uid = userId.toString();
+  const cached = userCache.get(uid);
+  if (cached && Date.now() - cached.ts < USER_CACHE_TTL) return cached.data;
+
+  try {
+    const res = await fetch(`${USER_SERVICE_URL}/api/v1/users/${uid}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    const user = json?.data;
+    if (!user) return null;
+    const profile = { name: user.name || '', studentId: user.studentId || '' };
+    userCache.set(uid, { data: profile, ts: Date.now() });
+    return profile;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Batch lấy nhiều user profiles song song.
+ */
+async function fetchUserProfiles(userIds) {
+  const unique = [...new Set(userIds.filter(Boolean).map((id) => id.toString()))];
+  const results = await Promise.all(unique.map((id) => fetchUserProfile(id)));
+  const map = {};
+  unique.forEach((id, i) => { map[id] = results[i]; });
+  return map;
 }
 
 // ── Controllers ──
@@ -83,29 +146,53 @@ function mapItem(item) {
 export async function listItems(req, res, next) {
   try {
     const { page, size, skip } = parsePagination(req.query);
+    const { type, status, category, keyword } = req.query;
+
+    // BUG FIX #1: Cache key PHẢI bao gồm tất cả query params.
+    // Thiếu bất kỳ param nào → 2 request khác nhau dùng chung cache key
+    // → người dùng A thấy kết quả lọc của người dùng B (data leak tiềm ẩn).
+    const cacheKey = [
+      'lostfound:list',
+      `p${page}`, `s${size}`,
+      `type:${type || 'all'}`,
+      `status:${status || 'all'}`,
+      `cat:${category || 'all'}`,
+      `kw:${keyword || ''}`,
+    ].join(':');
+
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      logger.debug(`[Cache HIT] ${cacheKey}`);
+      return res.json(cached);
+    }
+
     const filter = {};
 
-    if (req.query.type) {
-      if (!['LOST', 'FOUND'].includes(req.query.type)) {
+    if (type) {
+      if (!['LOST', 'FOUND'].includes(type)) {
         throw new BadRequestException('Invalid type. Must be LOST or FOUND');
       }
-      filter.type = req.query.type;
+      filter.type = type;
     }
-    if (req.query.status) {
-      if (!['OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED'].includes(req.query.status)) {
+    if (status) {
+      if (!['OPEN', 'CLAIMED', 'RESOLVED', 'CLOSED'].includes(status)) {
         throw new BadRequestException('Invalid status. Must be OPEN, CLAIMED, RESOLVED, or CLOSED');
       }
-      filter.status = req.query.status;
+      filter.status = status;
     }
-    if (req.query.category) {
-      filter.category = req.query.category;
+    if (category) {
+      filter.category = category;
     }
-    if (req.query.keyword) {
-      const keywordRegex = new RegExp(req.query.keyword, 'i');
+    if (keyword) {
+      // BUG FIX #3: Escape special regex characters trước khi tạo RegExp.
+      // Không escape → user có thể gửi keyword="(a+)+$" gây ReDoS (CPU 100%),
+      // hoặc keyword=".*" để match tất cả items, bất kể filter.
+      const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const keywordRegex = new RegExp(escapedKeyword, 'i');
       filter.$or = [
         { title: keywordRegex },
         { description: keywordRegex },
-        { tags: { $in: [req.query.keyword.toLowerCase()] } },
+        { tags: { $in: [keyword.toLowerCase()] } },
       ];
     }
 
@@ -114,8 +201,12 @@ export async function listItems(req, res, next) {
       LostFoundItem.countDocuments(filter),
     ]);
 
+    // Lấy thông tin user để hiển thị MSSV thật
+    const userIds = items.map((it) => it.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     const pageData = new PageResponse({
-      content: items.map(mapItem),
+      content: items.map((it) => mapItem(it, profiles[it.userId?.toString()])),
       page,
       size,
       totalElements: total,
@@ -123,7 +214,9 @@ export async function listItems(req, res, next) {
       last: page * size >= total,
     });
 
-    res.json(ApiResponse.ok(pageData));
+    const response = ApiResponse.ok(pageData);
+    await cache.set(cacheKey, response, 120); // TTL: 2 phút
+    res.json(response);
   } catch (err) {
     next(err);
   }
@@ -157,8 +250,12 @@ export async function listAdminItems(req, res, next) {
       LostFoundItem.countDocuments(filter),
     ]);
 
+    // Lấy thông tin user để hiển thị MSSV thật
+    const userIds = items.map((it) => it.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     const pageData = new PageResponse({
-      content: items.map(mapItem),
+      content: items.map((it) => mapItem(it, profiles[it.userId?.toString()])),
       page,
       size,
       totalElements: total,
@@ -177,9 +274,22 @@ export async function listAdminItems(req, res, next) {
  */
 export async function getItemById(req, res, next) {
   try {
+    const cacheKey = `lostfound:detail:${req.params.id}`;
+
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      logger.debug(`[Cache HIT] ${cacheKey}`);
+      return res.json(cached);
+    }
+
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
-    res.json(ApiResponse.ok(mapItem(item)));
+
+    const profile = await fetchUserProfile(item.userId?.toString());
+    const response = ApiResponse.ok(mapItem(item, profile));
+    // TTL 5 phút — analyzeItem() sẽ evict key này sau khi AI phân tích xong (BUG FIX #8)
+    await cache.set(cacheKey, response, 300);
+    res.json(response);
   } catch (err) {
     next(err);
   }
@@ -234,18 +344,46 @@ export async function createItem(req, res, next) {
       );
     }
 
-    // Trigger async image analysis (non-blocking, only if consented)
+    // BUG FIX #7 — GHI CHÚ RACE CONDITION (trade-off đã chấp nhận):
+    // queueAnalysis chạy bất đồng bộ (fire-and-forget), KHÔNG block response.
+    // autoMatchOnCreate chạy đồng bộ với dữ liệu HIỆN TẠI (category/tags chưa do AI cập nhật)
+    // → Kết quả match trả về lần đầu có thể kém chính xác hơn.
+    // SAU KHI AI phân tích xong, analyzeItem() sẽ publish Kafka 'lostfound.match'
+    // → notification-service gửi thông báo match chính xác hơn cho người dùng.
     if (hasImages && data.consentImageAnalysis) {
-      queueAnalysis(item._id.toString());
+      queueAnalysis(item._id.toString()); // non-blocking
     }
 
-    // Auto-match with opposite type items
+    // Chạy matching với data hiện tại (trước khi AI cập nhật)
     const matches = await autoMatchOnCreate(item);
 
+    // Publish Kafka event để notification-service gửi thông báo match
+    if (matches.length > 0) {
+      await publishLostFoundMatch({
+        itemId: item._id.toString(),
+        userId: item.userId.toString(),
+        type: item.type,
+        title: item.title,
+        matches: matches.map((m) => ({
+          itemId: m.item._id.toString(),
+          title: m.item.title,
+          score: m.score,
+          ownerId: m.item.userId.toString(),
+        })),
+      });
+    }
+
+    // Evict cache danh sách vì có item mới
+    await evictListCache();
+
+    const allUserIds = [item.userId?.toString(), ...matches.map((m) => m.item.userId?.toString())];
+    const profiles = await fetchUserProfiles(allUserIds);
+    const profile = profiles[item.userId?.toString()];
+
     res.status(201).json(ApiResponse.created({
-      ...mapItem(item),
+      ...mapItem(item, profile),
       matches: matches.map((m) => ({
-        item: mapItem(m.item),
+        item: mapItem(m.item, profiles[m.item.userId?.toString()]),
         score: m.score,
       })),
     }));
@@ -260,7 +398,11 @@ export async function createItem(req, res, next) {
  */
 export async function updateItem(req, res, next) {
   try {
-    const data = updateItemSchema.parse(req.body);
+    const rawData = { ...req.body };
+    if (rawData.imageUrls && !rawData.images) {
+      rawData.images = rawData.imageUrls;
+    }
+    const data = updateItemSchema.parse(rawData);
     const item = await LostFoundItem.findById(req.params.id);
     if (!item) throw new ResourceNotFoundException('LostFoundItem', req.params.id);
 
@@ -274,10 +416,28 @@ export async function updateItem(req, res, next) {
     }
 
     Object.assign(item, data);
+
+    const shouldReanalyze = Array.isArray(data.images);
+    if (shouldReanalyze) {
+      item.analysisStatus = item.images?.length ? 'PENDING' : 'SKIPPED';
+      item.detectedType = '';
+      item.analysisConfidence = 0;
+      item.extracted = { studentId: '', text: '' };
+      item.analysisMetadata = {};
+    }
+
     await item.save();
 
+    // BUG FIX #2: Evict cả danh sách và detail sau khi cập nhật
+    await Promise.all([evictListCache(), evictItemCache(item._id.toString())]);
+
+    if (shouldReanalyze && item.images?.length) {
+      queueAnalysis(item._id.toString(), { force: true });
+    }
+
     logger.info(`LostFoundItem updated: ${item._id} by user ${req.user.sub}`);
-    res.json(ApiResponse.ok(mapItem(item)));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.json(ApiResponse.ok(mapItem(item, profile)));
   } catch (err) {
     next(err);
   }
@@ -302,8 +462,11 @@ export async function deleteItem(req, res, next) {
     }
 
     await item.deleteOne();
-    logger.info(`LostFoundItem deleted: ${req.params.id} by user ${req.user.sub}`);
 
+    // BUG FIX #2: Evict cache sau khi xoá
+    await Promise.all([evictListCache(), evictItemCache(req.params.id)]);
+
+    logger.info(`LostFoundItem deleted: ${req.params.id} by user ${req.user.sub}`);
     res.json(ApiResponse.ok(null, 'Item deleted'));
   } catch (err) {
     next(err);
@@ -324,8 +487,11 @@ export async function deleteItemAsAdmin(req, res, next) {
     }
 
     await item.deleteOne();
-    logger.info(`LostFoundItem deleted by admin: ${req.params.id} by user ${req.user.sub}`);
 
+    // BUG FIX #2: Evict cache sau khi admin xoá
+    await Promise.all([evictListCache(), evictItemCache(req.params.id)]);
+
+    logger.info(`LostFoundItem deleted by admin: ${req.params.id} by user ${req.user.sub}`);
     res.json(ApiResponse.ok(null, 'Item deleted by admin'));
   } catch (err) {
     next(err);
@@ -363,6 +529,10 @@ export async function claimItem(req, res, next) {
       status: 'PENDING',
     });
     await item.save();
+
+    // BUG FIX #5: Evict item detail cache vì claims array đã thay đổi
+    await evictItemCache(item._id.toString());
+
     const claim = item.claims[item.claims.length - 1];
     await publishLostFoundEvent('lostfound.claim.created', {
       id: claim._id?.toString(),
@@ -374,7 +544,8 @@ export async function claimItem(req, res, next) {
     });
 
     logger.info(`LostFoundItem claimed: ${item._id} by user ${req.user.sub}`);
-    res.status(201).json(ApiResponse.created(mapItem(item), 'Claim submitted for owner verification'));
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.status(201).json(ApiResponse.created(mapItem(item, profile), 'Claim submitted for owner verification'));
   } catch (err) {
     next(err);
   }
@@ -389,7 +560,10 @@ export async function reviewClaim(req, res, next) {
       throw new ForbiddenException('Only the item owner can review claims');
     }
 
-    const claim = item.claims.id?.(req.params.claimId)
+    // BUG FIX #4: Mongoose đảm bảo .id() luôn tồn tại trên subdoc array.
+    // Không dùng optional chaining ?.() vì có thể silent fail thành undefined
+    // thay vì thực sự tìm theo _id như Mongoose quy định.
+    const claim = item.claims.id(req.params.claimId)
       || item.claims.find((entry) => entry._id.toString() === req.params.claimId);
     if (!claim) throw new ResourceNotFoundException('LostFoundClaim', req.params.claimId);
     if (claim.status !== 'PENDING') throw new BadRequestException(`Claim is already ${claim.status.toLowerCase()}`);
@@ -411,16 +585,44 @@ export async function reviewClaim(req, res, next) {
     }
 
     await item.save();
+
+    // BUG FIX #5: Evict item detail cache vì status + claims đã thay đổi
+    await Promise.all([evictListCache(), evictItemCache(item._id.toString())]);
+
+    // Publish event cho claim chính vừa được xét duyệt
     await publishLostFoundEvent('lostfound.claim.resolved', {
       id: claim._id?.toString(),
       claimId: claim._id?.toString(),
       itemId: item._id.toString(),
       ownerId: item.userId.toString(),
-      claimantId: claim.claimantId.toString(),
+      claimantId: claim.claimantId?.toString(),
       status: claim.status,
       title: item.title,
     });
-    res.json(ApiResponse.ok(mapItem(item), 'Claim reviewed'));
+
+    // BUG FIX #10: Publish event riêng cho các claim bị auto-reject khi có 1 claim khác được duyệt
+    // để notification-service gửi "Claim của bạn bị từ chối" cho từng người
+    if (claim.status === 'APPROVED') {
+      const autoRejected = item.claims.filter(
+        (c) => c._id.toString() !== claim._id.toString() && c.ownerNote === 'Another claim was approved'
+      );
+      for (const rejected of autoRejected) {
+        if (rejected.claimantId) {
+          publishLostFoundEvent('lostfound.claim.resolved', {
+            id: rejected._id?.toString(),
+            claimId: rejected._id?.toString(),
+            itemId: item._id.toString(),
+            ownerId: item.userId.toString(),
+            claimantId: rejected.claimantId.toString(),
+            status: 'REJECTED',
+            title: item.title,
+          }).catch((err) => logger.warn(`Failed to publish auto-reject event: ${err.message}`));
+        }
+      }
+    }
+
+    const profile = await fetchUserProfile(item.userId?.toString());
+    res.json(ApiResponse.ok(mapItem(item, profile), 'Claim reviewed'));
   } catch (err) {
     next(err);
   }
@@ -456,11 +658,15 @@ export async function getMatches(req, res, next) {
 
     const matches = await findMatches(req.params.id, { limit, minScore });
 
+    // Batch lấy profiles cho source item + tất cả match items
+    const allUserIds = [item.userId?.toString(), ...matches.map((m) => m.item.userId?.toString())];
+    const profiles = await fetchUserProfiles(allUserIds);
+
     res.json(
       ApiResponse.ok({
-        sourceItem: mapItem(item),
+        sourceItem: mapItem(item, profiles[item.userId?.toString()]),
         matches: matches.map((m) => ({
-          item: mapItem(m.item),
+          item: mapItem(m.item, profiles[m.item.userId?.toString()]),
           score: m.score,
         })),
         totalMatches: matches.length,
@@ -479,6 +685,16 @@ export async function getMatches(req, res, next) {
 export async function getHeatmapData(req, res, next) {
   try {
     const days = Math.min(parseInt(req.query.days) || 30, 365);
+
+    // BUG FIX #7: Cache kết quả heatmap 5 phút.
+    // 3 aggregation pipeline chạy song song rất nặng — không nên chạy lại mỗi request.
+    const cacheKey = `lostfound:heatmap:days${days}`;
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      logger.debug(`[Cache HIT] ${cacheKey}`);
+      return res.json(cached);
+    }
+
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 
     const pipeline = [
@@ -593,14 +809,14 @@ export async function getHeatmapData(req, res, next) {
       LostFoundItem.aggregate(analysisPipeline),
     ]);
 
-    res.json(
-      ApiResponse.ok({
-        locations: locationData,
-        timeline: timeData,
-        analysisStats: analysisData,
-        period: { days, since: since.toISOString() },
-      }),
-    );
+    const response = ApiResponse.ok({
+      locations: locationData,
+      timeline: timeData,
+      analysisStats: analysisData,
+      period: { days, since: since.toISOString() },
+    });
+    await cache.set(cacheKey, response, 300); // TTL 5 phút
+    res.json(response);
   } catch (err) {
     next(err);
   }
@@ -640,6 +856,13 @@ export async function bulkModerate(req, res, next) {
         { $set: { status: 'CLOSED' } },
       );
     }
+
+    // BUG FIX #6: Evict cả item detail cache cho từng ID, không chỉ list cache.
+    // Khi admin bulk-delete 50 items, mỗi item có cache detail riêng.
+    await Promise.all([
+      evictListCache(),
+      ...ids.map((id) => evictItemCache(id)),
+    ]);
 
     logger.info(`Bulk ${action}: ${items.length} items by admin ${req.user.sub}`);
     res.json(
@@ -682,7 +905,9 @@ export async function previewMatches(req, res, next) {
 
     const scored = [];
     for (const candidate of candidates) {
-      const score = calculateMatchScoreFromData(data, candidate);
+      // BUG FIX #9: Dùng calculateMatchScore import từ matching.service.js
+      // thay vì hàm calculateMatchScoreFromData duplicate 60 dòng bên dưới.
+      const score = calculateMatchScore(data, candidate);
       if (score >= 0.15) {
         scored.push({ item: candidate, score: Math.round(score * 1000) / 1000 });
       }
@@ -691,10 +916,14 @@ export async function previewMatches(req, res, next) {
     scored.sort((a, b) => b.score - a.score);
     const topMatches = scored.slice(0, 10);
 
+    // Batch lấy profiles cho match items
+    const userIds = topMatches.map((m) => m.item.userId?.toString());
+    const profiles = await fetchUserProfiles(userIds);
+
     res.json(
       ApiResponse.ok({
         matches: topMatches.map((m) => ({
-          item: mapItem(m.item),
+          item: mapItem(m.item, profiles[m.item.userId?.toString()]),
           score: m.score,
         })),
         totalMatches: topMatches.length,
@@ -705,68 +934,3 @@ export async function previewMatches(req, res, next) {
   }
 }
 
-/**
- * Helper: calculate match score using raw data (not saved item).
- * Used for preview matches before creation.
- */
-function calculateMatchScoreFromData(data, candidate) {
-  let score = 0;
-  let weights = 0;
-
-  // Normalize helper
-  const normalize = (t) =>
-    (t || '')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/đ/g, 'd')
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-  const extractKw = (t) =>
-    normalize(t)
-      .split(' ')
-      .filter((w) => w.length >= 2);
-
-  const jaccard = (a, b) => {
-    if (a.size === 0 && b.size === 0) return 0;
-    const inter = new Set([...a].filter((x) => b.has(x)));
-    const uni = new Set([...a, ...b]);
-    return inter.size / uni.size;
-  };
-
-  // Title (35)
-  const srcTitle = new Set(extractKw(data.title));
-  const candTitle = new Set(extractKw(candidate.title));
-  score += jaccard(srcTitle, candTitle) * 35;
-  weights += 35;
-
-  // Description (25)
-  const srcDesc = new Set(extractKw(data.description || ''));
-  const candDesc = new Set(extractKw(candidate.description || ''));
-  score += jaccard(srcDesc, candDesc) * 25;
-  weights += 25;
-
-  // Category (20)
-  if (data.category && candidate.category) {
-    if (data.category === candidate.category) score += 20;
-    weights += 20;
-  }
-
-  // Tags (15)
-  if (data.tags?.length && candidate.tags?.length) {
-    const srcTags = new Set(data.tags.map(normalize));
-    const candTags = new Set(candidate.tags.map(normalize));
-    score += jaccard(srcTags, candTags) * 15;
-    weights += 15;
-  }
-
-  // Location (5)
-  const srcLoc = new Set(normalize(data.location).split(' '));
-  const candLoc = new Set(normalize(candidate.location).split(' '));
-  score += jaccard(srcLoc, candLoc) * 5;
-  weights += 5;
-
-  return weights > 0 ? score / weights : 0;
-}

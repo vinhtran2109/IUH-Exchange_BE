@@ -10,7 +10,11 @@ import {
   Package,
   User as UserIcon,
   Flag,
-  Hand
+  Hand,
+  ScanLine,
+  BadgeCheck,
+  ShieldCheck,
+  Pencil
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 import type { LostFoundItem } from '../services/lostFoundService';
@@ -22,7 +26,7 @@ import { useConfirm, usePrompt } from '../components/Dialogs';
 const LostFoundDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore() as any;
+  const { user } = useAuthStore();
   const { success: toastSuccess, error: toastError } = useToast();
   const { confirm } = useConfirm();
   const { prompt } = usePrompt();
@@ -40,7 +44,7 @@ const LostFoundDetail: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     chatService.connect();
-    const removeListener = chatService.addNotificationListener((notification: any) => {
+    const removeListener = chatService.addNotificationListener((notification: { targetId?: string; type?: string }) => {
       const targetId = String(notification?.targetId || '');
       const type = String(notification?.type || '').toUpperCase();
       if (targetId === String(id) && (type.includes('SYSTEM') || type.includes('LOST'))) {
@@ -57,11 +61,22 @@ const LostFoundDetail: React.FC = () => {
       if (response.success) {
         setItem(response.data);
       }
-    } catch (error) {
-      console.error("Failed to fetch details:", error);
+    } catch {
+      console.error("Failed to fetch details:");
     } finally {
       setLoading(false);
     }
+  };
+
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (typeof error === 'object' && error && 'response' in error) {
+      const response = error as { response?: { data?: { message?: string } } };
+      return response.response?.data?.message || fallback;
+    }
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return fallback;
   };
 
   const handleDelete = async () => {
@@ -81,7 +96,7 @@ const LostFoundDetail: React.FC = () => {
         toastSuccess('Đã gỡ bài đăng thành công.');
         navigate('/lost-found');
       }
-    } catch (error) {
+    } catch {
       toastError('Gỡ bài thất bại. Vui lòng thử lại.');
     } finally {
       setDeleting(false);
@@ -90,23 +105,42 @@ const LostFoundDetail: React.FC = () => {
 
   const handleClaim = async () => {
     if (!item || !user) return;
-    const confirmed = await confirm({
-      title: 'Xác nhận tìm thấy',
-      message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
-      confirmText: 'Xác nhận',
-      cancelText: 'Hủy',
-      variant: 'default',
-    });
-    if (!confirmed) return;
+
+    // Nếu item có câu hỏi xác minh → hiển thị prompt để user trả lời TRƯỚC khi confirm
+    let answer = 'Tôi xác nhận đã tìm thấy đồ vật này';
+    if (item.verificationQuestion) {
+      // Dùng usePrompt hook (nhất quán với UX app) thay vì native window.prompt()
+      const userAnswer = await prompt({
+        title: 'Câu hỏi xác minh quyền sở hữu',
+        message: item.verificationQuestion,
+        placeholder: 'Nhập câu trả lời của bạn...',
+        confirmText: 'Xác nhận',
+        minLength: 2,
+        rows: 2,
+      });
+      if (!userAnswer) return; // User bấm Cancel
+      answer = userAnswer.trim();
+    } else {
+      // Không có câu hỏi → confirm đơn giản
+      const confirmed = await confirm({
+        title: 'Xác nhận tìm thấy',
+        message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
+        confirmText: 'Xác nhận',
+        cancelText: 'Hủy',
+        variant: 'default',
+      });
+      if (!confirmed) return;
+    }
+
     try {
       setClaiming(true);
-      const res = await lostFoundService.claimItem(item.id);
+      const res = await lostFoundService.claimItem(item.id, { answer });
       if (res.success) {
-        setItem({ ...item, status: 'CLAIMED' as any });
-        toastSuccess('Đã xác nhận tìm thấy đồ vật!');
+        setItem({ ...item, status: 'CLAIMED' });
+        toastSuccess('Đã xác nhận tìm thấy đồ vật! Chủ sở hữu sẽ xem xét yêu cầu của bạn.');
       }
-    } catch (err: any) {
-      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể xác nhận'));
+    } catch (err) {
+      toastError('Lỗi: ' + getErrorMessage(err, 'Không thể xác nhận'));
     } finally {
       setClaiming(false);
     }
@@ -126,15 +160,15 @@ const LostFoundDetail: React.FC = () => {
     try {
       await api.post('/reports', { targetType: 'LOST_FOUND', targetId: id, reason });
       toastSuccess('Đã gửi tố cáo. Admin sẽ xem xét sớm.');
-    } catch (err: any) {
-      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể gửi tố cáo'));
+    } catch (err) {
+      toastError('Lỗi: ' + getErrorMessage(err, 'Không thể gửi tố cáo'));
     }
   };
 
   if (loading) return <div className="max-w-7xl mx-auto px-4 py-32 text-center text-slate-400 font-bold">Đang tải dữ liệu...</div>;
   if (!item) return <div className="max-w-7xl mx-auto px-4 py-32 text-center text-slate-400 font-bold">Không tìm thấy thông tin.</div>;
 
-  const isOwner = user?.id === item.studentId;
+  const isOwner = String(user?.id || user?.sub || '') === String(item.userId || '');
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
@@ -152,7 +186,7 @@ const LostFoundDetail: React.FC = () => {
           <motion.div 
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="aspect-[4/3] bg-slate-100 rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl shadow-indigo-100/50"
+            className="aspect-4/3 bg-slate-100 rounded-[3rem] overflow-hidden border border-slate-100 shadow-2xl shadow-indigo-100/50"
           >
             {item.imageUrls && item.imageUrls.length > 0 ? (
               <img src={item.imageUrls[0]} className="w-full h-full object-cover" alt={item.title} />
@@ -176,14 +210,22 @@ const LostFoundDetail: React.FC = () => {
             </span>
 
             {isOwner && (
-              <button 
-                onClick={handleDelete}
-                disabled={deleting}
-                className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-600 hover:text-white transition-all shadow-sm"
-                title="Gỡ bài đăng"
-              >
-                <Trash2 size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => navigate(`/lost-found/${item.id}/edit`)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 hover:text-slate-900"
+                >
+                  <Pencil size={15} /> Sửa tin
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:opacity-50"
+                  title="Gỡ bài đăng"
+                >
+                  <Trash2 size={15} /> {deleting ? 'Đang gỡ...' : 'Gỡ bài'}
+                </button>
+              </div>
             )}
           </div>
 
@@ -205,6 +247,49 @@ const LostFoundDetail: React.FC = () => {
              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3">Mô tả chi tiết</h3>
              <p className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">{item.description}</p>
           </div>
+
+          {/* AI Analysis Results */}
+          {item.analysisStatus === 'COMPLETED' && (item.detectedType || item.extracted?.studentId) && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-6 mb-8 space-y-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-3xl border border-indigo-100 dark:border-indigo-700 text-indigo-700 dark:text-indigo-200"
+            >
+              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-200 font-black text-sm uppercase">
+                <ScanLine size={18} />
+                Kết quả phân tích AI
+              </div>
+              {item.detectedType && item.detectedType !== 'unknown' && (
+                <div className="flex items-center gap-2">
+                  <BadgeCheck size={16} className="text-emerald-500 dark:text-emerald-300" />
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
+                    <span className="font-bold">Loại đồ vật:</span> {item.detectedType}
+                  </span>
+                </div>
+              )}
+              {item.extracted?.studentId && (
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-indigo-500 dark:text-indigo-300" />
+                  <span className="text-sm text-slate-700 dark:text-slate-200">
+                    <span className="font-bold">MSSV phát hiện:</span>{' '}
+                    <span className="font-mono bg-indigo-100 dark:bg-indigo-800 px-2 py-0.5 rounded text-indigo-900 dark:text-indigo-100">{item.extracted.studentId}</span>
+                  </span>
+                </div>
+              )}
+            </motion.div>
+          )}
+
+          {/* Hiển thị câu hỏi xác minh nếu có — chỉ hiển thị với người không phải chủ */}
+          {!isOwner && item.verificationQuestion && item.status === 'OPEN' && (
+            <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 mb-6 flex items-start gap-3">
+              <span className="text-amber-500 text-xl mt-0.5">❓</span>
+              <div>
+                <h4 className="text-xs font-black text-amber-600 uppercase tracking-widest mb-1">Câu hỏi xác minh quyền sở hữu</h4>
+                <p className="text-sm text-amber-900 font-medium">{item.verificationQuestion}</p>
+                <p className="text-xs text-amber-600 mt-1">Bạn sẽ cần trả lời câu hỏi này khi xác nhận tìm thấy đồ vật.</p>
+              </div>
+            </div>
+          )}
 
            <div className="mt-auto space-y-4">
               <div className="flex items-center gap-4 bg-indigo-50 border border-indigo-100 p-6 rounded-3xl">
@@ -233,24 +318,24 @@ const LostFoundDetail: React.FC = () => {
                   <button 
                     onClick={handleClaim}
                     disabled={claiming}
-                    className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-emerald-600 text-white rounded-[1.75rem] font-black shadow-2xl shadow-emerald-200 hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+                    className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                   >
-                    <Hand size={22} />
+                    <Hand size={16} />
                     {claiming ? 'ĐANG XỬ LÝ...' : 'TÔI TÌM THẤY ĐỒ NÀY'}
                   </button>
                 )}
                 <button 
                   onClick={() => chatService.triggerOpenChat(item.studentId, "Chủ bài đăng")}
                   disabled={isOwner}
-                  className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-indigo-600 text-white rounded-[1.75rem] font-black shadow-2xl shadow-indigo-200 hover:bg-indigo-700 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
                 >
-                  <MessageCircle size={22} className="group-hover:rotate-12 transition-transform" />
+                  <MessageCircle size={16} className="group-hover:rotate-12 transition-transform" />
                   NHẮN TIN NGAY
                 </button>
                 
                 <a 
                   href={`tel:${item.contactInfo}`}
-                  className="flex-1 flex items-center justify-center gap-3 px-8 py-5 bg-white text-slate-900 border-2 border-slate-100 rounded-[1.75rem] font-black hover:border-indigo-600 hover:text-indigo-600 transition-all hover:scale-[1.02] active:scale-95"
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
                 >
                   GỌI ĐIỆN CHO CHỦ BÀI
                 </a>

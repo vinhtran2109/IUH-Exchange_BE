@@ -1,4 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
+
+process.env.IMAGE_ANALYSIS_PROVIDER = 'mock';
 
 // ── Mock dependencies ──
 vi.mock('../models/LostFound.js', () => {
@@ -44,14 +46,26 @@ vi.mock('@iuh-exchange/common', () => ({
     error: vi.fn(),
     debug: vi.fn(),
   },
+  cache: {
+    del: vi.fn().mockResolvedValue(true),
+  },
+  withRetry: vi.fn(async (fn) => fn()),
 }));
 
-import { analyzeItem, queueAnalysis } from '../services/image-processor.service.js';
 import { LostFoundItem } from '../models/LostFound.js';
 import { publishLostFoundAnalyzed, publishLostFoundMatch } from '../services/kafka.service.js';
 import { findMatches } from '../services/matching.service.js';
 
+let analyzeItem;
+let queueAnalysis;
+
 describe('image-processor.service', () => {
+  beforeAll(async () => {
+    const module = await import('../services/image-processor.service.js');
+    analyzeItem = module.analyzeItem;
+    queueAnalysis = module.queueAnalysis;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     // Reset mock item state
@@ -143,7 +157,7 @@ describe('image-processor.service', () => {
     it('should throw error for non-existent item', async () => {
       LostFoundItem.findById.mockResolvedValueOnce(null);
 
-      await expect(analyzeItem('nonexistent')).rejects.toThrow('Item not found: nonexistent');
+      await expect(analyzeItem('nonexistent')).rejects.toThrow('Item không tồn tại: nonexistent');
     });
 
     it('should publish Kafka event after successful analysis', async () => {

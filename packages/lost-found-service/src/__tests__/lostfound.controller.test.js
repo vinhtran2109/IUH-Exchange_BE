@@ -44,11 +44,22 @@ vi.mock('../services/matching.service.js', () => ({
   autoMatchOnCreate: vi.fn().mockResolvedValue([]),
 }));
 
+vi.mock('../services/kafka.service.js', () => ({
+  publishLostFoundMatch: vi.fn().mockResolvedValue(true),
+  publishLostFoundEvent: vi.fn().mockResolvedValue(true),
+}));
+
 vi.mock('@iuh-exchange/common', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
     logger: { info: vi.fn(), debug: vi.fn(), error: vi.fn(), warn: vi.fn() },
+    cache: {
+      get: vi.fn().mockResolvedValue(null),
+      set: vi.fn().mockResolvedValue(true),
+      del: vi.fn().mockResolvedValue(true),
+      delPattern: vi.fn().mockResolvedValue(true),
+    },
   };
 });
 

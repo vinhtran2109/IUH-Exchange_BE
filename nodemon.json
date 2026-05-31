@@ -1,0 +1,16 @@
+{
+  "watch": ["src"],
+  "ignore": [
+    "**/*.test.js",
+    "**/*.spec.js",
+    "**/__tests__/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/tmp/**",
+    "**/*.log",
+    "**/.git/**",
+    "**/node_modules/**"
+  ],
+  "ext": "js,json,mjs",
+  "delay": "300"
+}

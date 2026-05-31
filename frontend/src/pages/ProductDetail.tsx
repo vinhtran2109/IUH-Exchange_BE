@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   Trash2,
-  User,
+  User as UserIcon,
   Wallet,
   X,
   ZoomIn,
@@ -35,12 +35,58 @@ import { conditionLabel, categoryLabel, offerStatusLabel, offerStatusClass } fro
 
 type PaymentChoice = 'BANK_TRANSFER' | 'CASH';
 
+type SellerProfile = {
+  name?: string;
+  avatarUrl?: string;
+  bankInfo?: {
+    bankName?: string;
+    accountNumber?: string;
+    accountHolder?: string;
+    qrCodeUrl?: string;
+  };
+};
+
+type SellerTrust = {
+  badge?: string;
+  soldCount?: number;
+  trustScore?: number;
+  followerCount?: number;
+};
+
+type ProductOffer = {
+  id?: string;
+  _id?: string;
+  productId?: string;
+  type?: 'PRICE' | 'TRADE';
+  amount?: number;
+  tradeItemTitle?: string;
+  tradeItemDescription?: string;
+  message?: string;
+  status?: string;
+  updatedAt?: string;
+  createdAt?: string;
+};
+
+type ApiErrorLike = {
+  response?: { data?: { message?: string } };
+  message?: string;
+};
+
 const ARCHIVED_OFFER_STATUSES = new Set(['WITHDRAWN', 'CANCELLED', 'EXPIRED', 'REJECTED']);
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error) {
+    const apiError = error as ApiErrorLike;
+    return apiError.response?.data?.message || apiError.message || fallback;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
 
 const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuthStore() as any;
+  const { user } = useAuthStore();
   const { success: toastSuccess, error: toastError } = useToast();
   const { confirm } = useConfirm();
   const { prompt } = usePrompt();
@@ -53,12 +99,12 @@ const ProductDetail: React.FC = () => {
   const [selectedImage, setSelectedImage] = useState(0);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [buyerNote, setBuyerNote] = useState('');
-  const [sellerProfile, setSellerProfile] = useState<any>(null);
-  const [sellerTrust, setSellerTrust] = useState<any>(null);
+  const [sellerProfile, setSellerProfile] = useState<SellerProfile | null>(null);
+  const [sellerTrust, setSellerTrust] = useState<SellerTrust | null>(null);
   const [followingSeller, setFollowingSeller] = useState(false);
   const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('BANK_TRANSFER');
   const [purchaseMessage, setPurchaseMessage] = useState<string | null>(null);
-  const [offers, setOffers] = useState<any[]>([]);
+  const [offers, setOffers] = useState<ProductOffer[]>([]);
   const [offerType, setOfferType] = useState<'PRICE' | 'TRADE'>('PRICE');
   const [offerAmount, setOfferAmount] = useState('');
   const [tradeItemTitle, setTradeItemTitle] = useState('');
@@ -87,7 +133,7 @@ const ProductDetail: React.FC = () => {
       }
     };
     fetchProduct();
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     if (!product?.sellerId) return;
@@ -126,7 +172,7 @@ const ProductDetail: React.FC = () => {
     checkOrder();
   }, [id, user]);
 
-  const loadOffers = async () => {
+  const loadOffers = useCallback(async () => {
     if (!id || !user || !product) return;
     try {
       const res = user.id === product.sellerId
@@ -134,21 +180,21 @@ const ProductDetail: React.FC = () => {
         : await productService.listMyOffers();
       if (res.success) {
         const content = res.data?.content || res.data || [];
-        setOffers(user.id === product.sellerId ? content : content.filter((offer: any) => offer.productId === id));
+        setOffers(user.id === product.sellerId ? content : content.filter((offer: ProductOffer) => offer.productId === id));
       }
     } catch {
       // ignore optional offer panel errors
     }
-  };
+  }, [id, user, product]);
 
   useEffect(() => {
     void loadOffers();
-  }, [id, user?.id, product?.sellerId]);
+  }, [loadOffers]);
 
   useEffect(() => {
     if (!id) return;
     chatService.connect();
-    const removeListener = chatService.addNotificationListener((notification: any) => {
+    const removeListener = chatService.addNotificationListener((notification: { targetId?: string; type?: string }) => {
       const targetId = String(notification?.targetId || '');
       const type = String(notification?.type || '').toUpperCase();
       if (targetId !== String(id)) return;
@@ -163,7 +209,7 @@ const ProductDetail: React.FC = () => {
       }
     });
     return removeListener;
-  }, [id, user?.id, product?.sellerId]);
+  }, [id, loadOffers]);
 
   useEffect(() => {
     if (!id || !user) return;
@@ -208,8 +254,8 @@ const ProductDetail: React.FC = () => {
     try {
       const res = await wishlistService.toggle(id!);
       if (res.success) setWishlisted(res.data.wishlisted);
-    } catch (e) {
-      console.error(e);
+    } catch (error: unknown) {
+      console.error(error);
     }
   };
 
@@ -254,8 +300,8 @@ const ProductDetail: React.FC = () => {
     try {
       await api.post('/reports', { targetType: 'PRODUCT', targetId: id, reason });
       toastSuccess('Đã gửi tố cáo. Admin sẽ xem xét sớm.');
-    } catch (err: any) {
-      toastError('Lỗi: ' + (err.response?.data?.message || 'Không thể gửi tố cáo'));
+    } catch (error: unknown) {
+      toastError('Lỗi: ' + getErrorMessage(error, 'Không thể gửi tố cáo'));
     }
   };
 
@@ -313,8 +359,8 @@ const ProductDetail: React.FC = () => {
               : 'Đã tạo yêu cầu mua thành công. Bạn có thể theo dõi tiến độ đơn hàng tại đây.',
         },
       });
-    } catch (error: any) {
-      setPurchaseMessage(error.response?.data?.message || error.message || 'Có lỗi xảy ra khi tạo đơn hàng.');
+    } catch (error: unknown) {
+      setPurchaseMessage(getErrorMessage(error, 'Có lỗi xảy ra khi tạo đơn hàng.'));
     } finally {
       setOrdering(false);
     }
@@ -335,8 +381,8 @@ const ProductDetail: React.FC = () => {
         setOfferMessage('');
         await loadOffers();
       }
-    } catch (error: any) {
-      toastError(error.response?.data?.message || 'Không thể gửi đề xuất lúc này.');
+    } catch (error: unknown) {
+      toastError(getErrorMessage(error, 'Không thể gửi đề xuất lúc này.'));
     } finally {
       setOfferBusy(false);
     }
@@ -347,14 +393,14 @@ const ProductDetail: React.FC = () => {
       setOfferBusy(true);
       const res = await productService.resolveOffer(offerId, action);
       if (res.success) await loadOffers();
-    } catch (error: any) {
-      toastError(error.response?.data?.message || 'Không thể xử lý đề xuất.');
+    } catch (error: unknown) {
+      toastError(getErrorMessage(error, 'Không thể xử lý đề xuất.'));
     } finally {
       setOfferBusy(false);
     }
   };
 
-  const handleOrderFromOffer = async (offer: any) => {
+  const handleOrderFromOffer = async (offer: ProductOffer) => {
     if (!product) return;
     try {
       setOfferBusy(true);
@@ -368,8 +414,8 @@ const ProductDetail: React.FC = () => {
       });
       const orderId = orderResponse.data?.id || orderResponse.data?._id;
       navigate(`/orders/${orderId}`);
-    } catch (error: any) {
-      toastError(error.response?.data?.message || 'Không thể tạo đơn từ đề xuất.');
+    } catch (error: unknown) {
+      toastError(getErrorMessage(error, 'Không thể tạo đơn từ đề xuất.'));
     } finally {
       setOfferBusy(false);
     }
@@ -395,7 +441,7 @@ const ProductDetail: React.FC = () => {
     );
   }
 
-  const activeImage = product.imageUrls[selectedImage] || product.imageUrls[0] || 'https://placehold.co/800x600/e2e8f0/94a3b8?text=IUH';
+  const activeImage = product.imageUrls?.[selectedImage] || product.imageUrls?.[0] || 'https://placehold.co/800x600/e2e8f0/94a3b8?text=IUH';
 
   return (
     <>
@@ -453,22 +499,22 @@ const ProductDetail: React.FC = () => {
                 <ZoomIn size={15} className="text-slate-600" />
               </div>
               {/* Badge số ảnh */}
-              {product.imageUrls.length > 1 && (
+              {product.imageUrls?.length > 1 && (
                 <div className="absolute bottom-3 left-3 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
-                  {selectedImage + 1} / {product.imageUrls.length}
+                  {selectedImage + 1} / {product.imageUrls?.length}
                 </div>
               )}
             </div>
 
             {/* Thumbnails — chỉ hiện khi có > 1 ảnh */}
-            {product.imageUrls.length > 1 && (
+            {product.imageUrls?.length > 1 && (
               <div className="flex gap-2 overflow-x-auto pb-1">
                 {product.imageUrls.map((url, index) => (
                   <button
                     key={`thumb-${index}`}
                     type="button"
                     onClick={() => setSelectedImage(index)}
-                    className={`group relative h-[72px] w-[72px] shrink-0 overflow-hidden rounded-xl border-2 transition-all duration-200 ${
+                    className={`group relative h-18 w-18 shrink-0 overflow-hidden rounded-xl border-2 transition-all duration-200 ${
                       selectedImage === index
                         ? 'border-slate-900 shadow-md'
                         : 'border-transparent hover:-translate-y-0.5 hover:shadow-sm'
@@ -568,8 +614,8 @@ const ProductDetail: React.FC = () => {
                         {offer.message && <div className="mt-1 text-xs text-slate-500">{offer.message}</div>}
                         {user?.id === product.sellerId && offer.status === 'PENDING' && (
                           <div className="mt-2 flex gap-2">
-                            <button disabled={offerBusy} onClick={() => handleResolveOffer(offer.id || offer._id, 'ACCEPT')} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Chấp nhận</button>
-                            <button disabled={offerBusy} onClick={() => handleResolveOffer(offer.id || offer._id, 'REJECT')} className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">Từ chối</button>
+                            <button disabled={offerBusy} onClick={() => { const offerId = offer.id || offer._id; if (offerId) void handleResolveOffer(offerId, 'ACCEPT'); }} className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Chấp nhận</button>
+                            <button disabled={offerBusy} onClick={() => { const offerId = offer.id || offer._id; if (offerId) void handleResolveOffer(offerId, 'REJECT'); }} className="rounded bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600">Từ chối</button>
                           </div>
                         )}
                         {user?.id !== product.sellerId && offer.status === 'ACCEPTED' && (
@@ -716,7 +762,7 @@ const ProductDetail: React.FC = () => {
                   <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-white bg-slate-100 shadow-md ring-2 ring-slate-100 transition-opacity hover:opacity-90">
                     {sellerProfile.avatarUrl
                       ? <img src={sellerProfile.avatarUrl} alt={sellerProfile.name} className="h-full w-full object-cover" />
-                      : <div className="flex h-full w-full items-center justify-center text-slate-400"><User size={28} /></div>
+                      : <div className="flex h-full w-full items-center justify-center text-slate-400"><UserIcon size={28} /></div>
                     }
                   </div>
                   <BadgeCheck size={19} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white text-emerald-500" />
@@ -862,8 +908,8 @@ const ProductDetail: React.FC = () => {
             <div className="flex-1 space-y-4 overflow-y-auto px-6 py-5">
               {/* Product mini card */}
               <div className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
-                {product.imageUrls[0] && (
-                  <img src={product.imageUrls[0]} alt={product.title} className="h-12 w-12 shrink-0 rounded-lg object-cover" />
+                {product.imageUrls?.[0] && (
+                  <img src={product.imageUrls?.[0]} alt={product.title} className="h-12 w-12 shrink-0 rounded-lg object-cover" />
                 )}
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-800">{product.title}</p>
@@ -923,7 +969,7 @@ const ProductDetail: React.FC = () => {
       {/* ===== LIGHTBOX ===== */}
       {lightboxOpen && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90"
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/90"
           onClick={() => setLightboxOpen(false)}
         >
           <button
@@ -932,7 +978,7 @@ const ProductDetail: React.FC = () => {
           >
             <X size={20} />
           </button>
-          {product.imageUrls.length > 1 && selectedImage > 0 && (
+          {product.imageUrls?.length > 1 && selectedImage > 0 && (
             <button
               onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => i - 1); }}
               className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
@@ -940,7 +986,7 @@ const ProductDetail: React.FC = () => {
               <ArrowLeft size={20} />
             </button>
           )}
-          {product.imageUrls.length > 1 && selectedImage < product.imageUrls.length - 1 && (
+          {product.imageUrls?.length > 1 && selectedImage < product.imageUrls?.length - 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); setSelectedImage((i) => i + 1); }}
               className="absolute right-14 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
@@ -954,9 +1000,9 @@ const ProductDetail: React.FC = () => {
             className="max-h-[90vh] max-w-[90vw] rounded-xl object-contain"
             onClick={(e) => e.stopPropagation()}
           />
-          {product.imageUrls.length > 1 && (
+          {product.imageUrls?.length > 1 && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm font-medium text-white/70">
-              {selectedImage + 1} / {product.imageUrls.length}
+              {selectedImage + 1} / {product.imageUrls?.length}
             </div>
           )}
         </div>

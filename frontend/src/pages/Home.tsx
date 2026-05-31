@@ -38,8 +38,12 @@ const Home: React.FC = () => {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden rounded-3xl">
-        {/* Gradient background — looks great in both light and dark */}
-        <div className="absolute inset-0 bg-linear-to-br from-indigo-600 via-violet-600 to-purple-700" />
+        {/* Background image (cover) + dark overlay for readability */}
+        <div
+          className="absolute inset-0 bg-cover bg-center"
+          style={{ backgroundImage: `url(${encodeURI('/icons/ảnh bìa iuh.png')})` }}
+        />
+        <div className="absolute inset-0 bg-black/40" />
         {/* Decorative blobs */}
         <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-white/10 blur-3xl pointer-events-none" />
         <div className="absolute -bottom-16 -left-16 w-72 h-72 rounded-full bg-indigo-400/20 blur-2xl pointer-events-none" />
@@ -53,7 +57,7 @@ const Home: React.FC = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-semibold text-white/90 mb-4 sm:mb-5">
             <Star size={12} className="text-yellow-300" />
-            Nền tảng trao đổi #1 của sinh viên IUH
+            Nền tảng trao đổi #2 của sinh viên IUH
           </div>
 
           <h1 className="mb-4 text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -19,11 +19,15 @@ import {
 import { lostFoundService, ItemType } from '../services/lostFoundService';
 import { useToast } from '../components/Toast';
 
+const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
+
 const ReportLostFound: React.FC = () => {
+  const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
-  const { success: toastSuccess } = useToast();
+  const { success: toastSuccess, error: toastError } = useToast();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const isEditMode = Boolean(id);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -32,6 +36,7 @@ const ReportLostFound: React.FC = () => {
     location: '',
     contactInfo: '',
   });
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]);
 
   // Consent checkboxes for AI analysis
   const [consentImageAnalysis, setConsentImageAnalysis] = useState(false);
@@ -42,19 +47,95 @@ const ReportLostFound: React.FC = () => {
     detectedType?: string;
     studentId?: string;
     confidence?: number;
+    matchCount?: number;
   } | null>(null);
+
+  // BUG FIX #1: Tách trạng thái "submit thành công" ra riêng.
+  // Không navigate ngay mà render kết quả AI trước, để user thấy.
+  const [submitSuccess, setSubmitSuccess] = useState(false);
 
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!isEditMode || !id) return;
+
+    const loadItem = async () => {
+      try {
+        setLoading(true);
+        const response = await lostFoundService.getItemById(id);
+        if (response.success && response.data) {
+          const item = response.data;
+          setFormData({
+            title: item.title || '',
+            description: item.description || '',
+            type: item.type || ItemType.LOST,
+            location: item.location || '',
+            contactInfo: item.contactInfo || '',
+          });
+          setExistingImageUrls(item.imageUrls || []);
+          setImagePreview(item.imageUrls?.[0] || null);
+          setConsentImageAnalysis(Boolean(item.consentImageAnalysis));
+          setConsentMssvExtraction(Boolean(item.consentMssvExtraction));
+        }
+      } catch (err) {
+        setError('Không thể tải bài đăng để chỉnh sửa.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadItem();
+  }, [id, isEditMode]);
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setImagePreview(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!e.target.files || !e.target.files[0]) return;
+
+    const file = e.target.files[0];
+    if (!file.type.startsWith('image/')) {
+      setError('File không hợp lệ. Vui lòng chọn tệp ảnh.');
+      setImageFile(null);
+      e.target.value = '';
+      return;
     }
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setError('Ảnh quá lớn. Vui lòng chọn ảnh <= 10MB.');
+      setImageFile(null);
+      e.target.value = '';
+      return;
+    }
+
+    setError(null);
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const uploadImageToPresignedUrl = async (presignedUrl: string, file: File) => {
+    const attempts = 2;
+    let lastError: Error | null = null;
+
+    for (let i = 1; i <= attempts; i += 1) {
+      try {
+        const uploadResponse = await fetch(presignedUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type },
+        });
+
+        if (!uploadResponse.ok) {
+          const responseText = await uploadResponse.text();
+          throw new Error(`Upload S3 thất bại (HTTP ${uploadResponse.status}): ${responseText || 'No response body'}`);
+        }
+
+        return;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error('Upload ảnh thất bại');
+      }
+    }
+
+    throw lastError || new Error('Upload ảnh thất bại');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,48 +149,129 @@ const ReportLostFound: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      let finalImageUrl = '';
+      let finalImageUrls = existingImageUrls;
 
       // Upload ảnh nếu có
       if (imageFile) {
         const { data: uploadData } = await lostFoundService.getUploadUrl(imageFile.name, imageFile.type);
         const { presignedUrl, publicUrl } = uploadData;
 
-        await fetch(presignedUrl, {
-          method: 'PUT',
-          body: imageFile,
-          headers: { 'Content-Type': imageFile.type }
-        });
+        if (!presignedUrl || !publicUrl) {
+          throw new Error('Không nhận được upload URL hợp lệ từ server');
+        }
 
-        finalImageUrl = publicUrl;
+        await uploadImageToPresignedUrl(presignedUrl, imageFile);
+
+        finalImageUrls = [publicUrl];
       }
 
-      const response = await lostFoundService.createItem({
+      const payload = {
         ...formData,
-        imageUrls: finalImageUrl ? [finalImageUrl] : [],
+        images: finalImageUrls,
         consentImageAnalysis,
         consentMssvExtraction,
-      });
+      };
+
+      const response = isEditMode && id
+        ? await lostFoundService.updateItem(id, payload)
+        : await lostFoundService.createItem(payload);
 
       if (response.success) {
-        // Show AI analysis results if available
+        if (isEditMode && id) {
+          toastSuccess('Cập nhật bài đăng thành công!');
+          navigate(`/lost-found/${id}`);
+          return;
+        }
+
         const data = response.data;
-        if (data?.detectedType || data?.matches?.length > 0) {
+
+        // BUG FIX #1: Set result TRƯỚC, KHÔNG navigate ngay.
+        // BUG FIX #12: Đọc `extracted.studentId` đúng field từ backend response.
+        if (data?.detectedType || data?.extracted?.studentId || data?.matches?.length > 0) {
           setAnalysisResult({
             detectedType: data.detectedType,
-            studentId: data.studentId,
-            confidence: data.confidence,
+            studentId: data.extracted?.studentId || data.studentId,
+            confidence: data.analysisConfidence || data.confidence,
+            matchCount: data.matches?.length ?? 0,
           });
         }
+
         toastSuccess('Đăng tin thành công! Hy vọng bạn sớm tìm thấy đồ.');
-        navigate('/lost-found');
+        setSubmitSuccess(true); // ← Hiển thị panel kết quả, KHÔNG navigate
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.');
+      const errorMessage = err?.response?.data?.message || err?.message || 'Đã có lỗi xảy ra. Vui lòng thử lại.';
+      setError(errorMessage);
+      toastError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
+  // BUG FIX #1: Hiển thị kết quả sau submit thay vì render form
+  if (submitSuccess) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-4">
+        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-700 p-8 md:p-12 shadow-2xl shadow-indigo-100/50 text-center space-y-6">
+          <div className="w-20 h-20 bg-emerald-100 dark:bg-emerald-900/20 rounded-full flex items-center justify-center mx-auto">
+            <BadgeCheck size={40} className="text-emerald-500 dark:text-emerald-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-slate-900 mb-2">Đăng tin <span className="text-emerald-600">thành công!</span></h1>
+            <p className="text-slate-500">Tin của bạn đã được đăng lên hệ thống IUH Exchange.</p>
+          </div>
+
+          {/* Kết quả AI nếu có */}
+          {analysisResult && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="p-5 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl border border-indigo-100 dark:border-indigo-700 text-left space-y-2 text-indigo-700 dark:text-indigo-200"
+            >
+              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-200 font-black text-sm uppercase mb-3">
+                <ScanLine size={16} />
+                Kết quả phân tích AI
+              </div>
+              {analysisResult.detectedType && analysisResult.detectedType !== 'unknown' && (
+                <p className="text-sm text-slate-700 dark:text-slate-200">
+                  <span className="font-bold">Loại đồ vật:</span> {analysisResult.detectedType}
+                  {analysisResult.confidence && (
+                    <span className="ml-2 text-xs text-slate-500 dark:text-slate-400">({Math.round(analysisResult.confidence * 100)}% tin cậy)</span>
+                  )}
+                </p>
+              )}
+              {analysisResult.studentId && (
+                <p className="text-sm text-slate-700 dark:text-slate-200">
+                  <span className="font-bold">MSSV phát hiện:</span>{' '}
+                  <span className="font-mono bg-indigo-100 dark:bg-indigo-800 px-2 py-0.5 rounded">{analysisResult.studentId}</span>
+                </p>
+              )}
+              {(analysisResult.matchCount ?? 0) > 0 && (
+                <p className="text-sm text-emerald-700 dark:text-emerald-300 font-bold">
+                  🎯 Tìm thấy {analysisResult.matchCount} tin có thể khớp!
+                </p>
+              )}
+            </motion.div>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              onClick={() => navigate('/lost-found')}
+              className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black text-lg hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100"
+            >
+              Xem danh sách tin
+            </button>
+            <button
+              onClick={() => { setSubmitSuccess(false); setAnalysisResult(null); setImageFile(null); setImagePreview(null); setFormData({ title: '', description: '', type: 'LOST' as ItemType, location: '', contactInfo: '' }); }}
+              className="px-6 py-4 border-2 border-slate-200 text-slate-600 rounded-2xl font-bold hover:border-indigo-300 transition-all"
+            >
+              Đăng thêm
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-3xl mx-auto py-12 px-4">
@@ -123,7 +285,9 @@ const ReportLostFound: React.FC = () => {
 
       <div className="bg-white rounded-[2.5rem] border border-slate-100 p-8 md:p-12 shadow-2xl shadow-indigo-100/50">
         <div className="mb-10 text-center">
-          <h1 className="text-4xl font-black text-slate-900 mb-2">Đăng tin <span className="text-indigo-600">Thất lạc</span></h1>
+          <h1 className="text-4xl font-black text-slate-900 mb-2">
+            {isEditMode ? 'Chỉnh sửa' : 'Đăng tin'} <span className="text-indigo-600">Thất lạc</span>
+          </h1>
           <p className="text-slate-500">Giúp cộng đồng IUH bằng cách cung cấp thông tin chính xác nhất.</p>
         </div>
 
@@ -237,12 +401,12 @@ const ReportLostFound: React.FC = () => {
                   <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
                 </label>
 
-                {imagePreview && (
+                {(imagePreview || (isEditMode && existingImageUrls.length > 0)) && (
                   <div className="relative w-32 h-32 rounded-3xl overflow-hidden shadow-md border border-slate-100">
-                    <img src={imagePreview} className="w-full h-full object-cover" alt="Preview" />
+                    <img src={imagePreview || existingImageUrls[0]} className="w-full h-full object-cover" alt="Preview" />
                     <button
                       type="button"
-                      onClick={() => {setImageFile(null); setImagePreview(null);}}
+                      onClick={() => { setImageFile(null); setImagePreview(null); setExistingImageUrls([]); }}
                       className="absolute top-1 right-1 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-rose-600 transition-colors"
                     >
                       ×
@@ -307,35 +471,8 @@ const ReportLostFound: React.FC = () => {
             )}
           </div>
 
-          {/* AI Analysis Result Preview */}
-          {analysisResult && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="p-5 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2"
-            >
-              <div className="flex items-center gap-2 text-emerald-700 font-black text-sm uppercase">
-                <ScanLine size={16} />
-                Kết quả phân tích AI
-              </div>
-              {analysisResult.detectedType && analysisResult.detectedType !== 'unknown' && (
-                <p className="text-sm text-slate-700">
-                  <span className="font-bold">Loại đồ vật:</span> {analysisResult.detectedType}
-                  {analysisResult.confidence && (
-                    <span className="ml-2 text-xs text-slate-500">({Math.round(analysisResult.confidence * 100)}% tin cậy)</span>
-                  )}
-                </p>
-              )}
-              {analysisResult.studentId && (
-                <p className="text-sm text-slate-700">
-                  <span className="font-bold">MSSV phát hiện:</span>{' '}
-                  <span className="font-mono bg-emerald-100 px-2 py-0.5 rounded">{analysisResult.studentId}</span>
-                </p>
-              )}
-            </motion.div>
-          )}
-
           {error && (
+
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
@@ -356,7 +493,7 @@ const ReportLostFound: React.FC = () => {
             ) : (
               <>
                 <Send size={24} />
-                ĐĂNG BẢN TIN NGAY
+                {isEditMode ? 'LƯU THAY ĐỔI' : 'ĐĂNG BẢN TIN NGAY'}
               </>
             )}
           </button>

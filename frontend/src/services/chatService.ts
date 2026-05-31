@@ -135,6 +135,12 @@ export const chatService = {
     stompClient = Stomp.over(socket);
     stompClient.debug = () => {};
 
+    // Configure heartbeats to match server expectation (25s).
+    // Without this, old stompjs defaults to 0,0 (no heartbeats),
+    // and the server closes the connection after its heartbeat timeout.
+    stompClient.heartbeat.outgoing = 25000;
+    stompClient.heartbeat.incoming = 25000;
+
     stompClient.connect({ Authorization: `Bearer ${accessToken}` }, (frame) => {
       isConnecting = false;
       console.log('[WebSocket] Real-time link established.', frame);

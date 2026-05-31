@@ -5,6 +5,14 @@
  * Ưu tiên: process.env > default values
  */
 
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
+import { resolve, dirname } from 'node:path';
+
+// Load .env from monorepo root (../../ from packages/common/src/config/)
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../../../../.env') });
+
 // ── Required env validation ──
 const REQUIRED_ENV_VARS = ['JWT_SECRET'];
 

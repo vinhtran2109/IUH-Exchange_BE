@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useThemeStore } from '../store/themeStore';
@@ -17,22 +17,22 @@ import { authService } from '../services/authService';
 import api, { refreshAccessToken } from '../services/api';
 
 const Layout: React.FC = () => {
-  const { user, isAuthenticated, logout, updateUser } = (useAuthStore as any)();
+  const { user, isAuthenticated, logout, updateUser } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const fetchNotifs = async () => {
+  const fetchNotifs = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const res = await notificationService.getNotifications();
       if (res.success) setNotifications(res.data);
     } catch (e) {
-      console.error("Lỗi fetch thông báo", e);
+      console.error('Lỗi fetch thông báo', e);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -61,7 +61,7 @@ const Layout: React.FC = () => {
       clearInterval(interval);
       removeNotifListener();
     };
-  }, [isAuthenticated]);
+  }, [fetchNotifs, updateUser, isAuthenticated]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -124,10 +124,12 @@ const Layout: React.FC = () => {
   };
 
   const getNotifRoute = (n: Notification): string | null => {
+    if (n.link) return n.link;
     if (!n.targetId) return null;
     const t = n.type?.toUpperCase() || '';
     if (t.includes('ORDER'))   return `/orders/${n.targetId}`;
     if (t.includes('PRODUCT')) return `/products/${n.targetId}`;
+    if (t.includes('LOST'))    return `/lost-found/${n.targetId}`;
     if (t.includes('KARMA'))   return '/karma-history';
     if (t.includes('REPORT'))  return '/my-reports';
     return null;
@@ -136,14 +138,19 @@ const Layout: React.FC = () => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
+    <div className="min-h-screen bg-(--background) text-(--foreground)">
       <ChatManager />
       {/* Navigation Bar */}
-      <nav className="sticky top-0 z-50 w-full border-b border-[var(--border)] bg-[var(--background)]">
+      <nav className="sticky top-0 z-50 w-full border-b border-(--border) bg-(--background)">
         <div className="container mx-auto px-6 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md shadow-indigo-200">IUH</div>
+            <img
+              src={encodeURI('/icons/Logo chính thức.png')}
+              alt="Chợ IUH"
+              className="h-9 w-auto rounded-xl object-contain shadow-md shadow-indigo-200"
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/icons/icon-192.png'; }}
+            />
             <span className="font-bold text-base tracking-tight hidden sm:block text-slate-900">Chợ IUH</span>
           </Link>
 
@@ -204,7 +211,7 @@ const Layout: React.FC = () => {
                   </button>
 
                   {showNotifications && (
-                    <div className="absolute right-0 mt-2 w-80 bg-[var(--background)] rounded-2xl border border-[var(--border)] shadow-xl overflow-hidden origin-top-right">
+                    <div className="absolute right-0 mt-2 w-80 bg-(--background) rounded-2xl border border-(--border) shadow-xl overflow-hidden origin-top-right">
                       <div className="p-3 border-b border-slate-100 flex items-center justify-between">
                         <h4 className="font-semibold text-slate-800 text-sm">Thông báo</h4>
                         <div className="flex items-center gap-2">
@@ -218,7 +225,7 @@ const Layout: React.FC = () => {
                           </button>
                         </div>
                       </div>
-                      <div className="max-h-[360px] overflow-y-auto divide-y divide-slate-50">
+                      <div className="max-h-90 overflow-y-auto divide-y divide-slate-50">
                         {notifications.length === 0 ? (
                           <div className="p-8 text-center text-slate-400 text-sm">Chưa có thông báo nào.</div>
                         ) : (
@@ -239,6 +246,11 @@ const Layout: React.FC = () => {
                                 </div>
                                 <div className="min-w-0 flex-1">
                                   <p className="text-xs font-medium text-slate-700 leading-snug mb-1 line-clamp-2">{n.message}</p>
+                                  {getNotifRoute(n) && (
+                                    <div className="mt-1 text-[11px] font-semibold text-indigo-600">
+                                      Xem chi tiết →
+                                    </div>
+                                  )}
                                   <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
                                     <Clock size={10}/> {n.createdAt ? new Date(n.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' }) : 'Vừa xong'}
                                     {!n.isRead && <span className="ml-1 w-1.5 h-1.5 bg-indigo-500 rounded-full"></span>}
@@ -277,18 +289,18 @@ const Layout: React.FC = () => {
                   <Link to="/profile" className="flex items-center gap-2.5 pl-3 border-l border-slate-200 ml-1 cursor-pointer py-1.5">
                     <div className="text-right hidden sm:block">
                       <p className="text-sm font-semibold text-slate-700 line-clamp-1 leading-none mb-0.5 group-hover:text-slate-900 transition-colors">{user?.name}</p>
-                      <div className="flex items-center justify-end gap-1 px-1.5 py-0.5 bg-gradient-to-r from-amber-50 to-yellow-50 text-amber-700 rounded text-[10px] font-bold border border-amber-100">
+                      <div className="flex items-center justify-end gap-1 px-1.5 py-0.5 bg-linear-to-r from-amber-50 to-yellow-50 text-amber-700 rounded text-[10px] font-bold border border-amber-100">
                         <Zap size={9} strokeWidth={2.5} />
                         <span className="leading-none">{user?.karmaPoint} Karma</span>
                       </div>
                     </div>
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-100 to-violet-100 border-2 border-white shadow-sm overflow-hidden">
+                    <div className="w-9 h-9 rounded-full bg-linear-to-br from-indigo-100 to-violet-100 border-2 border-white shadow-sm overflow-hidden">
                       {user?.avatarUrl ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-indigo-400"><UserIcon size={18} /></div>}
                     </div>
                   </Link>
                   {/* Dropdown on hover */}
                   <div className="absolute right-0 top-full pt-2 hidden group-hover:block z-50">
-                    <div className="bg-[var(--background)] rounded-xl border border-[var(--border)] shadow-lg py-1.5 w-44">
+                    <div className="bg-(--background) rounded-xl border border-(--border) shadow-lg py-1.5 w-44">
                       <Link to="/profile" className="flex items-center gap-2 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors">
                         <UserIcon size={14} /> Hồ sơ
                       </Link>
@@ -323,11 +335,16 @@ const Layout: React.FC = () => {
         <Outlet />
       </main>
 
-      <footer className="bg-[var(--surface)] border-t border-[var(--border)] mt-auto py-12">
+      <footer className="bg-(--surface) border-t border-(--border) mt-auto py-12">
         <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-xl flex items-center justify-center text-white font-bold text-xs">IUH</div>
+              <img
+                src={encodeURI('/icons/Logo chính thức.png')}
+                alt="Chợ IUH"
+                className="h-8 w-auto rounded-xl object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/icons/icon-192.png'; }}
+              />
               <span className="font-bold text-base text-slate-900">Chợ IUH</span>
             </div>
             <p className="text-slate-500 text-sm max-w-sm leading-relaxed">Nền tảng mua bán và trao đổi đồ cũ dành cho cộng đồng sinh viên Đại học Công nghiệp TP.HCM.</p>

@@ -149,7 +149,19 @@ function personLabel(person, fallback = 'Đối tác') {
  * @param {string} params.type - ORDER | CHAT | SYSTEM | KARMA | REPORT
  * @param {string} [params.targetId]
  */
-async function sendNotification({ recipientId, title, message, type, targetId }) {
+function buildNotificationLink(type, targetId, explicitLink) {
+  if (explicitLink) return explicitLink;
+  if (!targetId) return null;
+
+  const upperType = String(type || '').toUpperCase();
+  if (upperType.includes('ORDER')) return `/orders/${targetId}`;
+  if (upperType.includes('PRODUCT')) return `/products/${targetId}`;
+  if (upperType.includes('REPORT')) return '/my-reports';
+  if (upperType.includes('KARMA')) return '/karma-history';
+  return null;
+}
+
+async function sendNotification({ recipientId, title, message, type, targetId, link }) {
   if (!recipientId) return;
 
   // Check user's notification preferences
@@ -175,6 +187,7 @@ async function sendNotification({ recipientId, title, message, type, targetId })
     message,
     type,
     targetId: targetId || null,
+    link: buildNotificationLink(type, targetId, link),
   });
 
   const notificationObj = notification.toObject();
@@ -610,6 +623,7 @@ const eventHandlers = {
       message,
       type: 'SYSTEM',
       targetId: itemId,
+      link: `/lost-found/${itemId}`,
     });
 
     // If MSSV found and item is FOUND, try to notify the owner of that student ID
@@ -624,6 +638,7 @@ const eventHandlers = {
             message: `Một vật phẩm phù hợp với MSSV ${studentId} của bạn vừa được đăng tìm: "${title}"`,
             type: 'SYSTEM',
             targetId: itemId,
+            link: `/lost-found/${itemId}`,
           });
         }
       } catch {
@@ -647,6 +662,7 @@ const eventHandlers = {
       message: `Có ${matchCount} vật phẩm có thể khớp với "${title}" (độ phù hợp cao nhất: ${bestScore}%). Kiểm tra ngay!`,
       type: 'SYSTEM',
       targetId: itemId,
+      link: `/lost-found/${itemId}`,
     });
 
     const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
@@ -659,6 +675,7 @@ const eventHandlers = {
           message: `"${title}" có thể là vật phẩm ${oppositeType === 'LOST' ? 'bị mất' : 'nhặt được'} liên quan đến bài "${match.title}" của bạn (${matchScore}% phù hợp).`,
           type: 'SYSTEM',
           targetId: match.itemId,
+          link: `/lost-found/${match.itemId}`,
         });
       }
     }
@@ -691,6 +708,7 @@ const eventHandlers = {
       message: `Bài "${payload.title || 'đồ thất lạc'}" vừa có claim mới cần xác minh.`,
       type: 'SYSTEM',
       targetId: payload.itemId,
+      link: `/lost-found/${payload.itemId}`,
     });
   },
 
@@ -701,6 +719,7 @@ const eventHandlers = {
       message: `Yêu cầu nhận "${payload.title || 'đồ thất lạc'}" đã được phản hồi.`,
       type: 'SYSTEM',
       targetId: payload.itemId,
+      link: `/lost-found/${payload.itemId}`,
     });
   },
 };
