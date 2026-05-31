@@ -55,6 +55,59 @@ type LostFoundTypeFilter = 'ALL' | 'LOST' | 'FOUND';
 type DlqFilter = 'ALL' | 'PENDING' | 'RETRYING' | 'RETRY_FAILED';
 type OrderFilter = 'ALL' | 'AWAITING_SELLER' | 'COMPLETED' | 'CANCELLED' | 'DISPUTED';
 
+type EntityWithId = { id?: string; _id?: string } | null | undefined;
+
+interface AdminProductData {
+  id?: string;
+  _id?: string;
+  sellerId?: string;
+  title?: string;
+  description?: string;
+  price?: number;
+  status?: string;
+  category?: string;
+  condition?: string;
+  imageUrls?: string[];
+}
+
+interface DashboardStats {
+  user?: { total?: number };
+  product?: { total?: number; pending?: number; available?: number; sold?: number };
+}
+
+interface HeatmapLocation {
+  location: string;
+  lost: number;
+  found: number;
+  total: number;
+}
+
+interface HeatmapAnalysisStat {
+  status: string;
+  count: number;
+}
+
+interface HeatmapTimelinePoint {
+  date: string;
+  lost: number;
+  found: number;
+}
+
+interface HeatmapData {
+  locations?: HeatmapLocation[];
+  analysisStats?: HeatmapAnalysisStat[];
+  timeline?: HeatmapTimelinePoint[];
+}
+
+interface ApiErrorShape {
+  response?: {
+    data?: {
+      message?: string;
+      error?: string;
+    };
+  };
+}
+
 const ADMIN_TABS = [
   { id: 'overview', label: 'Tổng quan', group: 'Bảng chính', icon: TrendingUp },
   { id: 'analytics', label: 'Phân tích', group: 'Bảng chính', icon: TrendingUp },
@@ -78,7 +131,18 @@ const formatDate = (value?: string) => {
 
 const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
 
-const getEntityId = (value: any) => value?.id || value?._id || '';
+const getEntityId = (value: EntityWithId) => value?.id || value?._id || '';
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const apiError = error as ApiErrorShape;
+    return apiError.response?.data?.message || apiError.response?.data?.error || fallback;
+  }
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return fallback;
+};
 
 const statusLabel = (status?: string) => {
   switch (status) {
@@ -233,7 +297,7 @@ const paymentMethodLabel = (method?: string) => {
 };
 
 const AdminDashboard: React.FC = () => {
-  const { user, isLoading } = useAuthStore() as any;
+  const { user, isLoading } = useAuthStore() as { user?: { role?: string; email?: string }; isLoading: boolean };
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
@@ -253,7 +317,7 @@ const AdminDashboard: React.FC = () => {
   const [emailResult, setEmailResult] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const [users, setUsers] = useState<UserAdminData[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<AdminProductData[]>([]);
   const [reports, setReports] = useState<ReportData[]>([]);
   const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
   const [dlqEvents, setDlqEvents] = useState<DlqEventData[]>([]);
@@ -261,23 +325,23 @@ const AdminDashboard: React.FC = () => {
   const [adminOrders, setAdminOrders] = useState<AdminOrderData[]>([]);
   const [reportedMessages, setReportedMessages] = useState<ReportedMessageData[]>([]);
   const [dlqStats, setDlqStats] = useState<Record<string, number>>({});
-  const [stats, setStats] = useState<any>({ user: {}, product: {} });
+  const [stats, setStats] = useState<DashboardStats>({ user: {}, product: {} });
 
   const [permUser, setPermUser] = useState<UserAdminData | null>(null);
   const [permValues, setPermValues] = useState<string[]>([]);
   const [permSaving, setPermSaving] = useState(false);
 
-  const [detailUser, setDetailUser] = useState<any>(null);
+  const [detailUser, setDetailUser] = useState<UserAdminData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const [productDetail, setProductDetail] = useState<any>(null);
+  const [productDetail, setProductDetail] = useState<AdminProductData | null>(null);
   const [productDetailLoading, setProductDetailLoading] = useState(false);
 
-  const [lostFoundDetail, setLostFoundDetail] = useState<any>(null);
+  const [lostFoundDetail, setLostFoundDetail] = useState<LostFoundAdminData | null>(null);
   const [lostFoundDetailLoading, setLostFoundDetailLoading] = useState(false);
 
   // Heatmap data for lost-found analytics
-  const [heatmapData, setHeatmapData] = useState<any>(null);
+  const [heatmapData, setHeatmapData] = useState<HeatmapData | null>(null);
   const [heatmapLoading, setHeatmapLoading] = useState(false);
 
   useEffect(() => {
@@ -287,7 +351,7 @@ const AdminDashboard: React.FC = () => {
       return;
     }
     void fetchData();
-  }, [activeTab, productFilter, reportFilter, reportTargetType, lostFoundTypeFilter, dlqFilter, user, isLoading, navigate]);
+  }, [activeTab, productFilter, reportFilter, reportTargetType, lostFoundTypeFilter, dlqFilter, user, isLoading, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchData = async () => {
     setLoading(true);
@@ -303,7 +367,7 @@ const AdminDashboard: React.FC = () => {
         ]);
         setStats({ user: uStats.data, product: pStats.data });
         setReports(reportRes.data?.content || []);
-        setProducts(productRes.data?.content || []);
+        setProducts((productRes.data?.content || []) as AdminProductData[]);
         setLostFoundItems(lostFoundRes.data?.content || []);
         setDlqEvents(dlqRes.data?.content || []);
         setDlqStats(dlqRes.data?.stats || {});
@@ -333,8 +397,12 @@ const AdminDashboard: React.FC = () => {
       }
 
       if (activeTab === 'products') {
-        const res = await adminService.getAdminProducts(productFilter, 1, 100);
-        if (res.success) setProducts(res.data.content || []);
+        const [productRes, userRes] = await Promise.all([
+          adminService.getAdminProducts(productFilter, 1, 100),
+          adminService.getAllUsers(1, 100),
+        ]);
+        if (productRes.success) setProducts((productRes.data.content || []) as AdminProductData[]);
+        if (userRes.success) setUsers(userRes.data.content || []);
         return;
       }
 
@@ -396,8 +464,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.toggleBanUser(userId);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể cập nhật trạng thái'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể cập nhật trạng thái'));
     }
   };
 
@@ -409,8 +477,8 @@ const AdminDashboard: React.FC = () => {
         if (getEntityId(detailUser) === userId) setDetailUser(null);
         await fetchData();
       }
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xóa tài khoản'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể xóa tài khoản'));
     }
   };
 
@@ -419,8 +487,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.updateUserRole(userId, newRole);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể đổi vai trò'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể đổi vai trò'));
     }
   };
 
@@ -431,8 +499,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.adjustKarma(userId, direction === 'up' ? Number(amount) : -Number(amount), reason);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể cập nhật karma'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể cập nhật karma'));
     }
   };
 
@@ -452,8 +520,8 @@ const AdminDashboard: React.FC = () => {
       await adminService.updateUserPermissions(permUser.id, permValues);
       setPermUser(null);
       await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể lưu quyền'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể lưu quyền'));
     } finally {
       setPermSaving(false);
     }
@@ -509,8 +577,8 @@ const AdminDashboard: React.FC = () => {
         if (getEntityId(productDetail) === productId) setProductDetail(null);
         await fetchData();
       }
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể cập nhật bài đăng'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể cập nhật bài đăng'));
     }
   };
 
@@ -522,8 +590,8 @@ const AdminDashboard: React.FC = () => {
         if (getEntityId(productDetail) === productId) setProductDetail(null);
         await fetchData();
       }
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể gỡ bài đăng'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể gỡ bài đăng'));
     }
   };
 
@@ -535,8 +603,8 @@ const AdminDashboard: React.FC = () => {
         if (getEntityId(lostFoundDetail) === itemId) setLostFoundDetail(null);
         await fetchData();
       }
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể gỡ bài đăng'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể gỡ bài đăng'));
     }
   };
 
@@ -545,8 +613,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.resolveReport(reportId, status, adminNote);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xử lý tố cáo'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể xử lý tố cáo'));
     }
   };
 
@@ -595,8 +663,8 @@ const AdminDashboard: React.FC = () => {
         await adminService.resolveReport(reportId, 'RESOLVED', adminNote);
         await fetchData();
       }
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xử lý tố cáo'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể xử lý tố cáo'));
     }
   };
 
@@ -604,8 +672,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.retryDlqEvent(eventId);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể thử lại sự kiện'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể thử lại sự kiện'));
     }
   };
 
@@ -614,8 +682,8 @@ const AdminDashboard: React.FC = () => {
     try {
       const res = await adminService.dismissDlqEvent(eventId);
       if (res.success) await fetchData();
-    } catch (e: any) {
-      alert('Lỗi: ' + (e.response?.data?.message || 'Không thể bỏ qua sự kiện'));
+    } catch (error) {
+      alert('Lỗi: ' + getErrorMessage(error, 'Không thể bỏ qua sự kiện'));
     }
   };
 
@@ -638,8 +706,8 @@ const AdminDashboard: React.FC = () => {
       } else {
         setEmailResult({ type: 'error', message: res.message || 'Không thể gửi email.' });
       }
-    } catch (e: any) {
-      setEmailResult({ type: 'error', message: e.response?.data?.message || e.response?.data?.error || 'Không thể gửi email.' });
+    } catch (error) {
+      setEmailResult({ type: 'error', message: getErrorMessage(error, 'Không thể gửi email.') });
     } finally {
       setEmailSending(false);
     }
@@ -715,7 +783,7 @@ const AdminDashboard: React.FC = () => {
   const secondaryActionClass = 'inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700';
 
   const EmptyState = ({ icon: Icon, title, description }: { icon: React.ElementType; title: string; description: string }) => (
-    <div className="flex min-h-[148px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
+    <div className="flex min-h-37 flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 px-6 py-8 text-center">
       <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
         <Icon size={22} />
       </div>
@@ -751,7 +819,7 @@ const AdminDashboard: React.FC = () => {
           { label: 'Tố cáo chờ xử lý', value: reports.length, icon: AlertTriangle },
           { label: 'Sự kiện DLQ', value: dlqEvents.length, icon: Server },
         ].map((item) => (
-          <div key={item.label} className={`${overviewCardClass} min-h-[156px] p-6`}>
+          <div key={item.label} className={`${overviewCardClass} min-h-39 p-6`}>
             <div className="flex items-start justify-between gap-4">
               <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                 <item.icon size={26} strokeWidth={2.2} />
@@ -784,7 +852,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                     <span className="font-bold text-slate-700">{currency(product.price)}</span>
                     <span className="h-1 w-1 rounded-full bg-slate-300" />
-                    <span className="font-mono text-xs">{product.sellerId}</span>
+                    <span className="font-mono text-xs">{shortId(product.sellerId)}</span>
                   </div>
                 </div>
                 <button onClick={() => openProductDetail(getEntityId(product))} className={iconButtonClass} title="Xem chi tiết">
@@ -1237,12 +1305,20 @@ const AdminDashboard: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {products.map((product) => (
+            {products.map((product) => {
+              const seller = users.find((targetUser) => targetUser.id === product.sellerId);
+              const sellerName = seller?.name || 'Chưa có tên';
+              const sellerStudentId = seller?.studentId || '';
+
+              return (
               <tr key={getEntityId(product)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="p-4 text-sm text-slate-600 truncate max-w-[160px]">{product.sellerId}</td>
+                <td className="p-4 text-sm text-slate-600 max-w-40">
+                  <div className="truncate font-bold text-slate-700">{sellerName}</div>
+                  <div className="mt-0.5 truncate text-xs text-slate-400">{sellerStudentId ? `MSSV: ${sellerStudentId}` : 'Chưa có MSSV'}</div>
+                </td>
                 <td className="p-4">
                   <div className="font-bold text-slate-800">{product.title}</div>
-                  <div className="text-xs text-slate-400 mt-1 line-clamp-1 max-w-[260px]">{product.description}</div>
+                  <div className="text-xs text-slate-400 mt-1 line-clamp-1 max-w-65">{product.description}</div>
                 </td>
                 <td className="p-4">
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeClass(product.status)}`}>{statusLabel(product.status)}</span>
@@ -1263,7 +1339,8 @@ const AdminDashboard: React.FC = () => {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
             {products.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-10 text-center text-slate-400">Không có bài đăng phù hợp.</td>
@@ -1324,9 +1401,9 @@ const AdminDashboard: React.FC = () => {
                 <tr key={reportId} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="p-4">
                     <div className="font-bold text-slate-800">{isAccountSupport ? 'Hỗ trợ tài khoản' : reportTargetLabel(report.targetType)}</div>
-                    <div className="text-xs text-slate-400 break-all">{isAccountSupport ? 'Người gửi yêu cầu' : report.targetId}</div>
+                    <div className="text-xs text-slate-400 break-all">{isAccountSupport ? 'Người gửi yêu cầu' : shortId(report.targetId)}</div>
                   </td>
-                  <td className="p-4 max-w-[360px]">
+                  <td className="p-4 max-w-90">
                     <div className="text-sm text-slate-700 line-clamp-2">{reason}</div>
                     {report.adminNote && <div className="text-xs text-slate-400 mt-1">Ghi chú: {report.adminNote}</div>}
                   </td>
@@ -1410,7 +1487,7 @@ const AdminDashboard: React.FC = () => {
             <div>
               <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Khu vực nhiều đồ thất lạc nhất</h4>
               <div className="space-y-2 max-h-64 overflow-y-auto">
-                {(heatmapData.locations || []).slice(0, 10).map((loc: any, idx: number) => (
+                {(heatmapData.locations || []).slice(0, 10).map((loc: HeatmapLocation, idx: number) => (
                   <div key={idx} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl">
                     <div className="flex-1">
                       <div className="text-sm font-bold text-slate-800">{loc.location}</div>
@@ -1442,7 +1519,7 @@ const AdminDashboard: React.FC = () => {
             <div>
               <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Trạng thái phân tích AI</h4>
               <div className="grid grid-cols-2 gap-3">
-                {(heatmapData.analysisStats || []).map((stat: any, idx: number) => {
+                {(heatmapData.analysisStats || []).map((stat: HeatmapAnalysisStat, idx: number) => {
                   const colors: Record<string, string> = {
                     COMPLETED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
                     PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -1470,16 +1547,19 @@ const AdminDashboard: React.FC = () => {
               {heatmapData.timeline && heatmapData.timeline.length > 0 && (
                 <div className="mt-4">
                   <h4 className="text-sm font-black text-slate-700 mb-3 uppercase tracking-wider">Xu hướng theo ngày</h4>
+                  {(() => {
+                    const recentTimeline = heatmapData.timeline?.slice(-14) || [];
+                    const maxVal = Math.max(...recentTimeline.map((point: HeatmapTimelinePoint) => point.lost + point.found), 1);
+                    return (
                   <div className="flex items-end gap-1 h-20">
-                    {heatmapData.timeline.slice(-14).map((day: any, idx: number) => {
-                      const maxVal = Math.max(...heatmapData.timeline.slice(-14).map((d: any) => d.lost + d.found), 1);
+                    {recentTimeline.map((day: HeatmapTimelinePoint, idx: number) => {
                       const height = ((day.lost + day.found) / maxVal) * 100;
                       return (
                         <div key={idx} className="flex-1 flex flex-col items-center gap-0.5" title={`${day.date}: Mất ${day.lost}, Nhặt ${day.found}`}>
                           <div className="w-full flex flex-col items-stretch" style={{ height: '64px' }}>
                             <div className="flex-1" />
                             <div
-                              className="bg-indigo-400 rounded-t-sm min-h-[2px]"
+                              className="bg-indigo-400 rounded-t-sm min-h-0.5"
                               style={{ height: `${height}%` }}
                             />
                           </div>
@@ -1488,6 +1568,8 @@ const AdminDashboard: React.FC = () => {
                       );
                     })}
                   </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -1602,15 +1684,15 @@ const AdminDashboard: React.FC = () => {
                 <td className="p-4">
                   <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">{log.action}</span>
                 </td>
-                <td className="p-4 text-slate-700">{log.resource}{log.resourceId ? ` / ${log.resourceId}` : ''}</td>
+                <td className="p-4 text-slate-700">{log.resource}{log.resourceId ? ` / ${shortId(log.resourceId)}` : ''}</td>
                 <td className="p-4 font-black text-slate-700">{log.method}</td>
                 <td className="p-4">
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${(log.statusCode || 0) >= 400 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}>
                     {log.statusCode || 'N/A'}
                   </span>
                 </td>
-                <td className="p-4 text-slate-500">{log.userId || 'system'}</td>
-                <td className="max-w-[280px] truncate p-4 text-slate-500" title={log.path}>{log.path}</td>
+                <td className="p-4 text-slate-500">{log.userId ? shortId(log.userId) : 'system'}</td>
+                <td className="max-w-70 truncate p-4 text-slate-500" title={log.path}>{log.path}</td>
               </tr>
             ))}
             {auditLogs.length === 0 && (
@@ -1639,8 +1721,8 @@ const AdminDashboard: React.FC = () => {
       try {
         await adminService.resolvePaymentIssue(order._id, action, resolution || defaultResolution);
         await fetchData();
-      } catch (e: any) {
-        alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xử lý thanh toán'));
+      } catch (error) {
+        alert('Lỗi: ' + getErrorMessage(error, 'Không thể xử lý thanh toán'));
       }
     };
 
@@ -1656,8 +1738,8 @@ const AdminDashboard: React.FC = () => {
       try {
         await adminService.resolveOrderDispute(order._id, status, resolution || defaultResolution, outcome, remedy);
         await fetchData();
-      } catch (e: any) {
-        alert('Lỗi: ' + (e.response?.data?.message || 'Không thể xử lý tranh chấp'));
+      } catch (error) {
+        alert('Lỗi: ' + getErrorMessage(error, 'Không thể xử lý tranh chấp'));
       }
     };
 
@@ -1777,8 +1859,10 @@ const AdminDashboard: React.FC = () => {
             const hasDispute = order.disputeStatus === 'OPEN';
             const needsAction = hasPaymentIssue || hasDispute;
             const productTitle = order.productTitle || order.product?.title || 'Sản phẩm ' + shortId(order.productId);
-            const buyerLabel = order.buyerName || order.buyer?.name || 'Người mua ' + shortId(order.buyerId);
-            const sellerLabel = order.sellerName || order.seller?.name || 'Người bán ' + shortId(order.sellerId);
+            const buyerStudentId = order.buyer?.studentId || '';
+            const sellerStudentId = order.seller?.studentId || '';
+            const buyerLabel = order.buyerName || order.buyer?.name || (buyerStudentId ? `MSSV ${buyerStudentId}` : 'Chưa có thông tin sinh viên');
+            const sellerLabel = order.sellerName || order.seller?.name || (sellerStudentId ? `MSSV ${sellerStudentId}` : 'Chưa có thông tin sinh viên');
             const dispute = disputeMeta(order);
 
             return (
@@ -1798,16 +1882,16 @@ const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-[380px]">
+                  <div className="grid w-full gap-3 sm:grid-cols-2 xl:w-95">
                     <button type="button" onClick={() => openUserDetail(order.buyerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
                       <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người mua</div>
                       <div className="mt-1 truncate text-sm font-black text-slate-800">{buyerLabel}</div>
-                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.buyerId)}</div>
+                      <div className="mt-0.5 text-[11px] font-bold text-slate-400">{buyerStudentId ? `MSSV: ${buyerStudentId}` : 'Chưa có MSSV'}</div>
                     </button>
                     <button type="button" onClick={() => openUserDetail(order.sellerId)} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left transition-colors hover:border-blue-200 hover:bg-blue-50">
                       <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người bán</div>
                       <div className="mt-1 truncate text-sm font-black text-slate-800">{sellerLabel}</div>
-                      <div className="mt-0.5 font-mono text-[11px] font-bold text-slate-400">{shortId(order.sellerId)}</div>
+                      <div className="mt-0.5 text-[11px] font-bold text-slate-400">{sellerStudentId ? `MSSV: ${sellerStudentId}` : 'Chưa có MSSV'}</div>
                     </button>
                   </div>
                 </div>
@@ -2080,8 +2164,8 @@ const AdminDashboard: React.FC = () => {
   );
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-8 lg:pl-[292px] lg:pr-10">
-      <aside className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-[264px] lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
+    <div className="min-h-[calc(100vh-4rem)] bg-white px-4 py-8 lg:pl-73 lg:pr-10">
+      <aside className="mb-6 rounded-2xl border border-slate-200 bg-white shadow-sm lg:fixed lg:left-0 lg:top-16 lg:mb-0 lg:h-[calc(100vh-4rem)] lg:w-66 lg:rounded-none lg:border-y-0 lg:border-l-0 lg:shadow-none">
         <div className="flex h-full flex-col">
           <div className="border-b border-slate-100 px-6 py-6">
             <div className="flex items-center gap-3">
@@ -2276,15 +2360,21 @@ const AdminDashboard: React.FC = () => {
             {productDetailLoading ? (
               <div className="py-10 text-center"><Loader2 size={24} className="animate-spin mx-auto text-indigo-600" /></div>
             ) : productDetail ? (
+              (() => {
+                const productImages = productDetail.imageUrls || [];
+                const sellerInfo = users.find((targetUser) => targetUser.id === productDetail.sellerId);
+                const sellerName = sellerInfo?.name || 'Chưa có tên';
+                const sellerStudentId = sellerInfo?.studentId || '';
+                return (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-6">
                   <div className="space-y-3">
                     <div className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
-                      <img src={productDetail.imageUrls?.[0] || 'https://placehold.co/800x800/e2e8f0/94a3b8?text=IUH'} alt={productDetail.title} className="w-full h-full object-cover" />
+                      <img src={productImages[0] || 'https://placehold.co/800x800/e2e8f0/94a3b8?text=IUH'} alt={productDetail.title} className="w-full h-full object-cover" />
                     </div>
-                    {productDetail.imageUrls?.length > 1 && (
+                    {productImages.length > 1 && (
                       <div className="grid grid-cols-4 gap-2">
-                        {productDetail.imageUrls.map((url: string, index: number) => (
+                        {productImages.map((url: string, index: number) => (
                           <div key={`${url}-${index}`} className="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                             <img src={url} alt={`${productDetail.title} ${index + 1}`} className="w-full h-full object-cover" />
                           </div>
@@ -2317,7 +2407,8 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="p-3 bg-slate-50 rounded-2xl">
                       <div className="text-xs text-slate-400 font-bold uppercase">Người bán</div>
-                      <div className="text-sm font-bold text-slate-800 mt-1 break-all">{productDetail.sellerId}</div>
+                      <div className="text-sm font-bold text-slate-800 mt-1 break-all">{sellerName}</div>
+                      <div className="mt-0.5 text-xs text-slate-400">{sellerStudentId ? `MSSV: ${sellerStudentId}` : 'Chưa có MSSV'}</div>
                     </div>
                   </div>
                 </div>
@@ -2335,6 +2426,8 @@ const AdminDashboard: React.FC = () => {
                   )}
                 </div>
               </div>
+                );
+              })()
             ) : null}
           </div>
         </div>
@@ -2350,15 +2443,18 @@ const AdminDashboard: React.FC = () => {
             {lostFoundDetailLoading ? (
               <div className="py-10 text-center"><Loader2 size={24} className="animate-spin mx-auto text-indigo-600" /></div>
             ) : lostFoundDetail ? (
+              (() => {
+                const lostFoundImages = lostFoundDetail.imageUrls || [];
+                return (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-[1.1fr_0.9fr] gap-6">
                   <div className="space-y-3">
                     <div className="aspect-square rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
-                      <img src={lostFoundDetail.imageUrls?.[0] || 'https://placehold.co/800x800/e2e8f0/94a3b8?text=IUH'} alt={lostFoundDetail.title} className="w-full h-full object-cover" />
+                      <img src={lostFoundImages[0] || 'https://placehold.co/800x800/e2e8f0/94a3b8?text=IUH'} alt={lostFoundDetail.title} className="w-full h-full object-cover" />
                     </div>
-                    {lostFoundDetail.imageUrls?.length > 1 && (
+                    {lostFoundImages.length > 1 && (
                       <div className="grid grid-cols-4 gap-2">
-                        {lostFoundDetail.imageUrls.map((url: string, index: number) => (
+                        {lostFoundImages.map((url: string, index: number) => (
                           <div key={`${url}-${index}`} className="aspect-square rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                             <img src={url} alt={`${lostFoundDetail.title} ${index + 1}`} className="w-full h-full object-cover" />
                           </div>
@@ -2405,6 +2501,8 @@ const AdminDashboard: React.FC = () => {
                   </button>
                 </div>
               </div>
+                );
+              })()
             ) : null}
           </div>
         </div>

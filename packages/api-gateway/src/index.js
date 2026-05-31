@@ -14,7 +14,6 @@ import helmet from 'helmet';
 import cors from 'cors';
 import crypto from 'node:crypto';
 import http from 'node:http';
-import jwt from 'jsonwebtoken';
 import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
 import rateLimit from 'express-rate-limit';
 import { RedisStore } from 'rate-limit-redis';
@@ -33,7 +32,7 @@ import { createCircuitBreaker } from './middleware/circuit-breaker.js';
 import { correlationId, requestLogger } from './middleware/request-logger.js';
 
 // ────────────────────────────────────────────────────────
-// Express app + HTTP server (needed for WebSocket upgrade)
+// Express app + HTTP server
 // ────────────────────────────────────────────────────────
 const app = express();
 const server = http.createServer(app);
@@ -360,72 +359,6 @@ app.use('/api/v1', (req, res) => {
 // Global error handler
 // ────────────────────────────────────────────────────────
 app.use(errorHandler);
-
-// ────────────────────────────────────────────────────────
-// WebSocket Proxy — SockJS + STOMP for chat & notifications
-// SockJS uses HTTP-based fallback transports alongside WebSocket upgrade.
-// All /ws traffic routes to the chat-service which handles both
-// chat and notification STOMP destinations.
-// ────────────────────────────────────────────────────────
-
-const CHAT_SERVICE_URL = SERVICES.chat;
-
-// Unified SockJS proxy — handles BOTH HTTP-based transports (xhr-streaming,
-// xhr-polling, etc.) AND WebSocket upgrade in a single proxy instance.
-// Using ws: true lets http-proxy-middleware manage the upgrade lifecycle
-// properly instead of a fragile manual server.on('upgrade') handler.
-const sockjsProxy = createProxyMiddleware({
-  target: CHAT_SERVICE_URL,
-  changeOrigin: true,
-  ws: true,
-  timeout: 30_000,
-  proxyTimeout: 30_000,
-  pathRewrite: (path) => path,
-  on: {
-    proxyReq(proxyReq, req) {
-      proxyReq.setHeader('X-Forwarded-Proto', 'http');
-
-      // For WebSocket upgrade requests: verify JWT from query string
-      // and inject x-user-* headers so downstream services can trust them.
-      if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
-        const urlObj = new URL(req.url || '/', 'http://localhost');
-        const token = urlObj.searchParams.get('token')
-          || (req.headers.authorization?.startsWith('Bearer ')
-            ? req.headers.authorization.substring(7)
-            : null);
-
-        if (token) {
-          try {
-            const decoded = jwt.verify(token, config.jwt.secret);
-            proxyReq.setHeader('x-user-id', String(decoded.sub || decoded.userId || decoded.id || ''));
-            proxyReq.setHeader('x-user-role', decoded.role || 'GUEST');
-            proxyReq.setHeader('x-user-email', decoded.email || '');
-          } catch {
-            // Token invalid — the downstream service will reject the STOMP CONNECT
-          }
-        }
-      }
-    },
-    error(err, req, res) {
-      logger.error(`[ws] SockJS proxy error: ${err.message}`);
-      if (res && !res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          success: false,
-          statusCode: 502,
-          message: 'Chat service unavailable.',
-          timestamp: new Date().toISOString(),
-        }));
-      }
-    },
-  },
-});
-
-// Mount unified proxy at /ws — handles both HTTP SockJS transports and WS upgrade
-app.use('/ws', (req, _res, next) => {
-  req.url = req.originalUrl;
-  next();
-}, sockjsProxy);
 
 // ────────────────────────────────────────────────────────
 // Graceful Shutdown

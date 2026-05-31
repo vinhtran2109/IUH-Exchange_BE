@@ -1,7 +1,6 @@
 import express from 'express';
 import { createServer } from 'http';
 import { config, logger, connectMongo, errorHandler, metricsMiddleware, metricsHandler, safeListen } from '@iuh-exchange/common';
-import { initSocketService } from './services/socket.service.js';
 import chatRoutes from './routes/chat.routes.js';
 import chatUploadRoutes from './routes/chat-upload.routes.js';
 import aiAssistantRoutes from './routes/ai-assistant.routes.js';
@@ -31,9 +30,6 @@ app.use('/api/v1/chat', aiAssistantRoutes);
 
 // ── Error handler ──
 app.use(errorHandler);
-
-// ── Initialize SockJS + STOMP server on /ws ──
-initSocketService(httpServer);
 
 // ── Start ──
 try {

@@ -107,11 +107,11 @@ const LostFoundDetail: React.FC = () => {
     if (!item || !user) return;
 
     // Nếu item có câu hỏi xác minh → hiển thị prompt để user trả lời TRƯỚC khi confirm
-    let answer = 'Tôi xác nhận đã tìm thấy đồ vật này';
+    let answer = 'Tôi xác nhận đây là đồ của tôi';
     if (item.verificationQuestion) {
       // Dùng usePrompt hook (nhất quán với UX app) thay vì native window.prompt()
       const userAnswer = await prompt({
-        title: 'Câu hỏi xác minh quyền sở hữu',
+        title: 'Câu hỏi xác minh yêu cầu nhận lại',
         message: item.verificationQuestion,
         placeholder: 'Nhập câu trả lời của bạn...',
         confirmText: 'Xác nhận',
@@ -123,8 +123,8 @@ const LostFoundDetail: React.FC = () => {
     } else {
       // Không có câu hỏi → confirm đơn giản
       const confirmed = await confirm({
-        title: 'Xác nhận tìm thấy',
-        message: 'Xác nhận bạn đã tìm thấy đồ vật này?',
+        title: 'Xác nhận yêu cầu nhận lại',
+        message: 'Xác nhận bạn là chủ sở hữu của đồ vật này?',
         confirmText: 'Xác nhận',
         cancelText: 'Hủy',
         variant: 'default',
@@ -137,7 +137,7 @@ const LostFoundDetail: React.FC = () => {
       const res = await lostFoundService.claimItem(item.id, { answer });
       if (res.success) {
         setItem({ ...item, status: 'CLAIMED' });
-        toastSuccess('Đã xác nhận tìm thấy đồ vật! Chủ sở hữu sẽ xem xét yêu cầu của bạn.');
+        toastSuccess('Đã gửi yêu cầu xác minh. Chủ sở hữu sẽ xem xét yêu cầu của bạn.');
       }
     } catch (err) {
       toastError('Lỗi: ' + getErrorMessage(err, 'Không thể xác nhận'));
@@ -286,7 +286,7 @@ const LostFoundDetail: React.FC = () => {
               <div>
                 <h4 className="text-xs font-black text-amber-600 uppercase tracking-widest mb-1">Câu hỏi xác minh quyền sở hữu</h4>
                 <p className="text-sm text-amber-900 font-medium">{item.verificationQuestion}</p>
-                <p className="text-xs text-amber-600 mt-1">Bạn sẽ cần trả lời câu hỏi này khi xác nhận tìm thấy đồ vật.</p>
+                <p className="text-xs text-amber-600 mt-1">Bạn sẽ cần trả lời câu hỏi này khi gửi yêu cầu nhận lại đồ vật.</p>
               </div>
             </div>
           )}
@@ -321,7 +321,7 @@ const LostFoundDetail: React.FC = () => {
                     className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 py-2.5 text-sm font-medium text-white transition-all hover:bg-slate-800 disabled:opacity-50"
                   >
                     <Hand size={16} />
-                    {claiming ? 'ĐANG XỬ LÝ...' : 'TÔI TÌM THẤY ĐỒ NÀY'}
+                    {claiming ? 'ĐANG XỬ LÝ...' : 'ĐÂY LÀ ĐỒ CỦA TÔI'}
                   </button>
                 )}
                 <button 

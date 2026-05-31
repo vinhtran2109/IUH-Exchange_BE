@@ -2,7 +2,7 @@ import axios from "axios";
 
 const inferredBaseUrl =
   typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:8080/api/v1`
+    ? `${window.location.origin}/api/v1`
     : "http://localhost:8080/api/v1";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || inferredBaseUrl;

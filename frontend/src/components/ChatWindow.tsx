@@ -286,7 +286,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: 12 }}
-      className="fixed bottom-4 right-4 z-50 flex h-[560px] w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:bottom-6 sm:right-6"
+      className="fixed bottom-4 right-4 z-50 flex h-140 w-[min(440px,calc(100vw-32px))] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:bottom-6 sm:right-6"
     >
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -385,7 +385,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
                   ) : (
                     <div className="space-y-2">
                       {messageProductContext && renderProductCard(messageProductContext, isMe)}
-                      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{msg.content}</div>
+                      <div className="whitespace-pre-wrap wrap-anywhere">{msg.content}</div>
                     </div>
                   )}
                 </div>

@@ -103,7 +103,7 @@ export const lostFoundService = {
   },
 
   /**
-   * Xác nhận tìm thấy đồ — gửi câu trả lời xác minh cho chủ sở hữu.
+   * Gửi yêu cầu xác minh/nhận lại đồ — kèm câu trả lời cho chủ sở hữu.
    *
    * BUG FIX #2: Backend Zod schema yêu cầu `answer: z.string().min(2)`.
    * Gọi không có body sẽ bị BadRequestException "Required".
