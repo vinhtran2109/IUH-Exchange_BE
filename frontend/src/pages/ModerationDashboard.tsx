@@ -300,7 +300,7 @@ const ModerationDashboard: React.FC = () => {
   const approvedProducts = products.filter((item) => item.status === 'AVAILABLE' || item.status === 'SOLD').length;
   const openLostFound = lostFoundItems.filter((item) => item.status !== 'CLOSED' && item.status !== 'RESOLVED').length;
   const lockedUsers = users.filter((item) => item.isActive === false).length;
-  const totalQueue = pendingProducts + reports.length + openLostFound;
+  const totalQueue = pendingProducts + reports.length;
 
   const tabs = [
     { id: 'postsPending' as const, label: 'Bài chờ duyệt', description: 'Sản phẩm cần quyết định', icon: PackageX, count: canModeratePosts ? pendingProducts : 0 },
@@ -411,7 +411,7 @@ const ModerationDashboard: React.FC = () => {
 
         <div className="mt-6 grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Cần xử lý', value: totalQueue, helper: 'Bài chờ duyệt, tin mở và tố cáo', icon: AlertTriangle, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+            { label: 'Cần xử lý', value: totalQueue, helper: 'Bài chờ duyệt và tố cáo', icon: AlertTriangle, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
             { label: 'Bài đăng', value: canModeratePosts ? products.length : 0, helper: `${pendingProducts.toLocaleString('vi-VN')} bài chờ duyệt`, icon: PackageX, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
             { label: 'Mất / nhặt đồ', value: lostFoundItems.length, helper: `${openLostFound.toLocaleString('vi-VN')} tin đang mở`, icon: MapPin, tone: 'border-cyan-100 bg-cyan-50 text-cyan-700' },
             { label: 'Tài khoản khóa', value: lockedUsers, helper: canBan ? 'Có thể can thiệp' : 'Chưa có quyền', icon: Ban, tone: 'border-slate-200 bg-slate-50 text-slate-700' },
