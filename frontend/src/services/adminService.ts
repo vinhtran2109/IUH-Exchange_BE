@@ -212,7 +212,7 @@ export const adminService = {
     return response.data;
   },
 
-  bulkModerateLostFound: async (ids: string[], action: 'DELETE' | 'CLOSE') => {
+  bulkModerateLostFound: async (ids: string[], action: 'DELETE' | 'CLOSE' | 'REOPEN') => {
     const response = await api.post('/lost-found/admin/bulk-moderate', { ids, action });
     return response.data;
   },

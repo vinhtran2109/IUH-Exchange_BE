@@ -261,6 +261,18 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
+  const reopenLostFoundItem = async (itemId: string) => {
+    setBusyId(itemId);
+    try {
+      await adminService.bulkModerateLostFound([itemId], 'REOPEN');
+      setLostFoundItems((current) =>
+        current.map((item) => (getId(item) === itemId ? { ...item, status: 'OPEN' } : item))
+      );
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const deleteLostFoundItem = async (itemId: string) => {
     setBusyId(itemId);
     try {
@@ -596,7 +608,9 @@ const ModerationDashboard: React.FC = () => {
                         </div>
 
                         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-                          {!isClosed && (
+                          {isClosed ? (
+                            <button onClick={() => reopenLostFoundItem(id)} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <RefreshCw size={15} />)} Mở lại</button>
+                          ) : (
                             <button onClick={() => closeLostFoundItem(id)} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <Clock3 size={15} />)} Đóng tin</button>
                           )}
                           <button onClick={() => deleteLostFoundItem(id)} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Trash2 size={15} />)} Gỡ tin</button>
