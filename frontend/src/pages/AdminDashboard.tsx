@@ -1243,78 +1243,84 @@ const AdminDashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-x-auto">
-        <div className="p-6 border-b border-slate-100">
-          <h3 className="text-lg font-black text-slate-900">Danh sách tố cáo</h3>
-          <p className="text-sm text-slate-500 mt-1">Mở đối tượng bị tố cáo, xử lý và ghi chú ngay tại đây.</p>
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 pb-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black text-slate-900">Danh sách tố cáo</h3>
+            <p className="mt-1 text-sm text-slate-500">Mở đối tượng, chọn hành động xử lý phù hợp, hệ thống tự cập nhật trạng thái tố cáo.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs font-black text-slate-600 sm:grid-cols-4">
+            <div className="rounded-2xl bg-amber-50 px-3 py-2 text-amber-700">Chờ: {reportCounts.PENDING || 0}</div>
+            <div className="rounded-2xl bg-blue-50 px-3 py-2 text-blue-700">Đã xem: {reportCounts.REVIEWED || 0}</div>
+            <div className="rounded-2xl bg-emerald-50 px-3 py-2 text-emerald-700">Xử lý: {reportCounts.RESOLVED || 0}</div>
+            <div className="rounded-2xl bg-slate-100 px-3 py-2 text-slate-600">Bỏ qua: {reportCounts.DISMISSED || 0}</div>
+          </div>
         </div>
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200 text-sm uppercase tracking-wider text-slate-500">
-              <th className="p-4 font-bold">Loại</th>
-              <th className="p-4 font-bold">Lý do</th>
-              <th className="p-4 font-bold">Trạng thái</th>
-              <th className="p-4 font-bold">Tạo lúc</th>
-              <th className="p-4 font-bold">Hành động</th>
-            </tr>
-          </thead>
-          <tbody>
-            {reports.map((report) => {
-              const reportId = getEntityId(report);
-              const isAccountSupport = isAccountSupportReport(report);
-              const reason = displayReportReason(report);
-              return (
-                <tr key={reportId} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="p-4">
-                    <div className="font-bold text-slate-800">{isAccountSupport ? 'Hỗ trợ tài khoản' : reportTargetLabel(report.targetType)}</div>
-                    <div className="text-xs text-slate-400 break-all">{isAccountSupport ? 'Người gửi yêu cầu' : report.targetId}</div>
-                  </td>
-                  <td className="p-4 max-w-[360px]">
-                    <div className="text-sm text-slate-700 line-clamp-2">{reason}</div>
-                    {report.adminNote && <div className="text-xs text-slate-400 mt-1">Ghi chú: {report.adminNote}</div>}
-                  </td>
-                  <td className="p-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
-                  </td>
-                  <td className="p-4 text-sm text-slate-500">{formatDate(report.createdAt)}</td>
-                  <td className="p-4">
-                    <div className="flex gap-2 flex-wrap">
-                      <button onClick={() => openReportTarget(report)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all" title="Mở đối tượng">
-                        <Eye size={16} />
-                      </button>
-                      {report.status === 'PENDING' && (
-                        <>
-                          <button onClick={() => handleResolveReport(reportId, 'REVIEWED')} className="px-3 py-2 bg-sky-50 text-sky-700 rounded-xl text-xs font-bold hover:bg-sky-100">Đã xem</button>
-                          {isAccountSupport && (
-                            <button onClick={() => handleResolveReport(reportId, 'RESOLVED')} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold hover:bg-emerald-100">Hoàn tất hỗ trợ</button>
-                          )}
-                          {report.targetType === 'USER' && !isAccountSupport && (
-                            <>
-                              <button onClick={() => handleResolveReportWithAction(report, 'WARN_USER')} className="px-3 py-2 bg-amber-50 text-amber-700 rounded-xl text-xs font-bold hover:bg-amber-100">Cảnh cáo -5</button>
-                              <button onClick={() => handleResolveReportWithAction(report, 'PENALIZE_USER')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Phạt -10</button>
-                            </>
-                          )}
-                          {report.targetType === 'PRODUCT' && (
-                            <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_PRODUCT')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Gỡ sản phẩm</button>
-                          )}
-                          {report.targetType === 'LOST_FOUND' && (
-                            <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_LOST_FOUND')} className="px-3 py-2 bg-rose-600 text-white rounded-xl text-xs font-bold hover:bg-rose-700">Gỡ bài</button>
-                          )}
-                          <button onClick={() => handleResolveReportWithAction(report, 'DISMISS')} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200">Bỏ qua</button>
-                        </>
-                      )}
+
+        <div className="mt-5 space-y-3">
+          {reports.map((report) => {
+            const reportId = getEntityId(report);
+            const isAccountSupport = isAccountSupportReport(report);
+            const reason = displayReportReason(report);
+            const actionable = report.status === 'PENDING' || report.status === 'REVIEWED';
+            const title = isAccountSupport ? 'Hỗ trợ tài khoản' : `Tố cáo ${reportTargetLabel(report.targetType).toLowerCase()}`;
+            return (
+              <article key={reportId} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-indigo-200 hover:shadow-sm">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`rounded-full px-3 py-1 text-xs font-black ${badgeClass(report.status)}`}>{statusLabel(report.status)}</span>
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{isAccountSupport ? 'Tài khoản' : reportTargetLabel(report.targetType)}</span>
+                      <span className="text-xs font-medium text-slate-400">{formatDate(report.createdAt)}</span>
                     </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {reports.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-10 text-center text-slate-400">Chưa có dữ liệu tố cáo cho bộ lọc hiện tại.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                    <h4 className="mt-3 text-base font-black text-slate-950">{title}</h4>
+                    <p className="mt-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">{reason}</p>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                      <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-600">{isAccountSupport ? 'Người gửi yêu cầu' : 'Đối tượng bị tố cáo'}</span>
+                      <span className="rounded-xl bg-slate-50 px-3 py-2 font-mono font-bold text-slate-500 break-all">{report.targetId}</span>
+                    </div>
+                    {report.adminNote && <div className="mt-2 rounded-xl bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">Ghi chú: {report.adminNote}</div>}
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2 xl:max-w-xs xl:justify-end">
+                    <button onClick={() => openReportTarget(report)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
+                      <Eye size={15} /> Mở đối tượng
+                    </button>
+                    {actionable && (
+                      <>
+                        {report.status === 'PENDING' && (
+                          <button onClick={() => handleResolveReport(reportId, 'REVIEWED')} className="rounded-xl bg-sky-50 px-3 py-2 text-xs font-black text-sky-700 transition hover:bg-sky-100">Đã xem</button>
+                        )}
+                        {isAccountSupport && (
+                          <button onClick={() => handleResolveReport(reportId, 'RESOLVED')} className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100">Hoàn tất hỗ trợ</button>
+                        )}
+                        {report.targetType === 'USER' && !isAccountSupport && (
+                          <>
+                            <button onClick={() => handleResolveReportWithAction(report, 'WARN_USER')} className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-100">Cảnh cáo -5</button>
+                            <button onClick={() => handleResolveReportWithAction(report, 'PENALIZE_USER')} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white transition hover:bg-rose-700">Phạt -10</button>
+                          </>
+                        )}
+                        {report.targetType === 'PRODUCT' && (
+                          <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_PRODUCT')} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white transition hover:bg-rose-700">Gỡ sản phẩm</button>
+                        )}
+                        {report.targetType === 'LOST_FOUND' && (
+                          <button onClick={() => handleResolveReportWithAction(report, 'REMOVE_LOST_FOUND')} className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-black text-white transition hover:bg-rose-700">Gỡ bài</button>
+                        )}
+                        <button onClick={() => handleResolveReportWithAction(report, 'DISMISS')} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-200">Bỏ qua</button>
+                      </>
+                    )}
+                    {!actionable && <span className="rounded-xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">Đã kết thúc</span>}
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+          {reports.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-10 text-center text-sm font-semibold text-slate-400">
+              Chưa có dữ liệu tố cáo cho bộ lọc hiện tại.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

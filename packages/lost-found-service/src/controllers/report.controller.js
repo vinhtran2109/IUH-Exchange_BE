@@ -133,7 +133,7 @@ export async function resolveReport(req, res, next) {
     const report = await Report.findById(req.params.reportId);
     if (!report) throw new ResourceNotFoundException('Report', req.params.reportId);
 
-    if (report.status !== 'PENDING') {
+    if (['RESOLVED', 'DISMISSED'].includes(report.status)) {
       throw new BadRequestException(`Report is already ${report.status.toLowerCase()}`);
     }
 

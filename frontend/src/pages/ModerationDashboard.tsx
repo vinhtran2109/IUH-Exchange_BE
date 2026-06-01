@@ -213,10 +213,30 @@ const ModerationDashboard: React.FC = () => {
     loadData();
   }, []);
 
-  const resolveReport = async (reportId: string, status: 'RESOLVED' | 'DISMISSED') => {
+  const resolveReportWithAction = async (
+    report: ReportData,
+    action: 'DISMISS' | 'RESOLVE' | 'REMOVE_PRODUCT' | 'REMOVE_LOST_FOUND' | 'BAN_USER'
+  ) => {
+    const reportId = getId(report);
     setBusyId(reportId);
     try {
-      await adminService.resolveReport(reportId, status, status === 'RESOLVED' ? 'Moderator resolved' : 'Moderator dismissed');
+      if (action === 'DISMISS') {
+        await adminService.resolveReport(reportId, 'DISMISSED', 'Moderator reviewed and dismissed the report');
+      } else if (action === 'REMOVE_PRODUCT') {
+        if (!window.confirm('Gỡ sản phẩm bị tố cáo và đánh dấu tố cáo đã xử lý?')) return;
+        await adminService.deleteProduct(report.targetId);
+        await adminService.resolveReport(reportId, 'RESOLVED', 'Moderator removed the reported product');
+      } else if (action === 'REMOVE_LOST_FOUND') {
+        if (!window.confirm('Gỡ tin mất/nhặt đồ bị tố cáo và đánh dấu tố cáo đã xử lý?')) return;
+        await adminService.deleteLostFoundItem(report.targetId);
+        await adminService.resolveReport(reportId, 'RESOLVED', 'Moderator removed the reported lost-found post');
+      } else if (action === 'BAN_USER') {
+        if (!window.confirm('Khóa tài khoản bị tố cáo và đánh dấu tố cáo đã xử lý?')) return;
+        await adminService.toggleBanUser(report.targetId);
+        await adminService.resolveReport(reportId, 'RESOLVED', 'Moderator locked the reported account', { skipKarmaPenalty: true });
+      } else {
+        await adminService.resolveReport(reportId, 'RESOLVED', 'Moderator reviewed and resolved the report');
+      }
       setReports((current) => current.filter((item) => getId(item) !== reportId));
     } finally {
       setBusyId('');
@@ -626,24 +646,35 @@ const ModerationDashboard: React.FC = () => {
             <div className="space-y-3">
               {filteredReports.map((report) => {
                 const id = getId(report);
+                const target = targetLabel(report.targetType);
                 return (
-                  <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
+                  <article key={id} className="rounded-2xl border border-slate-200 bg-white p-5 transition hover:border-blue-200 hover:shadow-sm">
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(report.status)}>{statusLabel[report.status] || report.status}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{targetLabel(report.targetType)}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{target}</span>
                           <span className="text-xs font-medium text-slate-400">{formatDateTime(report.createdAt)}</span>
                         </div>
-                        <p className="mt-3 text-base font-black text-slate-950">{report.reason}</p>
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-bold text-slate-600">Loại đối tượng: {targetLabel(report.targetType)}</span>
-                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-bold text-slate-600">Người gửi báo cáo đã được ghi nhận</span>
+                        <h3 className="mt-3 text-base font-black text-slate-950">Tố cáo {target.toLowerCase()}</h3>
+                        <p className="mt-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">{report.reason}</p>
+                        <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
+                          <span className="rounded-xl bg-slate-50 px-3 py-2 font-bold text-slate-600">Đối tượng: {target}</span>
+                          <span className="rounded-xl bg-slate-50 px-3 py-2 font-mono font-bold text-slate-500">ID: {report.targetId}</span>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <button onClick={() => resolveReport(id, 'DISMISSED')} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Bỏ qua</button>
-                        <button onClick={() => resolveReport(id, 'RESOLVED')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Xử lý</button>
+                      <div className="flex shrink-0 flex-col gap-2 sm:flex-row xl:flex-col">
+                        {report.targetType === 'PRODUCT' && (
+                          <button onClick={() => resolveReportWithAction(report, 'REMOVE_PRODUCT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Trash2 size={15} />)} Gỡ sản phẩm</button>
+                        )}
+                        {report.targetType === 'LOST_FOUND' && (
+                          <button onClick={() => resolveReportWithAction(report, 'REMOVE_LOST_FOUND')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Trash2 size={15} />)} Gỡ bài</button>
+                        )}
+                        {report.targetType === 'USER' && canBan && (
+                          <button onClick={() => resolveReportWithAction(report, 'BAN_USER')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Ban size={15} />)} Khóa tài khoản</button>
+                        )}
+                        <button onClick={() => resolveReportWithAction(report, 'RESOLVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Đã xử lý</button>
+                        <button onClick={() => resolveReportWithAction(report, 'DISMISS')} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Bỏ qua</button>
                       </div>
                     </div>
                   </article>
