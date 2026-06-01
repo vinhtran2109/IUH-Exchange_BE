@@ -378,7 +378,7 @@ const eventHandlers = {
   },
 
   'order.dispute.resolved': async (payload) => {
-    const { buyerId, sellerId, orderId, outcome, remedy, resolution } = payload;
+    const { buyerId, sellerId, orderId, outcome, remedy, resolution, sanctions = {} } = payload;
     const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý tranh chấp');
     const outcomeLabel = outcome === 'SELLER_FAULT'
       ? 'người bán có lỗi'
@@ -392,7 +392,7 @@ const eventHandlers = {
       await sendNotification({
         recipientId,
         title: 'Tranh chấp đã được xử lý',
-        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}`,
+        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}${remedy === 'CANCEL_ORDER' ? ', giao dịch đã bị hủy' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}${recipientId === buyerId && sanctions.buyer && sanctions.buyer !== 'Không áp dụng' ? ` Chế tài của bạn: ${sanctions.buyer}.` : ''}${recipientId === sellerId && sanctions.seller && sanctions.seller !== 'Không áp dụng' ? ` Chế tài của bạn: ${sanctions.seller}.` : ''}`,
         type: 'ORDER',
         targetId: orderId,
       });
@@ -631,25 +631,7 @@ const eventHandlers = {
   },
 
   'lostfound.analyzed': async (payload) => {
-    const { userId, itemId, title, detectedType, studentId, confidence, type } = payload;
-
-    const label = detectedType ? ` (${detectedType})` : '';
-    const confidencePercent = Math.round((confidence || 0) * 100);
-
-    let message = `Bài đăng "${title}" đã được phân tích${label}. Độ tin cậy: ${confidencePercent}%.`;
-
-    if (studentId) {
-      message += ` Phát hiện MSSV: ${studentId}.`;
-    }
-
-    await sendNotification({
-      recipientId: userId,
-      title: 'Phân tích hoàn tất',
-      message,
-      type: 'SYSTEM',
-      targetId: itemId,
-      link: `/lost-found/${itemId}`,
-    });
+    const { itemId, title, studentId, type } = payload;
 
     // If MSSV found and item is FOUND, try to notify the owner of that student ID
     if (studentId && type === 'FOUND') {
@@ -678,8 +660,14 @@ const eventHandlers = {
 
     if (!matches?.length) return;
 
-    const matchCount = matches.length;
-    const bestScore = Math.round((matches[0]?.score || 0) * 100);
+    const reliableMatches = matches
+      .filter((match) => Number(match.score || 0) >= 0.6)
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+    if (!reliableMatches.length) return;
+
+    const matchCount = reliableMatches.length;
+    const bestScore = Math.round((reliableMatches[0]?.score || 0) * 100);
 
     await sendNotification({
       recipientId: userId,
@@ -691,7 +679,7 @@ const eventHandlers = {
     });
 
     const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
-    for (const match of matches.slice(0, 3)) {
+    for (const match of reliableMatches.slice(0, 2)) {
       if (match.ownerId && match.ownerId !== userId) {
         const matchScore = Math.round((match.score || 0) * 100);
         await sendNotification({

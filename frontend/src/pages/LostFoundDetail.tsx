@@ -11,9 +11,6 @@ import {
   User as UserIcon,
   Flag,
   Hand,
-  ScanLine,
-  BadgeCheck,
-  ShieldCheck,
   Pencil
 } from 'lucide-react';
 import { lostFoundService, ItemType } from '../services/lostFoundService';
@@ -249,37 +246,6 @@ const LostFoundDetail: React.FC = () => {
              <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-3">Mô tả chi tiết</h3>
              <p className="text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">{item.description}</p>
           </div>
-
-          {/* AI Analysis Results */}
-          {item.analysisStatus === 'COMPLETED' && (item.detectedType || item.extracted?.studentId) && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="p-6 mb-8 space-y-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-3xl border border-indigo-100 dark:border-indigo-700 text-indigo-700 dark:text-indigo-200"
-            >
-              <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-200 font-black text-sm uppercase">
-                <ScanLine size={18} />
-                Kết quả phân tích AI
-              </div>
-              {item.detectedType && item.detectedType !== 'unknown' && (
-                <div className="flex items-center gap-2">
-                  <BadgeCheck size={16} className="text-emerald-500 dark:text-emerald-300" />
-                  <span className="text-sm text-slate-700 dark:text-slate-200">
-                    <span className="font-bold">Loại đồ vật:</span> {item.detectedType}
-                  </span>
-                </div>
-              )}
-              {item.extracted?.studentId && (
-                <div className="flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-indigo-500 dark:text-indigo-300" />
-                  <span className="text-sm text-slate-700 dark:text-slate-200">
-                    <span className="font-bold">MSSV phát hiện:</span>{' '}
-                    <span className="font-mono bg-indigo-100 dark:bg-indigo-800 px-2 py-0.5 rounded text-indigo-900 dark:text-indigo-100">{item.extracted.studentId}</span>
-                  </span>
-                </div>
-              )}
-            </motion.div>
-          )}
 
           {/* Hiển thị câu hỏi xác minh nếu có — chỉ hiển thị với người không phải chủ */}
           {!isOwner && item.verificationQuestion && item.status === 'OPEN' && (

@@ -27,6 +27,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const sentProductContextKey = useRef<string | null>(null);
+  const evaluatedProductContextKey = useRef<string | null>(null);
 
   const conversationId = useMemo(() => {
     if (!user?.id) return '';
@@ -158,6 +159,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     if (!user?.id) return;
 
     const contextKey = `${conversationId}:${productContext.id}`;
+    if (evaluatedProductContextKey.current === contextKey) return;
+    evaluatedProductContextKey.current = contextKey;
     if (sentProductContextKey.current === contextKey) return;
     if (productContextStorageKey && localStorage.getItem(productContextStorageKey)) {
       sentProductContextKey.current = contextKey;
@@ -188,7 +191,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       'Bạn tư vấn thêm giúp mình nhé.',
     ].join('\n');
 
+    const markProductContextSent = () => {
+      sentProductContextKey.current = contextKey;
+      if (productContextStorageKey) localStorage.setItem(productContextStorageKey, 'sent');
+    };
+
     const sendContextMessage = () => {
+      markProductContextSent();
       const sent = chatService.sendMessage({
         senderId: user.id,
         recipientId,
@@ -199,8 +208,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
       } as any);
 
       if (sent) {
-        sentProductContextKey.current = contextKey;
-        if (productContextStorageKey) localStorage.setItem(productContextStorageKey, 'sent');
         setTimeout(() => inputRef.current?.focus(), 200);
       }
 
@@ -216,7 +223,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ recipientId, recipientName, onC
     });
 
     return removeConnectedListener;
-  }, [conversationId, historyLoaded, messages, productContext, productContextStorageKey, recipientId, user?.id]);
+  }, [conversationId, historyLoaded, productContext, productContextStorageKey, recipientId, user?.id]);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);

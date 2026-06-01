@@ -8,10 +8,14 @@ import {
   Clock,
   CreditCard,
   ExternalLink,
+  FileText,
+  Gavel,
   Loader2,
+  MessageSquare,
   Package,
   Receipt,
   ShoppingBag,
+  Upload,
   User,
   X,
 } from 'lucide-react';
@@ -41,14 +45,61 @@ const OrderDetail: React.FC = () => {
   const [acting, setActing] = useState(false);
   const [flashMessage, setFlashMessage] = useState<string | null>((location.state as any)?.flashMessage || null);
   const [disputeReason, setDisputeReason] = useState('');
-  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [disputeCategory, setDisputeCategory] = useState('ITEM_NOT_AS_DESCRIBED');
+  const [disputeDesiredResolution, setDisputeDesiredResolution] = useState('ADMIN_REVIEW');
+  const [initialEvidenceNote, setInitialEvidenceNote] = useState('');
+  const [initialEvidenceFile, setInitialEvidenceFile] = useState<File | null>(null);
   const [evidenceNote, setEvidenceNote] = useState('');
+  const [evidenceType, setEvidenceType] = useState<'IMAGE' | 'CHAT_SCREENSHOT' | 'RECEIPT' | 'OTHER'>('IMAGE');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [paymentIssueReason, setPaymentIssueReason] = useState('');
-  const [noShowReason, setNoShowReason] = useState('');
-  const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
   const initialOrder = (location.state as any)?.initialOrder || null;
 
+  const disputeCategoryLabels: Record<string, string> = {
+    ITEM_NOT_AS_DESCRIBED: 'Sản phẩm không đúng mô tả',
+    ITEM_DAMAGED: 'Sản phẩm lỗi/hư hỏng',
+    NOT_RECEIVED: 'Chưa nhận được hàng',
+    PAYMENT_PROBLEM: 'Vấn đề thanh toán',
+    NO_SHOW: 'Một bên không đến điểm hẹn',
+    OTHER: 'Lý do khác',
+  };
+
+  const disputeResolutionLabels: Record<string, string> = {
+    REFUND: 'Hoàn tiền cho người mua',
+    CANCEL_ORDER: 'Hủy giao dịch',
+    SELLER_RESPONSE: 'Yêu cầu người bán phản hồi',
+    BUYER_RESPONSE: 'Yêu cầu người mua bổ sung',
+    ADMIN_REVIEW: 'Yêu cầu admin can thiệp',
+  };
+
+  const evidenceTypeLabels: Record<string, string> = {
+    IMAGE: 'Ảnh sản phẩm/giao nhận',
+    CHAT_SCREENSHOT: 'Ảnh chụp đoạn chat',
+    RECEIPT: 'Biên nhận/thanh toán',
+    OTHER: 'Bằng chứng khác',
+  };
+
   const getOrderProductId = (source: any) => String(source?.productId?.id || source?.productId?._id || source?.product?.id || source?.product?._id || source?.productId || '');
+
+  const uploadEvidenceFile = async (file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('File bằng chứng tối đa 10MB.');
+    }
+    const uploadRes = await chatService.getChatUploadUrl(file.name, file.type || 'application/octet-stream');
+    if (!uploadRes?.success || !uploadRes.data?.presignedUrl || !uploadRes.data?.publicUrl) {
+      throw new Error('Không lấy được đường dẫn upload bằng chứng.');
+    }
+    const putRes = await fetch(uploadRes.data.presignedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+    if (!putRes.ok) {
+      throw new Error('Upload bằng chứng thất bại.');
+    }
+    return uploadRes.data.publicUrl as string;
+  };
 
   const fetchDetail = async (silent = false) => {
     if (!id) return;
@@ -231,28 +282,6 @@ const OrderDetail: React.FC = () => {
     }
   };
 
-  const handleReportNoShow = async () => {
-    if (!order) return;
-    const reason = noShowReason.trim() || (isBuyer ? 'Người bán không đến điểm hẹn' : 'Người mua không đến điểm hẹn');
-    try {
-      setActing(true);
-      const res = await orderService.reportNoShow(order.id || order._id, {
-        reason,
-        evidenceUrl: noShowEvidenceUrl.trim(),
-      });
-      if (res.success) {
-        setNoShowReason('');
-        setNoShowEvidenceUrl('');
-        setFlashMessage('Đã ghi nhận báo không đến. Đơn đã được hủy và sản phẩm được trả lại trạng thái khả dụng.');
-        await fetchDetail(true);
-      }
-    } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể báo không đến lúc này.');
-    } finally {
-      setActing(false);
-    }
-  };
-
   const handleOpenPaymentIssue = async () => {
     if (!order || paymentIssueReason.trim().length < 10) return;
     try {
@@ -290,35 +319,50 @@ const OrderDetail: React.FC = () => {
     if (!order || disputeReason.trim().length < 10) return;
     try {
       setActing(true);
-      const res = await orderService.openDispute(order.id || order._id, disputeReason.trim());
+      setUploadingEvidence(true);
+      const uploadedEvidenceUrl = initialEvidenceFile ? await uploadEvidenceFile(initialEvidenceFile) : '';
+      const res = await orderService.openDispute(order.id || order._id, {
+        reason: disputeReason.trim(),
+        category: disputeCategory,
+        desiredResolution: disputeDesiredResolution,
+        evidenceUrl: uploadedEvidenceUrl,
+        evidenceNote: initialEvidenceNote.trim(),
+      });
       if (res.success) {
         setDisputeReason('');
+        setInitialEvidenceFile(null);
+        setInitialEvidenceNote('');
+        setFlashMessage('Đã mở tranh chấp. Bên còn lại và admin sẽ nhận thông báo để phản hồi.');
         await fetchDetail(true);
       }
     } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể mở tranh chấp.');
+      toastError(error?.response?.data?.message || error?.message || 'Không thể mở tranh chấp.');
     } finally {
+      setUploadingEvidence(false);
       setActing(false);
     }
   };
 
   const handleAddEvidence = async () => {
-    if (!order || !evidenceUrl.trim()) return;
+    if (!order || !evidenceFile) return;
     try {
       setActing(true);
+      setUploadingEvidence(true);
+      const uploadedEvidenceUrl = await uploadEvidenceFile(evidenceFile);
       const res = await orderService.addDisputeEvidence(order.id || order._id, {
-        type: 'OTHER',
-        url: evidenceUrl.trim(),
-        note: evidenceNote.trim(),
+        type: evidenceType,
+        url: uploadedEvidenceUrl,
+        note: evidenceNote.trim() || evidenceFile.name,
       });
       if (res.success) {
-        setEvidenceUrl('');
         setEvidenceNote('');
+        setEvidenceFile(null);
         await fetchDetail(true);
       }
     } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể thêm bằng chứng.');
+      toastError(error?.response?.data?.message || error?.message || 'Không thể thêm bằng chứng.');
     } finally {
+      setUploadingEvidence(false);
       setActing(false);
     }
   };
@@ -326,10 +370,41 @@ const OrderDetail: React.FC = () => {
   const isSeller = !!(user?.id && order?.sellerId && user.id === order.sellerId);
   const isBuyer = !!(user?.id && order?.buyerId && user.id === order.buyerId);
   const orderProductId = getOrderProductId(order);
+  const buyerId = String(order?.buyerId || order?.buyer?._id || order?.buyer?.id || '');
+  const sellerId = String(order?.sellerId || order?.seller?._id || order?.seller?.id || product?.sellerId || '');
   const buyerDisplayName = order?.buyer?.name || order?.buyerName || (isBuyer ? user?.name : '') || order?.buyerId;
+  const sellerDisplayName = order?.seller?.name || order?.sellerName || product?.sellerName || (isSeller ? user?.name : '') || order?.sellerId;
   const productTitle = product?.title || order?.product?.title || order?.productTitle || 'Đang tải...';
   const productDescription = product?.description || order?.product?.description || '';
   const productImageUrl = product?.imageUrls?.[0] || order?.product?.imageUrls?.[0] || '';
+  const disputeOpenedEvent = (order?.disputeTimeline || []).find((entry: any) => entry.action === 'OPENED');
+  const disputeMetadata = disputeOpenedEvent?.metadata || {};
+  const disputeCategoryLabel = disputeCategoryLabels[disputeMetadata.category] || 'Chưa phân loại';
+  const disputeDesiredLabel = disputeResolutionLabels[disputeMetadata.desiredResolution] || 'Yêu cầu admin xem xét';
+  const disputeOpenedByRole = disputeOpenedEvent?.actorRole === 'BUYER'
+    ? 'Người mua'
+    : disputeOpenedEvent?.actorRole === 'SELLER'
+      ? 'Người bán'
+      : 'Một bên trong giao dịch';
+  const disputeStatusMeta = (() => {
+    if (order?.disputeStatus === 'OPEN') return { label: 'Đang xem xét', className: 'bg-blue-50 text-blue-700 ring-1 ring-blue-100', body: 'Admin đang chờ bằng chứng/phản hồi từ hai bên.' };
+    if (order?.disputeStatus === 'RESOLVED') return { label: 'Đã giải quyết', className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100', body: order.disputeResolution || 'Tranh chấp đã có kết luận.' };
+    if (order?.disputeStatus === 'REJECTED') return { label: 'Bị bác bỏ', className: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200', body: order.disputeResolution || 'Không đủ căn cứ để xử lý.' };
+    return { label: 'Chưa có tranh chấp', className: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200', body: 'Bạn có thể mở tranh chấp sau khi đơn hoàn tất nếu phát sinh vấn đề.' };
+  })();
+  const disputeTimeline = order?.disputeTimeline || [];
+  const disputeEvidence = order?.disputeEvidence || [];
+  const otherParticipantRole = isBuyer ? 'người bán' : 'người mua';
+
+  const handleChatParticipant = (participantId: string, participantName: string) => {
+    if (!participantId || participantId === user?.id) return;
+    chatService.triggerOpenChat(participantId, participantName || 'Người dùng IUH', {
+      id: orderProductId || order?.productId || order?.id || order?._id,
+      title: productTitle,
+      price: Number(order?.price || product?.price || 0),
+      imageUrl: productImageUrl,
+    });
+  };
 
   const currentStatus = (order?.status || 'PENDING') as OrderStatusKey;
   const paymentMethod = payment?.paymentMethod || order?.paymentMethod;
@@ -676,17 +751,40 @@ const OrderDetail: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <section>
               <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                <User size={16} className="text-slate-400" /> Người mua
+                <User size={16} className="text-slate-400" /> Người tham gia
               </h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="text-slate-500">Họ tên</span>
-                  <span className="font-medium text-slate-700">{buyerDisplayName}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="text-slate-500">Ghi chú</span>
-                  <span className="max-w-[60%] text-right font-medium text-slate-700">{order.buyerNote || 'Không có'}</span>
-                </div>
+              <div className="space-y-3">
+                {[
+                  { role: 'Người mua', id: buyerId, name: buyerDisplayName, note: order.buyerNote || 'Không có ghi chú' },
+                  { role: 'Người bán', id: sellerId, name: sellerDisplayName, note: 'Chủ bài đăng sản phẩm' },
+                ].map((participant) => {
+                  const isSelf = participant.id && participant.id === user?.id;
+                  const canChat = Boolean(participant.id && !isSelf);
+                  return (
+                    <div key={participant.role} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{participant.role}</div>
+                          <div className="mt-1 truncate text-sm font-bold text-slate-800">{participant.name || 'Người dùng IUH'}</div>
+                          <div className="mt-1 line-clamp-2 text-xs text-slate-500">{participant.note}</div>
+                        </div>
+                        {isSelf ? (
+                          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-200">Bạn</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleChatParticipant(participant.id, participant.name)}
+                            disabled={!canChat}
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                          >
+                            <MessageSquare size={13} />
+                            Nhắn tin
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
@@ -719,20 +817,22 @@ const OrderDetail: React.FC = () => {
           </div>
 
           {(isBuyer || isSeller) && (
-            <details className="rounded-xl border border-slate-200 bg-white p-4">
-              <summary className="cursor-pointer text-sm font-bold text-slate-800">Hỗ trợ khi có vấn đề</summary>
-              <div className="mt-4 space-y-4">
-                {currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED' && (
-                  <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-rose-900">Báo không đến điểm hẹn</h3>
-                    <p className="mb-3 text-xs text-rose-700">Chỉ dùng khi bên còn lại không đến theo lịch đã hẹn.</p>
-                    <div className="mb-3 grid gap-2 md:grid-cols-2">
-                      <input value={noShowReason} onChange={(e) => setNoShowReason(e.target.value)} placeholder="Lý do không đến" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-                      <input value={noShowEvidenceUrl} onChange={(e) => setNoShowEvidenceUrl(e.target.value)} placeholder="URL bằng chứng nếu có" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-                    </div>
-                    <button onClick={handleReportNoShow} disabled={acting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Báo không đến và hủy đơn</button>
-                  </div>
-                )}
+            <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-4 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-black text-slate-900">
+                    <Gavel size={20} className="text-indigo-600" />
+                    Tranh chấp & hỗ trợ sau giao dịch
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Thu thập lý do, bằng chứng và mong muốn xử lý để admin có đủ dữ liệu ra quyết định.
+                  </p>
+                </div>
+                <span className={'inline-flex w-fit rounded-full px-3 py-1 text-xs font-black ' + disputeStatusMeta.className}>
+                  {disputeStatusMeta.label}
+                </span>
+              </div>
+              <div className="space-y-4">
 
                 {(isBankTransfer || paymentStatus === 'PAID') && (
                   <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
@@ -754,28 +854,143 @@ const OrderDetail: React.FC = () => {
                 )}
 
                 <div className="rounded-xl border border-slate-200 bg-white p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-slate-800">Tranh chấp & bằng chứng</h3>
+                  <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900">Hồ sơ tranh chấp</h3>
+                      <p className="mt-1 text-xs text-slate-500">{disputeStatusMeta.body}</p>
+                    </div>
+                    {order.disputeStatus === 'OPEN' && (
+                      <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                        Cần phản hồi từ {otherParticipantRole} hoặc admin
+                      </div>
+                    )}
+                  </div>
                   {order.disputeStatus === 'OPEN' ? (
                     <>
-                      <div className="mb-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-700">Tranh chấp đang mở: {order.disputeReason}</div>
-                      <div className="mb-3 grid gap-2 md:grid-cols-2">
-                        <input value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} placeholder="URL bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                        <input value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                      <div className="mb-4 grid gap-3 lg:grid-cols-3">
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                          <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người mở</div>
+                          <div className="mt-1 text-sm font-bold text-slate-800">{disputeOpenedByRole}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                          <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Loại vấn đề</div>
+                          <div className="mt-1 text-sm font-bold text-slate-800">{disputeCategoryLabel}</div>
+                        </div>
+                        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                          <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Mong muốn</div>
+                          <div className="mt-1 text-sm font-bold text-slate-800">{disputeDesiredLabel}</div>
+                        </div>
                       </div>
-                      <button onClick={handleAddEvidence} disabled={acting || !evidenceUrl} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Thêm bằng chứng</button>
-                      {(order.disputeEvidence || []).map((item: any) => (
-                        <a key={item._id} href={item.url} target="_blank" rel="noreferrer" className="mt-2 block rounded-lg border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 hover:text-slate-900">{item.note || item.type}: {item.url}</a>
-                      ))}
+                      <div className="mb-4 rounded-xl border border-amber-100 bg-amber-50 p-4">
+                        <div className="mb-1 text-xs font-black uppercase tracking-wide text-amber-700">Nội dung khiếu nại</div>
+                        <p className="whitespace-pre-wrap text-sm font-medium text-amber-950">{order.disputeReason}</p>
+                      </div>
+
+                      <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                        <h4 className="mb-3 flex items-center gap-2 text-sm font-black text-slate-900">
+                          <Upload size={16} /> Bổ sung bằng chứng
+                        </h4>
+                        <div className="grid gap-2 md:grid-cols-[180px_1fr]">
+                          <select value={evidenceType} onChange={(e) => setEvidenceType(e.target.value as any)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium">
+                            {Object.entries(evidenceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:bg-blue-50">
+                            <span className="truncate">{evidenceFile ? evidenceFile.name : 'Chọn file ảnh/biên nhận/ảnh chụp chat'}</span>
+                            <Upload size={15} className="shrink-0 text-slate-400" />
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept="image/*,.pdf"
+                              onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                            />
+                          </label>
+                        </div>
+                        <textarea value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} rows={2} placeholder="Ghi chú ngắn: bằng chứng này chứng minh điều gì?" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                        <button onClick={handleAddEvidence} disabled={acting || uploadingEvidence || !evidenceFile} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                          {uploadingEvidence ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                          {uploadingEvidence ? 'Đang upload...' : 'Thêm bằng chứng'}
+                        </button>
+                      </div>
+
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <div>
+                          <h4 className="mb-2 flex items-center gap-2 text-sm font-black text-slate-900"><FileText size={16} /> Bằng chứng đã gửi</h4>
+                          {disputeEvidence.length > 0 ? disputeEvidence.map((item: any) => (
+                            <a key={item._id || item.url} href={item.url} target="_blank" rel="noreferrer" className="mb-2 block rounded-xl border border-slate-100 bg-white p-3 text-sm text-slate-600 hover:border-blue-200 hover:text-blue-700">
+                              <div className="font-bold text-slate-800">{evidenceTypeLabels[item.type] || item.type || 'Bằng chứng'}</div>
+                              <div className="mt-1 line-clamp-2 text-xs">{item.note || item.url}</div>
+                            </a>
+                          )) : <div className="rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-400">Chưa có bằng chứng nào.</div>}
+                        </div>
+                        <div>
+                          <h4 className="mb-2 text-sm font-black text-slate-900">Tiến trình xử lý</h4>
+                          <div className="space-y-2">
+                            {disputeTimeline.map((entry: any, index: number) => (
+                              <div key={entry._id || index} className="rounded-xl bg-slate-50 p-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-black uppercase text-slate-500">{entry.action === 'OPENED' ? 'Mở tranh chấp' : entry.action === 'EVIDENCE_ADDED' ? 'Thêm bằng chứng' : entry.action}</span>
+                                  <span className="text-[11px] font-bold text-slate-400">{entry.actorRole || 'SYSTEM'}</span>
+                                </div>
+                                {entry.note && <p className="mt-1 line-clamp-2 text-xs text-slate-600">{entry.note}</p>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </>
+                  ) : order.disputeStatus === 'RESOLVED' || order.disputeStatus === 'REJECTED' ? (
+                    <div className="rounded-xl border border-slate-100 bg-slate-50 p-4">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span className={'rounded-full px-3 py-1 text-xs font-black ' + disputeStatusMeta.className}>{disputeStatusMeta.label}</span>
+                        {order.disputeRemedy === 'REFUND' && <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">Đã hoàn tiền</span>}
+                      </div>
+                      <p className="text-sm font-medium text-slate-700">{order.disputeResolution || 'Admin đã kết thúc hồ sơ tranh chấp.'}</p>
+                    </div>
                   ) : (
-                    <>
-                      <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={2} placeholder="Lý do tranh chấp, tối thiểu 10 ký tự" className="mb-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
-                      <button onClick={handleOpenDispute} disabled={acting || disputeReason.trim().length < 10} className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">Mở tranh chấp</button>
-                    </>
+                    <div className="space-y-3">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="text-sm font-bold text-slate-700">
+                          Lý do chính
+                          <select value={disputeCategory} onChange={(e) => setDisputeCategory(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium">
+                            {Object.entries(disputeCategoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                        </label>
+                        <label className="text-sm font-bold text-slate-700">
+                          Mong muốn xử lý
+                          <select value={disputeDesiredResolution} onChange={(e) => setDisputeDesiredResolution(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium">
+                            {Object.entries(disputeResolutionLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                          </select>
+                        </label>
+                      </div>
+                      <label className="block text-sm font-bold text-slate-700">
+                        Mô tả vấn đề
+                        <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={4} placeholder="Nêu rõ chuyện gì xảy ra, thời điểm, hai bên đã trao đổi gì, bạn muốn admin xem xét điểm nào..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                      </label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:bg-blue-50">
+                          <span className="truncate">{initialEvidenceFile ? initialEvidenceFile.name : 'Chọn file bằng chứng ban đầu nếu có'}</span>
+                          <Upload size={15} className="shrink-0 text-slate-400" />
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*,.pdf"
+                            onChange={(e) => setInitialEvidenceFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                        <input value={initialEvidenceNote} onChange={(e) => setInitialEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                      </div>
+                      <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+                        Sau khi mở tranh chấp, hệ thống sẽ thông báo cho {otherParticipantRole} và admin. Bạn vẫn có thể bổ sung ảnh sản phẩm, biên nhận hoặc ảnh chụp đoạn chat.
+                      </div>
+                      <button onClick={handleOpenDispute} disabled={acting || uploadingEvidence || disputeReason.trim().length < 10} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">
+                        {uploadingEvidence ? <Loader2 size={14} className="animate-spin" /> : <Gavel size={14} />}
+                        {uploadingEvidence ? 'Đang upload...' : 'Mở tranh chấp'}
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
-            </details>
+            </section>
           )}
 
           {(isBuyer || isSeller) && currentStatus !== 'COMPLETED' && currentStatus !== 'CANCELLED' && (

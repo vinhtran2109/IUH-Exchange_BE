@@ -132,7 +132,13 @@ export class OrderController {
     if (!userId) throw new BadRequestException('Missing X-User-Id header');
     const reason = String(req.body?.reason || '').trim();
     if (reason.length < 10) throw new BadRequestException('Dispute reason must be at least 10 characters');
-    const order = await this.orderService.openDispute(req.params.id, userId, reason);
+    const order = await this.orderService.openDispute(req.params.id, userId, {
+      reason,
+      category: String(req.body?.category || '').trim(),
+      desiredResolution: String(req.body?.desiredResolution || '').trim(),
+      evidenceUrl: String(req.body?.evidenceUrl || '').trim(),
+      evidenceNote: String(req.body?.evidenceNote || '').trim(),
+    });
     return res.status(201).json(ApiResponse.created(order, 'Dispute opened'));
   }
 
@@ -222,8 +228,18 @@ export class OrderController {
     const outcome = ['SELLER_FAULT', 'BUYER_FAULT', 'BOTH_FAULT', 'NO_FAULT'].includes(req.body?.outcome)
       ? req.body.outcome
       : 'NO_FAULT';
-    const remedy = ['NONE', 'REFUND'].includes(req.body?.remedy) ? req.body.remedy : 'NONE';
-    const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution, outcome, remedy });
+    const remedy = ['NONE', 'REFUND', 'CANCEL_ORDER'].includes(req.body?.remedy) ? req.body.remedy : 'NONE';
+    const validSanctions = ['NONE', 'WARNING', 'KARMA_MINUS_5', 'KARMA_MINUS_10', 'KARMA_MINUS_15'];
+    const buyerSanction = validSanctions.includes(req.body?.buyerSanction) ? req.body.buyerSanction : 'NONE';
+    const sellerSanction = validSanctions.includes(req.body?.sellerSanction) ? req.body.sellerSanction : 'NONE';
+    const internalNote = String(req.body?.internalNote || '').trim();
+    const order = await this.orderService.resolveDispute(req.params.id, adminId, {
+      status,
+      resolution,
+      outcome,
+      remedy,
+      sanctions: { buyer: buyerSanction, seller: sellerSanction, internalNote },
+    });
     return res.json(ApiResponse.ok(order, 'Dispute resolved'));
   }
 

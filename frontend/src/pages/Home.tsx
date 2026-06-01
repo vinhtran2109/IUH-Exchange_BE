@@ -160,51 +160,73 @@ const Home: React.FC = () => {
         </motion.div>
       </section>
 
-      {/* Trust signals */}
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            { icon: <ShieldCheck size={17} />, label: 'Xác thực email IUH' },
-            { icon: <Users size={17} />, label: 'Chỉ sinh viên IUH mới tham gia' },
-            { icon: <Star size={17} />, label: 'Hệ thống Karma uy tín' },
-            { icon: <MapPin size={17} />, label: 'Hỗ trợ đồ thất lạc' },
-            { icon: <Flag size={17} />, label: 'Báo cáo vi phạm' },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
-                {item.icon}
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-slate-700">
-                <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
-                <span className="truncate">{item.label}</span>
-              </div>
+      {/* Trust and benefits */}
+      <section className="space-y-4">
+        <div className="grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="border-b border-slate-100 bg-slate-950 p-5 text-white lg:border-b-0 lg:border-r">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 text-emerald-300 ring-1 ring-white/10">
+              <ShieldCheck size={22} />
             </div>
-          ))}
+            <div className="text-xs font-black uppercase tracking-widest text-emerald-200">An toàn trong campus</div>
+            <h2 className="mt-2 text-xl font-black leading-tight">Chợ IUH dành riêng cho sinh viên đã xác thực</h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              Tập trung vào danh tính IUH, uy tín giao dịch và công cụ báo cáo khi phát sinh vấn đề.
+            </p>
+          </div>
+          <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { icon: <ShieldCheck size={17} />, label: 'Xác thực email IUH' },
+              { icon: <Users size={17} />, label: 'Chỉ sinh viên IUH tham gia' },
+              { icon: <Star size={17} />, label: 'Karma theo lịch sử giao dịch' },
+              { icon: <MapPin size={17} />, label: 'Hỗ trợ đồ thất lạc' },
+              { icon: <Flag size={17} />, label: 'Báo cáo vi phạm' },
+            ].map((item) => (
+              <div key={item.label} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                  {item.icon}
+                </div>
+                <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-slate-700">
+                  <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
+                  <span className="line-clamp-2">{item.label}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </section>
 
-      {/* ── Feature cards ── */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { icon: <Timer />, title: "Nhanh chóng", desc: "Đăng tin chỉ trong 1 phút, kết nối ngay với người mua tại trường.", color: 'bg-blue-100 text-blue-600' },
-          { icon: <Lock />, title: "An toàn",     desc: "Hệ thống Karma minh bạch, tin đăng được kiểm duyệt chặt chẽ.", color: 'bg-emerald-100 text-emerald-600' },
-          { icon: <Users />, title: "Tiết kiệm",  desc: "Nâng cao giá trị vòng đời sản phẩm, tiết kiệm tối đa cho sinh viên.", color: 'bg-purple-100 text-purple-600' },
-        ].map((feat, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
-            className="rounded-2xl border border-(--border) bg-(--surface) p-6 transition-all hover:shadow-md"
-          >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${feat.color}`}>
-              {React.cloneElement(feat.icon as React.ReactElement<{ size?: number }>, { size: 20 })}
-            </div>
-            <h3 className="mb-1.5 text-base font-bold text-(--foreground)">{feat.title}</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">{feat.desc}</p>
-          </motion.div>
-        ))}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[
+            { icon: <Timer />, title: 'Nhanh chóng', desc: 'Đăng tin gọn, tìm người mua hoặc người nhặt đồ ngay trong cộng đồng trường.', tone: 'blue', step: '01' },
+            { icon: <Lock />, title: 'An toàn', desc: 'Email IUH, Karma và báo cáo vi phạm giúp giao dịch có trách nhiệm hơn.', tone: 'emerald', step: '02' },
+            { icon: <Users />, title: 'Tiết kiệm', desc: 'Tận dụng lại tài liệu, đồ dùng và thiết bị để giảm lãng phí cho sinh viên.', tone: 'violet', step: '03' },
+          ].map((feat, i) => {
+            const toneClass = {
+              blue: 'bg-blue-50 text-blue-700 ring-blue-100',
+              emerald: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+              violet: 'bg-violet-50 text-violet-700 ring-violet-100',
+            }[feat.tone];
+            return (
+              <motion.div
+                key={feat.title}
+                initial={{ opacity: 0, y: 10 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+              >
+                <div className="mb-5 flex items-start justify-between gap-4">
+                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ring-1 ${toneClass}`}>
+                    {React.cloneElement(feat.icon as React.ReactElement<{ size?: number }>, { size: 22 })}
+                  </div>
+                  <span className="text-xs font-black text-slate-300">{feat.step}</span>
+                </div>
+                <h3 className="text-base font-black text-slate-950">{feat.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-slate-500">{feat.desc}</p>
+                <div className="mt-5 h-1 w-12 rounded-full bg-slate-200 transition-all group-hover:w-20 group-hover:bg-indigo-500" />
+              </motion.div>
+            );
+          })}
+        </div>
       </section>
 
       {/* ── Recent activity ── */}

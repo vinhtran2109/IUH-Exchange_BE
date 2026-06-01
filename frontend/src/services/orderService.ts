@@ -78,8 +78,18 @@ export const orderService = {
     return response.data;
   },
 
-  openDispute: async (id: string, reason: string) => {
-    const response = await api.post(`/orders/${id}/disputes`, { reason });
+  openDispute: async (
+    id: string,
+    payload: string | {
+      reason: string;
+      category?: string;
+      desiredResolution?: string;
+      evidenceUrl?: string;
+      evidenceNote?: string;
+    }
+  ) => {
+    const body = typeof payload === 'string' ? { reason: payload } : payload;
+    const response = await api.post(`/orders/${id}/disputes`, body);
     return response.data;
   },
 

@@ -473,7 +473,7 @@ const ProductDetail: React.FC = () => {
                 src={activeImage}
                 alt={product.title}
                 loading="lazy"
-                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                className="h-full w-full bg-white object-contain transition-transform duration-300 group-hover:scale-[1.01]"
               />
               {/* Zoom hint */}
               <div className="absolute bottom-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-white/80 opacity-0 shadow transition-opacity group-hover:opacity-100 backdrop-blur-sm">
@@ -505,7 +505,7 @@ const ProductDetail: React.FC = () => {
                       src={url}
                       alt={`${product.title} ${index + 1}`}
                       loading="lazy"
-                      className="h-full w-full object-cover"
+                      className="h-full w-full bg-white object-contain"
                     />
                     {selectedImage !== index && (
                       <div className="absolute inset-0 bg-slate-900/10 opacity-0 transition-opacity group-hover:opacity-100" />

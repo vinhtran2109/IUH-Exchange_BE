@@ -21,14 +21,37 @@ const Layout: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [notificationToast, setNotificationToast] = useState<Notification | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationsHydratedRef = useRef(false);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
 
   const fetchNotifs = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const res = await notificationService.getNotifications();
-      if (res.success) setNotifications(res.data);
+      if (res.success) {
+        const normalized: Notification[] = res.data.map((n: Notification) => normalizeNotification(n));
+        const knownIds = knownNotificationIdsRef.current;
+        const unseen = normalized.filter(n => n.id && !knownIds.has(n.id));
+        setNotifications(normalized);
+        normalized.forEach(n => {
+          if (n.id) knownIds.add(n.id);
+        });
+        if (notificationsHydratedRef.current && unseen.length > 0) {
+          const newestUnread = unseen.find(n => !n.isRead) || unseen[0];
+          if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
+          setNotificationToast(newestUnread);
+          notificationToastTimer.current = setTimeout(() => {
+            setNotificationToast(current => current?.id === newestUnread.id ? null : current);
+            notificationToastTimer.current = null;
+          }, 6500);
+        }
+        notificationsHydratedRef.current = true;
+      }
     } catch (e) {
       console.error('Lỗi fetch thông báo', e);
     }
@@ -41,11 +64,18 @@ const Layout: React.FC = () => {
 
     const removeNotifListener = chatService.addNotificationListener((notif: Notification) => {
       const normalized = normalizeNotification(notif);
+      if (normalized.id) knownNotificationIdsRef.current.add(normalized.id);
       setNotifications(prev => {
         const notificationId = normalized.id;
         if (notificationId && prev.some(n => n.id === notificationId)) return prev;
         return [normalized, ...prev];
       });
+      if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
+      setNotificationToast(normalized);
+      notificationToastTimer.current = setTimeout(() => {
+        setNotificationToast(current => current?.id === normalized.id ? null : current);
+        notificationToastTimer.current = null;
+      }, 6500);
       if (String(normalized.type || '').toUpperCase().includes('KARMA')) {
         refreshAccessToken()
           .then(() => api.get('/users/me'))
@@ -56,17 +86,32 @@ const Layout: React.FC = () => {
       }
     });
 
-    const interval = setInterval(fetchNotifs, 120000);
+    const removeChatListener = chatService.addListener((msg) => {
+      const senderId = String(msg.senderId || '');
+      const receiverId = String((msg as any).receiverId || msg.recipientId || '');
+      if (!user?.id || !senderId || !receiverId) return;
+      if (senderId !== user.id && receiverId === user.id) {
+        setChatUnreadCount((count) => Math.min(count + 1, 99));
+      }
+    });
+
+    const interval = setInterval(fetchNotifs, 15000);
     return () => {
       clearInterval(interval);
       removeNotifListener();
+      removeChatListener();
+      if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
     };
-  }, [fetchNotifs, updateUser, isAuthenticated]);
+  }, [fetchNotifs, updateUser, isAuthenticated, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setNotifications([]);
+      setChatUnreadCount(0);
+      setNotificationToast(null);
       setShowNotifications(false);
+      notificationsHydratedRef.current = false;
+      knownNotificationIdsRef.current.clear();
     }
   }, [isAuthenticated]);
 
@@ -147,6 +192,14 @@ const Layout: React.FC = () => {
     if (t.includes('KARMA'))   return '/karma-history';
     if (t.includes('REPORT'))  return '/my-reports';
     return null;
+  };
+
+  const openNotification = async (notification: Notification) => {
+    if (notification.id) await handleMarkRead(notification.id);
+    const route = getNotifRoute(notification);
+    if (route) navigate(route);
+    setNotificationToast(null);
+    setShowNotifications(false);
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -246,12 +299,7 @@ const Layout: React.FC = () => {
                           notifications.slice(0, 8).map(n => (
                             <div 
                               key={n.id} 
-                              onClick={() => {
-                                if (n.id) handleMarkRead(n.id);
-                                const route = getNotifRoute(n);
-                                if (route) navigate(route);
-                                setShowNotifications(false);
-                              }}
+                              onClick={() => openNotification(n)}
                               className={`block p-3 cursor-pointer hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-indigo-50/40' : ''}`}
                             >
                               <div className="flex gap-2.5">
@@ -289,8 +337,19 @@ const Layout: React.FC = () => {
                   )}
                 </div>
 
-                <button onClick={() => chatService.triggerOpenChat('list', 'Hộp thư')} className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all">
+                <button
+                  onClick={() => {
+                    setChatUnreadCount(0);
+                    chatService.triggerOpenChat('list', 'Hộp thư');
+                  }}
+                  className="relative p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                >
                   <MessageSquare size={18} />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                      {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                    </span>
+                  )}
                 </button>
 
                 <Link to="/products/new" className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200">
@@ -348,6 +407,38 @@ const Layout: React.FC = () => {
       <main className="container mx-auto px-6 py-8">
         <Outlet />
       </main>
+
+      {notificationToast && (
+        <div className="fixed right-6 top-20 z-60 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <button
+            type="button"
+            onClick={() => openNotification(notificationToast)}
+            className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-slate-50"
+          >
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${notifIconBg(notificationToast.type)}`}>
+              {notifIcon(notificationToast.type)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-black text-slate-900">Thông báo mới</p>
+                <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-600">Mới</span>
+              </div>
+              <p className="line-clamp-2 text-sm leading-snug text-slate-600">{notificationToast.message}</p>
+              {getNotifRoute(notificationToast) && (
+                <p className="mt-2 text-xs font-bold text-indigo-600">Xem chi tiết →</p>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNotificationToast(null)}
+            className="absolute right-2 top-2 rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Đóng thông báo"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <footer className="bg-(--surface) border-t border-(--border) mt-auto py-12">
         <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8">
