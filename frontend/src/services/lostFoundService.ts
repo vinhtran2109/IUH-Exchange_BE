@@ -27,6 +27,7 @@ export interface LostFoundItem {
   contactInfo: string;
   studentId: string;        // MSSV của người đăng tin
   userId?: string;
+  userName?: string;
   status: ItemStatus;
   imageUrls: string[];
   createdAt: string;

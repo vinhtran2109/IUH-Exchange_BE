@@ -9,7 +9,7 @@ import {
   logger,
 } from '@iuh-exchange/common';
 import { Report } from '../models/LostFound.js';
-import { publishKarmaPenalty } from '../services/kafka.service.js';
+import { publishKarmaPenalty, publishReportResolved } from '../services/kafka.service.js';
 
 // ── Validation Schemas ──
 
@@ -133,7 +133,7 @@ export async function resolveReport(req, res, next) {
     const report = await Report.findById(req.params.reportId);
     if (!report) throw new ResourceNotFoundException('Report', req.params.reportId);
 
-    if (report.status !== 'PENDING') {
+    if (['RESOLVED', 'DISMISSED'].includes(report.status)) {
       throw new BadRequestException(`Report is already ${report.status.toLowerCase()}`);
     }
 
@@ -146,6 +146,16 @@ export async function resolveReport(req, res, next) {
       await publishKarmaPenalty(report.targetId.toString(), report.reason);
       logger.info(`Karma penalty triggered for user ${report.targetId} from report ${report._id}`);
     }
+
+    await publishReportResolved({
+      reportId: report._id.toString(),
+      reporterId: report.reporterId.toString(),
+      status: data.status,
+      targetType: report.targetType,
+      targetId: report.targetId.toString(),
+      reason: report.reason,
+      adminNote: data.adminNote,
+    });
 
     logger.info(`Report ${report._id} resolved as ${data.status} by admin`);
     res.json(ApiResponse.ok(report));

@@ -5,7 +5,6 @@ import {
   AlertCircle,
   ArrowLeft,
   ArrowRight,
-  BadgeCheck,
   ChevronDown,
   Flag,
   Heart,
@@ -27,7 +26,6 @@ import { orderService } from '../services/orderService';
 import type { Product } from '../services/productService';
 import { useAuthStore } from '../store/authStore';
 import api from '../services/api';
-import ReviewSection from '../components/ReviewSection';
 import { wishlistService } from '../services/wishlistService';
 import { useToast } from '../components/Toast';
 import { useConfirm, usePrompt } from '../components/Dialogs';
@@ -94,7 +92,6 @@ const ProductDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleting, setDeleting] = useState(false);
   const [ordering, setOrdering] = useState(false);
-  const [completedOrderId, setCompletedOrderId] = useState<string | null>(null);
   const [wishlisted, setWishlisted] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
@@ -155,22 +152,6 @@ const ProductDetail: React.FC = () => {
         .catch(() => {});
     }
   }, [product?.sellerId, user]);
-
-  useEffect(() => {
-    if (!id || !user) return;
-    const checkOrder = async () => {
-      try {
-        const res = await api.get(`/orders?productId=${id}&status=COMPLETED&page=1&size=1`);
-        if (res.data?.success && res.data?.data?.content?.length > 0) {
-          const order = res.data.data.content[0];
-          setCompletedOrderId(order.id || order._id);
-        }
-      } catch {
-        // ignore
-      }
-    };
-    checkOrder();
-  }, [id, user]);
 
   const loadOffers = useCallback(async () => {
     if (!id || !user || !product) return;
@@ -445,11 +426,11 @@ const ProductDetail: React.FC = () => {
 
   return (
     <>
-      <div className="mx-auto max-w-5xl px-4 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         {/* Top bar: nút quạy lại + menu 3 chấm */}
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between">
           <button onClick={() => navigate(-1)} className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition-colors hover:text-slate-900">
-            <ArrowLeft size={16} /> Quạy lại
+            <ArrowLeft size={16} /> Quay lại
           </button>
 
           {/* Menu 3 chấm — chỉ hiện khi không phải chủ sản phẩm */}
@@ -479,7 +460,7 @@ const ProductDetail: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(380px,0.95fr)]">
           {/* ===== CỘT TRÁI: Ảnh ===== */}
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-3">
             {/* Ảnh chính — ratio 4:3 cố định, bồ góc 18px, click mở lightbox */}
@@ -536,7 +517,7 @@ const ProductDetail: React.FC = () => {
           </motion.div>
 
           {/* ===== CỘT PHẢI: Thông tin ===== */}
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             {/* Category badge */}
             <span className="mb-3 w-fit rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
               {categoryLabel(product.category)}
@@ -572,7 +553,7 @@ const ProductDetail: React.FC = () => {
             </div>
 
             {/* Status + ngày đăng — bên dướí giá */}
-            <div className="mb-5 flex items-center gap-2">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
                 {conditionLabel(product.condition)}
               </span>
@@ -672,7 +653,7 @@ const ProductDetail: React.FC = () => {
             )}
 
             {/* Mô tả */}
-            <div className="mb-2">
+            <div className="mb-2 rounded-xl border border-slate-100 bg-slate-50 p-4">
               <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
                 <Package size={16} className="text-slate-400" /> Mô tả
               </h3>
@@ -680,7 +661,7 @@ const ProductDetail: React.FC = () => {
             </div>
 
             {/* Action buttons */}
-            <div className="mt-8 space-y-2 border-t border-slate-100 pt-4">
+            <div className="mt-5 space-y-2 border-t border-slate-100 pt-4">
               {user?.id === product.sellerId ? (
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -734,82 +715,52 @@ const ProductDetail: React.FC = () => {
                 </>
               )}
             </div>
-          </motion.div>
-        </div>
 
-        {/* ===== UY TÍN NGƯỜI BÁN — Full-width ===== */}
-        {sellerProfile && (
-          <div className="mb-8 mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-3.5">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-slate-500">
-                <ShieldCheck size={14} className="text-emerald-500" />
-                Uy tín người bán
-              </div>
-              {sellerTrust?.badge && (
-                <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                  {sellerTrust.badge}
-                </span>
-              )}
-            </div>
-
-            {/* Body */}
-            <div className="flex flex-wrap items-center gap-6 px-6 py-5 sm:flex-nowrap">
-
-              {/* Avatar + tên + sao + nút theo dõi (avatar và tên là link đến profile) */}
-              <div className="flex items-center gap-4 shrink-0">
-                <Link to={`/sellers/${product.sellerId}`} className="relative h-16 w-16 shrink-0 block">
-                  <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-white bg-slate-100 shadow-md ring-2 ring-slate-100 transition-opacity hover:opacity-90">
+            {sellerProfile && (
+              <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-slate-400">
+                    <ShieldCheck size={14} className="text-emerald-500" />
+                    Người bán
+                  </div>
+                  {sellerTrust?.badge && (
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-black text-emerald-700">
+                      {sellerTrust.badge}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link to={`/sellers/${product.sellerId}`} className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
                     {sellerProfile.avatarUrl
                       ? <img src={sellerProfile.avatarUrl} alt={sellerProfile.name} className="h-full w-full object-cover" />
-                      : <div className="flex h-full w-full items-center justify-center text-slate-400"><UserIcon size={28} /></div>
+                      : <div className="flex h-full w-full items-center justify-center text-slate-400"><UserIcon size={22} /></div>
                     }
-                  </div>
-                  <BadgeCheck size={19} className="absolute -bottom-0.5 -right-0.5 rounded-full bg-white text-emerald-500" />
-                </Link>
-
-                <div>
-                  <Link
-                    to={`/sellers/${product.sellerId}`}
-                    className="text-base font-bold text-slate-900 hover:text-slate-600 transition-colors"
-                  >
-                    {sellerProfile.name || 'Người dùng IUH'}
                   </Link>
-                  
-                  {/* Nút theo dõi ngay dưới tên */}
+                  <div className="min-w-0 flex-1">
+                    <Link to={`/sellers/${product.sellerId}`} className="truncate text-sm font-black text-slate-900 hover:text-indigo-700">
+                      {sellerProfile.name || 'Người dùng IUH'}
+                    </Link>
+                    <div className="mt-1 flex flex-wrap gap-3 text-xs font-semibold text-slate-500">
+                      <span>{sellerTrust?.soldCount || 0} giao dịch</span>
+                      <span>{sellerTrust?.trustScore || 0} điểm uy tín</span>
+                      <span>{sellerTrust?.followerCount || 0} theo dõi</span>
+                    </div>
+                  </div>
                   {user && user.id !== product.sellerId && (
                     <button
                       onClick={async () => { const res = await productService.toggleSellerFollow(product.sellerId); if (res.success) setFollowingSeller(res.data.following); }}
-                      className={`mt-2 flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${followingSeller ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
+                      className={`shrink-0 rounded-lg px-3 py-2 text-xs font-black transition-all ${followingSeller ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-900 text-white hover:bg-slate-800'}`}
                     >
                       {followingSeller ? 'Đang theo dõi' : '+ Theo dõi'}
                     </button>
                   )}
                 </div>
               </div>
+            )}
+          </motion.div>
+        </div>
 
-              <div className="hidden sm:block w-30" /> 
 
-              {/* Stats — không có cột dọc ngăn cách */}
-              <div className="flex items-center gap-30">
-                <div className="text-center">
-                  <div className="text-2xl font-black text-slate-900">{sellerTrust?.soldCount || 0}</div>
-                  <div className="mt-0.5 text-xs font-medium text-slate-400">Giao dịch</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-black text-slate-900">{sellerTrust?.trustScore || 0}</div>
-                  <div className="mt-0.5 text-xs font-medium text-slate-400">Điểm uy tín</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-black text-slate-900">{sellerTrust?.followerCount || 0}</div>
-                  <div className="mt-0.5 text-xs font-medium text-slate-400">Người theo dõi</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <ReviewSection productId={product.id} orderId={completedOrderId || undefined} />
       </div>
 
       {/* ===== MODAL MUA HÀNG ===== */}

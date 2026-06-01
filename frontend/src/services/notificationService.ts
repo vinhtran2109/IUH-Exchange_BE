@@ -12,6 +12,17 @@ export interface Notification {
   createdAt: string;
 }
 
+export const NOTIFICATION_SYNC_EVENT = 'iuh:notifications-sync';
+
+type NotificationSyncDetail =
+  | { action: 'read'; id: string }
+  | { action: 'readAll' };
+
+export const emitNotificationSync = (detail: NotificationSyncDetail) => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent<NotificationSyncDetail>(NOTIFICATION_SYNC_EVENT, { detail }));
+};
+
 export const normalizeNotification = (notification: any): Notification => ({
   ...notification,
   id: notification?.id || notification?._id,
@@ -38,12 +49,14 @@ export const notificationService = {
   // Đánh dấu 1 thông báo là đã đọc
   markAsRead: async (id: string) => {
     const response = await api.patch(`/notifications/${id}/read`);
+    emitNotificationSync({ action: 'read', id });
     return response.data;
   },
 
   // Đánh dấu tất cả là đã đọc
   markAllAsRead: async () => {
     const response = await api.patch('/notifications/read-all');
+    emitNotificationSync({ action: 'readAll' });
     return response.data;
   }
 };

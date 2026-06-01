@@ -6,6 +6,7 @@ const KARMA_TOPIC = 'user.karma.penalty';
 const KARMA_PENALTY_POINTS = 5;
 const LOSTFOUND_ANALYZED_TOPIC = 'lostfound.analyzed';
 const LOSTFOUND_MATCH_TOPIC = 'lostfound.match';
+const REPORT_RESOLVED_TOPIC = 'report.resolved';
 
 /**
  * Initialize Kafka producer. Call once at startup.
@@ -126,6 +127,42 @@ export async function publishKarmaPenalty(userId, reason) {
     logger.info(`Karma penalty event published for user ${userId}: -${KARMA_PENALTY_POINTS} points`);
   } catch (err) {
     logger.error(`Failed to publish karma penalty for user ${userId}: ${err.message}`);
+  }
+}
+
+/**
+ * Notify the reporter when a moderation report has been reviewed.
+ * @param {object} payload
+ * @param {string} payload.reportId
+ * @param {string} payload.reporterId
+ * @param {string} payload.status
+ * @param {string} payload.targetType
+ * @param {string} payload.targetId
+ * @param {string} payload.adminNote
+ */
+export async function publishReportResolved(payload) {
+  if (!producer) {
+    logger.warn('Kafka producer unavailable, skipping report.resolved event');
+    return;
+  }
+
+  try {
+    await producer.send({
+      topic: REPORT_RESOLVED_TOPIC,
+      messages: [
+        {
+          key: payload.reportId,
+          value: JSON.stringify({
+            ...payload,
+            source: 'lost-found-service',
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      ],
+    });
+    logger.info(`Report resolved event published for report ${payload.reportId}`);
+  } catch (err) {
+    logger.error(`Failed to publish report.resolved for report ${payload.reportId}: ${err.message}`);
   }
 }
 

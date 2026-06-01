@@ -477,6 +477,26 @@ describe('kafka-consumer.service', () => {
       expect(Notification.create).toHaveBeenCalledTimes(2);
     });
 
+    it('should notify reporter when report is resolved', async () => {
+      await simulateKafkaMessage('report.resolved', {
+        reporterId: 'user-1',
+        reportId: 'report-1',
+        targetType: 'PRODUCT',
+        status: 'RESOLVED',
+        adminNote: 'Đã gỡ nội dung vi phạm',
+      });
+
+      expect(Notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipientId: 'user-1',
+          title: 'Tố cáo đã được cập nhật',
+          type: 'REPORT',
+          targetId: 'report-1',
+          link: '/my-reports',
+        })
+      );
+    });
+
     it('should handle lostfound.analyzed event', async () => {
       await simulateKafkaMessage('lostfound.analyzed', {
         userId: 'user-1',

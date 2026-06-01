@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tag, ArrowRight } from 'lucide-react';
+import { Tag, UserRound } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { conditionLabel, conditionClass, categoryLabel, categoryClass } from '../utils/enums';
 
@@ -12,6 +12,9 @@ interface ProductCardProps {
     condition: string;
     imageUrls: string[];
     sellerId?: string;
+    sellerName?: string;
+    sellerStudentId?: string;
+    sellerAvatarUrl?: string;
   };
 }
 
@@ -26,15 +29,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const mainImage = product.imageUrls && product.imageUrls.length > 0
     ? product.imageUrls[0]
     : 'https://placehold.co/400x400/e2e8f0/94a3b8?text=IUH';
+  const sellerLabel = product.sellerName?.trim()
+    || (product.sellerId ? `Người bán ${product.sellerId.slice(0, 6)}` : 'Người bán IUH');
+  const sellerMeta = product.sellerStudentId || 'Sinh viên IUH';
 
   return (
-    <div className="group bg-white rounded-[12px] border border-slate-200 overflow-hidden shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200 flex flex-col h-full">
+    <Link to={`/products/${product.id}`} className="group flex h-full flex-col overflow-hidden rounded-[12px] border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:border-indigo-200 hover:shadow-md">
       {/* Product Image */}
-      <div className="relative aspect-square overflow-hidden bg-slate-50">
+      <div className="relative aspect-[4/3] overflow-hidden bg-slate-50">
         <img 
           src={mainImage} 
           alt={product.title}
-          className="w-full h-full object-cover"
+          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
         />
         <div className="absolute top-3 left-3">
           <span className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide rounded-md border border-white/20 shadow-sm ${conditionClass(product.condition)}`}>
@@ -44,32 +50,39 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       </div>
 
       {/* Product Info */}
-      <div className="p-4 flex flex-col flex-1">
-        <div className="flex items-center gap-1.5 mb-2.5">
-          <div className={`px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-1 border border-white/20 ${categoryClass(product.category)}`}>
-             <Tag size={10} />
+      <div className="flex flex-1 flex-col p-4">
+        <div className="mb-3 flex items-center gap-1.5">
+          <div className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-black ${categoryClass(product.category)}`}>
+             <Tag size={12} />
              {categoryLabel(product.category)}
           </div>
         </div>
 
-        <h3 className="text-sm font-semibold text-slate-800 group-hover:text-indigo-700 transition-colors line-clamp-2 leading-snug mb-3 flex-1">
+        <h3 className="mb-3 line-clamp-2 min-h-11 flex-1 text-base font-black leading-snug text-slate-950 transition-colors group-hover:text-indigo-700">
           {product.title}
         </h3>
 
-        <div className="flex items-center justify-between mt-auto pt-2 border-t border-slate-100">
-          <p className="text-lg font-extrabold text-indigo-600">
+        <div className="mb-3 flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white text-slate-400 ring-1 ring-slate-200">
+            {product.sellerAvatarUrl ? (
+              <img src={product.sellerAvatarUrl} alt={sellerLabel} className="h-full w-full object-cover" />
+            ) : (
+              <UserRound size={15} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate text-xs font-black text-slate-700">{sellerLabel}</div>
+            <div className="truncate text-[11px] font-medium text-slate-400">{sellerMeta}</div>
+          </div>
+        </div>
+
+        <div className="mt-auto border-t border-slate-100 pt-3">
+          <p className="text-lg font-black text-indigo-600">
             {formatPrice(product.price)}
           </p>
-          
-          <Link 
-            to={`/products/${product.id}`}
-            className="w-8 h-8 bg-slate-100 text-slate-500 rounded-lg flex items-center justify-center transition-all group-hover:bg-slate-900 group-hover:text-white"
-          >
-            <ArrowRight size={14} />
-          </Link>
         </div>
       </div>
-    </div>
+    </Link>
   );
 };
 

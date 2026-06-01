@@ -33,6 +33,7 @@ const TOPICS = [
   { topic: 'offer.resolved', fromBeginning: false },
   { topic: 'karma.updated', fromBeginning: false },
   { topic: 'report.created', fromBeginning: false },
+  { topic: 'report.resolved', fromBeginning: false },
   { topic: 'lostfound.analyzed', fromBeginning: false },
   { topic: 'lostfound.match', fromBeginning: false },
   { topic: 'user.student_verification.requested', fromBeginning: false },
@@ -603,6 +604,30 @@ const eventHandlers = {
         targetId: reportId,
       });
     }
+  },
+
+  'report.resolved': async (payload) => {
+    const { reporterId, reportId, status, targetType, adminNote } = payload;
+    const statusText = status === 'DISMISSED'
+      ? 'đã được xem xét và bỏ qua'
+      : status === 'REVIEWED'
+        ? 'đã được ghi nhận'
+        : 'đã được xử lý';
+    const targetText = targetType === 'PRODUCT'
+      ? 'sản phẩm'
+      : targetType === 'LOST_FOUND'
+        ? 'tin mất/nhặt đồ'
+        : 'người dùng';
+    const noteText = adminNote ? ` Ghi chú: ${adminNote}` : '';
+
+    await sendNotification({
+      recipientId: reporterId,
+      title: 'Tố cáo đã được cập nhật',
+      message: `Tố cáo của bạn về ${targetText} ${statusText}.${noteText}`,
+      type: 'REPORT',
+      targetId: reportId,
+      link: '/my-reports',
+    });
   },
 
   'lostfound.analyzed': async (payload) => {

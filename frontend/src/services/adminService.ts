@@ -85,14 +85,20 @@ export interface ReportedMessageData {
 
 export interface LostFoundAdminData {
   id: string;
+  _id?: string;
+  userId?: string;
+  userName?: string;
   title: string;
   description?: string;
   type: 'LOST' | 'FOUND';
   status: string;
+  category?: string;
+  tags?: string[];
   location?: string;
   contactInfo?: string;
   studentId?: string;
   imageUrls?: string[];
+  images?: string[];
   createdAt: string;
 }
 
@@ -126,6 +132,11 @@ export const adminService = {
 
   adjustKarma: async (userId: string, amount: number, reason?: string) => {
     const response = await api.put(`/users/admin/${userId}/karma`, { amount, reason });
+    return response.data;
+  },
+
+  getUserProfile: async (userId: string) => {
+    const response = await api.get(`/users/${userId}`);
     return response.data;
   },
 
@@ -201,7 +212,7 @@ export const adminService = {
     return response.data;
   },
 
-  bulkModerateLostFound: async (ids: string[], action: 'DELETE' | 'CLOSE') => {
+  bulkModerateLostFound: async (ids: string[], action: 'DELETE' | 'CLOSE' | 'REOPEN') => {
     const response = await api.post('/lost-found/admin/bulk-moderate', { ids, action });
     return response.data;
   },

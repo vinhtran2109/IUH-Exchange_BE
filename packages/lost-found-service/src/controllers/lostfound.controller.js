@@ -825,7 +825,7 @@ export async function getHeatmapData(req, res, next) {
 /**
  * POST /api/v1/lost-found/admin/bulk-moderate
  * Batch approve/reject/delete multiple lost-found items.
- * Body: { ids: string[], action: 'DELETE' | 'CLOSE' }
+ * Body: { ids: string[], action: 'DELETE' | 'CLOSE' | 'REOPEN' }
  */
 export async function bulkModerate(req, res, next) {
   try {
@@ -837,8 +837,8 @@ export async function bulkModerate(req, res, next) {
     if (ids.length > 50) {
       throw new BadRequestException('Maximum 50 items per batch');
     }
-    if (!['DELETE', 'CLOSE'].includes(action)) {
-      throw new BadRequestException('action must be DELETE or CLOSE');
+    if (!['DELETE', 'CLOSE', 'REOPEN'].includes(action)) {
+      throw new BadRequestException('action must be DELETE, CLOSE, or REOPEN');
     }
 
     const items = await LostFoundItem.find({ _id: { $in: ids } });
@@ -854,6 +854,11 @@ export async function bulkModerate(req, res, next) {
       await LostFoundItem.updateMany(
         { _id: { $in: ids }, status: { $ne: 'CLOSED' } },
         { $set: { status: 'CLOSED' } },
+      );
+    } else if (action === 'REOPEN') {
+      await LostFoundItem.updateMany(
+        { _id: { $in: ids }, status: { $in: ['CLOSED', 'RESOLVED'] } },
+        { $set: { status: 'OPEN' } },
       );
     }
 
