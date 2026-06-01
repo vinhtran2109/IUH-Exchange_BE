@@ -11,6 +11,7 @@ import {
   Flag,
   Pencil,
   Phone,
+  Receipt,
   Save,
   ShieldCheck,
   ShoppingBag,
@@ -281,11 +282,15 @@ const Profile: React.FC = () => {
     });
   }, [myOrders, user?.id]);
 
+  const activeListingCount = useMemo(() => {
+    return myProducts.filter((product: any) => ['AVAILABLE', 'PENDING_APPROVAL'].includes(String(product?.status || ''))).length;
+  }, [myProducts]);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
         <h1 className="mb-0.5 text-2xl font-bold text-slate-900">Tài khoản của tôi</h1>
-        <p className="text-sm text-slate-500">Quản lý hồ sơ, đơn hàng và bài đăng của bạn.</p>
+        <p className="text-sm text-slate-500">Quản lý hồ sơ, bài đăng và các đơn mua/bán của bạn.</p>
       </div>
 
       <div className="mb-6 grid grid-cols-3 gap-3">
@@ -294,8 +299,8 @@ const Profile: React.FC = () => {
           <div className="text-lg font-bold text-slate-900">{profileLoading ? '...' : profile?.studentId || 'Chưa cập nhật'}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">Đang bán</div>
-          <div className="text-lg font-bold text-slate-900">{myProducts.length}</div>
+          <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">Bài đang mở</div>
+          <div className="text-lg font-bold text-slate-900">{activeListingCount}</div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">Đã mua</div>
@@ -307,9 +312,9 @@ const Profile: React.FC = () => {
         <div className="space-y-1 lg:col-span-1">
           {[
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
-            { id: 'products', label: 'Món đồ đang bán', icon: Store },
+            { id: 'products', label: 'Bài đăng của tôi', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
-            { id: 'sales', label: 'Đơn bán của tôi', icon: Store },
+            { id: 'sales', label: 'Đơn từ người mua', icon: Receipt },
             { id: 'wishlist', label: 'Đã lưu', icon: Bookmark },
             { id: 'history', label: 'Đã xem', icon: Clock },
             { id: 'reports', label: 'Báo cáo của tôi', icon: Flag, action: () => navigate('/my-reports') },
@@ -546,7 +551,15 @@ const Profile: React.FC = () => {
 
             {activeTab === 'products' && (
               <div className="space-y-3">
-                <h3 className="mb-4 text-base font-semibold text-slate-800">Món đồ đang rao bán</h3>
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-slate-800">Bài đăng của tôi</h3>
+                    <p className="mt-1 text-xs text-slate-400">Những sản phẩm bạn đã đăng, gồm bài đang bán, chờ duyệt hoặc đã bán.</p>
+                  </div>
+                  <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
+                    {myProducts.length} bài
+                  </div>
+                </div>
                 {productsLoading ? (
                   <div className="py-16 text-center text-sm text-slate-400">Đang tải...</div>
                 ) : (
@@ -660,8 +673,8 @@ const Profile: React.FC = () => {
               <div className="space-y-3">
                 <div className="mb-4 flex items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-base font-semibold text-slate-800">Đơn bán của tôi</h3>
-                    <p className="mt-1 text-xs text-slate-400">Theo dõi các đơn người mua gửi cho sản phẩm của bạn.</p>
+                    <h3 className="text-base font-semibold text-slate-800">Đơn từ người mua</h3>
+                    <p className="mt-1 text-xs text-slate-400">Các giao dịch phát sinh khi có người mua sản phẩm bạn đã đăng.</p>
                   </div>
                   <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
                     {sellerOrders.length} đơn

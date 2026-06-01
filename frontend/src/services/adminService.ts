@@ -53,6 +53,12 @@ export interface AdminOrderData {
   buyerId: string;
   sellerId: string;
   productId: string;
+  productTitle?: string;
+  product?: { title?: string } | null;
+  buyerName?: string;
+  sellerName?: string;
+  buyer?: { name?: string; studentId?: string } | null;
+  seller?: { name?: string; studentId?: string } | null;
   price: number;
   status: string;
   paymentStatus: string;
