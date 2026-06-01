@@ -54,8 +54,6 @@ const OrderDetail: React.FC = () => {
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [paymentIssueReason, setPaymentIssueReason] = useState('');
-  const [noShowReason, setNoShowReason] = useState('');
-  const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
   const initialOrder = (location.state as any)?.initialOrder || null;
 
   const disputeCategoryLabels: Record<string, string> = {
@@ -279,28 +277,6 @@ const OrderDetail: React.FC = () => {
       }
     } catch (error: any) {
       toastError(error?.response?.data?.message || 'Không thể xác nhận nhận tiền lúc này.');
-    } finally {
-      setActing(false);
-    }
-  };
-
-  const handleReportNoShow = async () => {
-    if (!order) return;
-    const reason = noShowReason.trim() || (isBuyer ? 'Người bán không đến điểm hẹn' : 'Người mua không đến điểm hẹn');
-    try {
-      setActing(true);
-      const res = await orderService.reportNoShow(order.id || order._id, {
-        reason,
-        evidenceUrl: noShowEvidenceUrl.trim(),
-      });
-      if (res.success) {
-        setNoShowReason('');
-        setNoShowEvidenceUrl('');
-        setFlashMessage('Đã ghi nhận báo không đến. Đơn đã được hủy và sản phẩm được trả lại trạng thái khả dụng.');
-        await fetchDetail(true);
-      }
-    } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể báo không đến lúc này.');
     } finally {
       setActing(false);
     }
@@ -857,17 +833,6 @@ const OrderDetail: React.FC = () => {
                 </span>
               </div>
               <div className="space-y-4">
-                {currentStatus !== 'CANCELLED' && currentStatus !== 'COMPLETED' && (
-                  <div className="rounded-xl border border-rose-100 bg-rose-50 p-4">
-                    <h3 className="mb-2 text-sm font-semibold text-rose-900">Báo không đến điểm hẹn</h3>
-                    <p className="mb-3 text-xs text-rose-700">Chỉ dùng khi bên còn lại không đến theo lịch đã hẹn.</p>
-                    <div className="mb-3 grid gap-2 md:grid-cols-2">
-                      <input value={noShowReason} onChange={(e) => setNoShowReason(e.target.value)} placeholder="Lý do không đến" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-                      <input value={noShowEvidenceUrl} onChange={(e) => setNoShowEvidenceUrl(e.target.value)} placeholder="URL bằng chứng nếu có" className="rounded-lg border border-rose-100 px-3 py-2 text-sm" />
-                    </div>
-                    <button onClick={handleReportNoShow} disabled={acting} className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Báo không đến và hủy đơn</button>
-                  </div>
-                )}
 
                 {(isBankTransfer || paymentStatus === 'PAID') && (
                   <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
