@@ -378,7 +378,7 @@ const eventHandlers = {
   },
 
   'order.dispute.resolved': async (payload) => {
-    const { buyerId, sellerId, orderId, outcome, remedy, resolution } = payload;
+    const { buyerId, sellerId, orderId, outcome, remedy, resolution, sanctions = {} } = payload;
     const orderDetails = await buildOrderEmailDetails(payload, 'Đã xử lý tranh chấp');
     const outcomeLabel = outcome === 'SELLER_FAULT'
       ? 'người bán có lỗi'
@@ -392,7 +392,7 @@ const eventHandlers = {
       await sendNotification({
         recipientId,
         title: 'Tranh chấp đã được xử lý',
-        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}`,
+        message: `Admin đã xử lý tranh chấp cho ${orderProductLabel(orderDetails)}: ${outcomeLabel}${remedy === 'REFUND' ? ', có hoàn tiền' : ''}${remedy === 'CANCEL_ORDER' ? ', giao dịch đã bị hủy' : ''}.${resolution ? ` Ghi chú: ${resolution}` : ''}${recipientId === buyerId && sanctions.buyer && sanctions.buyer !== 'Không áp dụng' ? ` Chế tài của bạn: ${sanctions.buyer}.` : ''}${recipientId === sellerId && sanctions.seller && sanctions.seller !== 'Không áp dụng' ? ` Chế tài của bạn: ${sanctions.seller}.` : ''}`,
         type: 'ORDER',
         targetId: orderId,
       });

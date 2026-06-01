@@ -228,8 +228,18 @@ export class OrderController {
     const outcome = ['SELLER_FAULT', 'BUYER_FAULT', 'BOTH_FAULT', 'NO_FAULT'].includes(req.body?.outcome)
       ? req.body.outcome
       : 'NO_FAULT';
-    const remedy = ['NONE', 'REFUND'].includes(req.body?.remedy) ? req.body.remedy : 'NONE';
-    const order = await this.orderService.resolveDispute(req.params.id, adminId, { status, resolution, outcome, remedy });
+    const remedy = ['NONE', 'REFUND', 'CANCEL_ORDER'].includes(req.body?.remedy) ? req.body.remedy : 'NONE';
+    const validSanctions = ['NONE', 'WARNING', 'KARMA_MINUS_5', 'KARMA_MINUS_10', 'KARMA_MINUS_15'];
+    const buyerSanction = validSanctions.includes(req.body?.buyerSanction) ? req.body.buyerSanction : 'NONE';
+    const sellerSanction = validSanctions.includes(req.body?.sellerSanction) ? req.body.sellerSanction : 'NONE';
+    const internalNote = String(req.body?.internalNote || '').trim();
+    const order = await this.orderService.resolveDispute(req.params.id, adminId, {
+      status,
+      resolution,
+      outcome,
+      remedy,
+      sanctions: { buyer: buyerSanction, seller: sellerSanction, internalNote },
+    });
     return res.json(ApiResponse.ok(order, 'Dispute resolved'));
   }
 

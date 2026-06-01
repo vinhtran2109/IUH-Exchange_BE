@@ -68,6 +68,11 @@ export interface AdminOrderData {
   disputeResolution?: string;
   disputeOutcome?: string;
   disputeRemedy?: string;
+  disputeSanctions?: {
+    buyer?: string;
+    seller?: string;
+    internalNote?: string;
+  };
   disputeEvidence?: Array<{ _id?: string; submittedBy?: string; type?: string; url?: string; note?: string }>;
   disputeTimeline?: Array<{ _id?: string; action?: string; actorRole?: string; note?: string; metadata?: Record<string, string> }>;
   paymentIssueStatus?: string;
@@ -249,12 +254,17 @@ export const adminService = {
 
   resolveOrderDispute: async (
     orderId: string,
-    status: 'RESOLVED' | 'REJECTED',
-    resolution: string,
-    outcome: 'SELLER_FAULT' | 'BUYER_FAULT' | 'BOTH_FAULT' | 'NO_FAULT' = 'NO_FAULT',
-    remedy: 'NONE' | 'REFUND' = 'NONE'
+    payload: {
+      status: 'RESOLVED' | 'REJECTED';
+      resolution: string;
+      outcome?: 'SELLER_FAULT' | 'BUYER_FAULT' | 'BOTH_FAULT' | 'NO_FAULT';
+      remedy?: 'NONE' | 'REFUND' | 'CANCEL_ORDER';
+      buyerSanction?: string;
+      sellerSanction?: string;
+      internalNote?: string;
+    }
   ) => {
-    const response = await api.patch(`/orders/${orderId}/disputes/resolve`, { status, resolution, outcome, remedy });
+    const response = await api.patch(`/orders/${orderId}/disputes/resolve`, payload);
     return response.data;
   },
 

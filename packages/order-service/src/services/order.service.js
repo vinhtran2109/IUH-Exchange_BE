@@ -243,6 +243,64 @@ function disputeKarmaAdjustments(order, { status, outcome, adminId, resolution }
   return [];
 }
 
+const DISPUTE_SANCTION_LABELS = {
+  NONE: 'Không áp dụng',
+  WARNING: 'Cảnh cáo',
+  KARMA_MINUS_5: 'Trừ 5 Karma',
+  KARMA_MINUS_10: 'Trừ 10 Karma',
+  KARMA_MINUS_15: 'Trừ 15 Karma',
+};
+
+const DISPUTE_SANCTION_POINTS = {
+  KARMA_MINUS_5: -5,
+  KARMA_MINUS_10: -10,
+  KARMA_MINUS_15: -15,
+};
+
+function normalizeDisputeSanctions(sanctions = {}) {
+  const buyer = DISPUTE_SANCTION_LABELS[sanctions.buyer] ? sanctions.buyer : 'NONE';
+  const seller = DISPUTE_SANCTION_LABELS[sanctions.seller] ? sanctions.seller : 'NONE';
+  return {
+    buyer,
+    seller,
+    buyerLabel: DISPUTE_SANCTION_LABELS[buyer],
+    sellerLabel: DISPUTE_SANCTION_LABELS[seller],
+    internalNote: String(sanctions.internalNote || '').trim(),
+  };
+}
+
+function disputeSanctionAdjustments(order, { adminId, resolution, sanctions }) {
+  const adjustments = [];
+  const buyerAmount = DISPUTE_SANCTION_POINTS[sanctions.buyer] || 0;
+  const sellerAmount = DISPUTE_SANCTION_POINTS[sanctions.seller] || 0;
+
+  if (buyerAmount) {
+    adjustments.push({
+      userId: order.buyerId,
+      amount: buyerAmount,
+      reason: `Chế tài tranh chấp: ${sanctions.buyerLabel}`,
+      source: 'DISPUTE_BUYER_SANCTION',
+      relatedId: order._id.toString(),
+      performedBy: adminId,
+      metadata: { sanction: sanctions.buyer, resolution },
+    });
+  }
+
+  if (sellerAmount) {
+    adjustments.push({
+      userId: order.sellerId,
+      amount: sellerAmount,
+      reason: `Chế tài tranh chấp: ${sanctions.sellerLabel}`,
+      source: 'DISPUTE_SELLER_SANCTION',
+      relatedId: order._id.toString(),
+      performedBy: adminId,
+      metadata: { sanction: sanctions.seller, resolution },
+    });
+  }
+
+  return adjustments;
+}
+
 /**
  * Order Service - Business logic for order management.
  * Implements Saga Choreography Pattern via Kafka.
@@ -991,19 +1049,32 @@ export class OrderService {
     return order.toObject();
   }
 
-  async resolveDispute(orderId, adminId, { status, resolution, outcome = 'NO_FAULT', remedy = 'NONE' }) {
+  async resolveDispute(orderId, adminId, { status, resolution, outcome = 'NO_FAULT', remedy = 'NONE', sanctions = {} }) {
     const order = await Order.findById(orderId);
     if (!order) throw new ResourceNotFoundException('Order', orderId);
     if (order.disputeStatus !== 'OPEN') {
       throw new BadRequestException('Đơn hàng không có tranh chấp đang mở');
     }
+    const normalizedSanctions = normalizeDisputeSanctions(sanctions);
 
     order.disputeStatus = status === 'REJECTED' ? 'REJECTED' : 'RESOLVED';
     order.disputeOutcome = status === 'REJECTED' ? 'REJECTED' : outcome;
     order.disputeRemedy = remedy;
+    order.disputeSanctions = {
+      buyer: normalizedSanctions.buyer,
+      seller: normalizedSanctions.seller,
+      internalNote: normalizedSanctions.internalNote,
+    };
     order.disputeResolution = resolution || '';
     order.disputeResolvedBy = adminId;
     order.disputeResolvedAt = new Date();
+    if (remedy === 'CANCEL_ORDER' && order.status !== 'CANCELLED') {
+      transitionOrderStatus(order, 'CANCELLED', {
+        changedBy: adminId,
+        reason: resolution || 'Admin hủy giao dịch sau tranh chấp',
+        metadata: { category: 'DISPUTE' },
+      });
+    }
     if (remedy === 'REFUND' && order.paymentStatus === 'PAID') {
       order.paymentStatus = 'REFUNDED';
       order.paymentProviderStatus = 'DISPUTE_REFUNDED';
@@ -1025,7 +1096,13 @@ export class OrderService {
       actorId: adminId,
       actorRole: 'ADMIN',
       note: resolution || '',
-      metadata: { outcome: order.disputeOutcome, remedy },
+      metadata: {
+        outcome: order.disputeOutcome,
+        remedy,
+        buyerSanction: normalizedSanctions.buyer,
+        sellerSanction: normalizedSanctions.seller,
+        internalNote: normalizedSanctions.internalNote,
+      },
     });
     await order.save();
 
@@ -1038,9 +1115,17 @@ export class OrderService {
       outcome: order.disputeOutcome,
       remedy,
       resolution,
+      sanctions: {
+        buyer: normalizedSanctions.buyerLabel,
+        seller: normalizedSanctions.sellerLabel,
+      },
     });
 
-    for (const adjustment of disputeKarmaAdjustments(order, { status: order.disputeStatus, outcome: order.disputeOutcome, adminId, resolution })) {
+    const karmaAdjustments = [
+      ...disputeKarmaAdjustments(order, { status: order.disputeStatus, outcome: order.disputeOutcome, adminId, resolution }),
+      ...disputeSanctionAdjustments(order, { adminId, resolution, sanctions: normalizedSanctions }),
+    ];
+    for (const adjustment of karmaAdjustments) {
       await publishOrderEvent('karma.adjustment.requested', adjustment);
     }
 
