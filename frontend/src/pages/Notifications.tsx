@@ -14,7 +14,7 @@ import {
   MessageSquare,
   Star,
 } from 'lucide-react';
-import { notificationService, normalizeNotification } from '../services/notificationService';
+import { NOTIFICATION_SYNC_EVENT, notificationService, normalizeNotification } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
 import { chatService } from '../services/chatService';
 
@@ -108,6 +108,20 @@ const Notifications: React.FC = () => {
       });
     });
     return removeListener;
+  }, []);
+
+  useEffect(() => {
+    const handleNotificationSync = (event: Event) => {
+      const detail = (event as CustomEvent<{ action?: string; id?: string }>).detail;
+      if (detail?.action === 'read' && detail.id) {
+        setNotifications(prev => prev.map(n => n.id === detail.id ? { ...n, isRead: true } : n));
+      }
+      if (detail?.action === 'readAll') {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      }
+    };
+    window.addEventListener(NOTIFICATION_SYNC_EVENT, handleNotificationSync);
+    return () => window.removeEventListener(NOTIFICATION_SYNC_EVENT, handleNotificationSync);
   }, []);
 
   const handleMarkRead = async (id: string) => {

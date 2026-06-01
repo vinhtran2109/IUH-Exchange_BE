@@ -11,7 +11,7 @@ import {
 
 import ChatManager from './ChatManager';
 import { chatService } from '../services/chatService';
-import { normalizeNotification, notificationService } from '../services/notificationService';
+import { NOTIFICATION_SYNC_EVENT, normalizeNotification, notificationService } from '../services/notificationService';
 import type { Notification } from '../services/notificationService';
 import { authService } from '../services/authService';
 import api, { refreshAccessToken } from '../services/api';
@@ -78,6 +78,20 @@ const Layout: React.FC = () => {
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const handleNotificationSync = (event: Event) => {
+      const detail = (event as CustomEvent<{ action?: string; id?: string }>).detail;
+      if (detail?.action === 'read' && detail.id) {
+        setNotifications(prev => prev.map(n => n.id === detail.id ? { ...n, isRead: true } : n));
+      }
+      if (detail?.action === 'readAll') {
+        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      }
+    };
+    window.addEventListener(NOTIFICATION_SYNC_EVENT, handleNotificationSync);
+    return () => window.removeEventListener(NOTIFICATION_SYNC_EVENT, handleNotificationSync);
   }, []);
 
   const handleMarkRead = async (id: string) => {
