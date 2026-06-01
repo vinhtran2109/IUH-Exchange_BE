@@ -14,6 +14,7 @@ import {
 } from '@iuh-exchange/common';
 
 // ── Helpers ──
+const USER_SERVICE_URL = process.env.USER_SERVICE_URL || 'http://user-service:3001';
 
 function toResponse(product) {
   return {
@@ -34,6 +35,30 @@ function toResponse(product) {
     reservationExpiresAt: product.reservationExpiresAt,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+  };
+}
+
+async function fetchUserSnapshot(userId) {
+  if (!userId) return null;
+  try {
+    const response = await fetch(`${USER_SERVICE_URL}/api/v1/users/${userId}`);
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.success) return null;
+    return body.data || null;
+  } catch (err) {
+    logger.warn(`[ProductAdmin] Seller snapshot unavailable: userId=${userId}, error=${err.message}`);
+    return null;
+  }
+}
+
+async function enrichProductModerationSummary(product) {
+  const seller = await fetchUserSnapshot(product.sellerId);
+  return {
+    ...toResponse(product),
+    sellerName: seller?.name || '',
+    sellerStudentId: seller?.studentId || '',
+    sellerEmail: seller?.email || '',
+    sellerAvatarUrl: seller?.avatarUrl || '',
   };
 }
 
@@ -150,8 +175,10 @@ export async function listProducts(req, res) {
     Product.countDocuments(filter),
   ]);
 
+  const content = await Promise.all(products.map(enrichProductModerationSummary));
+
   const pageResponse = new PageResponse({
-    content: products.map(toResponse),
+    content,
     page,
     size,
     totalElements: total,

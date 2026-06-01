@@ -22,9 +22,17 @@ type ProductModerationData = {
   _id?: string;
   title: string;
   description?: string;
+  price?: number;
   status: string;
   category?: string;
+  condition?: string;
+  location?: string;
+  imageUrls?: string[];
   sellerId?: string;
+  sellerName?: string;
+  sellerStudentId?: string;
+  sellerEmail?: string;
+  sellerAvatarUrl?: string;
   createdAt: string;
 };
 
@@ -169,6 +177,19 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
+  const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
+
+  const conditionLabel = (value?: string) => {
+    switch (value) {
+      case 'NEW': return 'Mới';
+      case 'LIKE_NEW': return 'Như mới';
+      case 'GOOD': return 'Tốt';
+      case 'FAIR': return 'Khá';
+      case 'POOR': return 'Cũ';
+      default: return value || 'Chưa rõ';
+    }
+  };
+
   const statusBadgeClass = (status?: string) => {
     switch (status) {
       case 'PENDING':
@@ -298,10 +319,8 @@ const ModerationDashboard: React.FC = () => {
                         </div>
                         <p className="mt-3 text-base font-black text-slate-950">{report.reason}</p>
                         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                          <span>Target</span>
-                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(report.targetId)}</span>
-                          <span>Reporter</span>
-                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(report.reporterId)}</span>
+                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-bold text-slate-600">Loại đối tượng: {targetLabel(report.targetType)}</span>
+                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-bold text-slate-600">Người gửi báo cáo đã được ghi nhận</span>
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
@@ -321,22 +340,66 @@ const ModerationDashboard: React.FC = () => {
               ) : (
                 products.map((product) => {
                   const id = getId(product);
+                  const imageUrl = product.imageUrls?.[0] || '';
+                  const sellerLabel = product.sellerName || product.sellerEmail || 'Chưa có tên người bán';
                   return (
-                    <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
-                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-100">{product.status}</span>
-                            {product.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category}</span>}
-                            <span className="text-xs font-medium text-slate-400">{formatDateTime(product.createdAt)}</span>
-                          </div>
-                          <p className="mt-3 text-base font-black text-slate-950">{product.title}</p>
-                          {product.description && <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">{product.description}</p>}
-                          {product.sellerId && <p className="mt-2 text-xs text-slate-500">Seller <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(product.sellerId)}</span></p>}
+                    <article key={id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-200 hover:shadow-sm">
+                      <div className="grid gap-0 lg:grid-cols-[220px_1fr]">
+                        <div className="relative aspect-[4/3] bg-slate-100 lg:aspect-auto lg:min-h-[190px]">
+                          {imageUrl ? (
+                            <img src={imageUrl} alt={product.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <div className="flex h-full w-full flex-col items-center justify-center text-slate-400">
+                              <PackageX size={32} />
+                              <span className="mt-2 text-xs font-bold">Chưa có ảnh</span>
+                            </div>
+                          )}
+                          {product.imageUrls && product.imageUrls.length > 1 && (
+                            <span className="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-black text-white">
+                              {product.imageUrls.length} ảnh
+                            </span>
+                          )}
                         </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                          <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Ẩn bài</button>
-                          <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
+
+                        <div className="flex min-w-0 flex-col gap-4 p-4">
+                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-100">Chờ duyệt</span>
+                                {product.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category}</span>}
+                                <span className="text-xs font-medium text-slate-400">{formatDateTime(product.createdAt)}</span>
+                              </div>
+                              <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">{product.title}</h3>
+                              {product.description && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{product.description}</p>}
+                            </div>
+                            <div className="text-left xl:text-right">
+                              <div className="text-2xl font-black text-slate-950">{currency(product.price)}</div>
+                              <div className="mt-1 text-xs font-bold text-slate-400">Giá niêm yết</div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người bán</div>
+                              <div className="mt-1 truncate text-sm font-black text-slate-800">{sellerLabel}</div>
+                              <div className="mt-0.5 text-xs font-medium text-slate-500">{product.sellerStudentId || product.sellerEmail || 'Chưa cập nhật MSSV'}</div>
+                            </div>
+                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Tình trạng</div>
+                              <div className="mt-1 text-sm font-black text-slate-800">{conditionLabel(product.condition)}</div>
+                              <div className="mt-0.5 text-xs font-medium text-slate-500">{product.location || 'Chưa có vị trí'}</div>
+                            </div>
+                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Hình ảnh</div>
+                              <div className="mt-1 text-sm font-black text-slate-800">{product.imageUrls?.length || 0} ảnh</div>
+                              <div className="mt-0.5 text-xs font-medium text-slate-500">Dùng để kiểm tra nội dung</div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+                            <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Ẩn bài</button>
+                            <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
+                          </div>
                         </div>
                       </div>
                     </article>
