@@ -169,6 +169,8 @@ const LostFoundDetail: React.FC = () => {
   if (!item) return <div className="max-w-7xl mx-auto px-4 py-32 text-center text-slate-400 font-bold">Không tìm thấy thông tin.</div>;
 
   const isOwner = String(user?.id || user?.sub || '') === String(item.userId || '');
+  const ownerName = item.userName?.trim() || 'Chưa có tên sinh viên';
+  const ownerStudentId = item.studentId && item.studentId !== item.userId ? item.studentId : 'Chưa cập nhật MSSV';
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-12">
@@ -308,7 +310,8 @@ const LostFoundDetail: React.FC = () => {
                  </div>
                  <div>
                     <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Sinh viên đăng bài</h4>
-                    <p className="text-sm font-bold text-slate-700">Mã sinh viên: {item.studentId}</p>
+                    <p className="text-sm font-black text-slate-800">{ownerName}</p>
+                    <p className="mt-1 text-sm font-bold text-slate-600">MSSV: {ownerStudentId}</p>
                  </div>
               </div>
 
@@ -325,20 +328,13 @@ const LostFoundDetail: React.FC = () => {
                   </button>
                 )}
                 <button 
-                  onClick={() => chatService.triggerOpenChat(item.studentId, "Chủ bài đăng")}
+                  onClick={() => item.userId && chatService.triggerOpenChat(item.userId, ownerName)}
                   disabled={isOwner}
                   className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-50 disabled:grayscale disabled:cursor-not-allowed group"
                 >
                   <MessageCircle size={16} className="group-hover:rotate-12 transition-transform" />
                   NHẮN TIN NGAY
                 </button>
-                
-                <a 
-                  href={`tel:${item.contactInfo}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white py-2.5 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50"
-                >
-                  GỌI ĐIỆN CHO CHỦ BÀI
-                </a>
               </div>
               {!isOwner && (
                 <button 
