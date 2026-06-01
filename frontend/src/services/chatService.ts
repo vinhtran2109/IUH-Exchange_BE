@@ -35,6 +35,8 @@ export interface AiAssistantReply {
 let stompClient: Stomp.Client | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let isConnecting = false;
+type PendingFrame = { destination: string; body: string };
+let pendingFrames: PendingFrame[] = [];
 
 const inferredSocketUrl =
   typeof window !== 'undefined'
@@ -60,6 +62,31 @@ const clearReconnectTimer = () => {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
+};
+
+const flushPendingFrames = () => {
+  if (!stompClient?.connected || pendingFrames.length === 0) return;
+  const frames = [...pendingFrames];
+  pendingFrames = [];
+  frames.forEach((frame) => {
+    try {
+      stompClient?.send(frame.destination, {}, frame.body);
+    } catch (_error) {
+      pendingFrames.unshift(frame);
+    }
+  });
+};
+
+const sendOrQueue = (destination: string, payload: unknown) => {
+  const body = JSON.stringify(payload);
+  if (stompClient?.connected) {
+    stompClient.send(destination, {}, body);
+    return true;
+  }
+
+  pendingFrames.push({ destination, body });
+  chatService.connect();
+  return true;
 };
 
 export const chatService = {
@@ -112,6 +139,7 @@ export const chatService = {
   connect: () => {
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
+      pendingFrames = [];
       chatService.disconnect();
       return;
     }
@@ -175,6 +203,7 @@ export const chatService = {
         }
       });
 
+      flushPendingFrames();
       connectedListeners.forEach((callback) => callback());
     }, (error) => {
       isConnecting = false;
@@ -218,19 +247,11 @@ export const chatService = {
   },
 
   sendMessage: (message: ChatMessage) => {
-    if (stompClient && stompClient.connected) {
-      stompClient.send('/app/chat', {}, JSON.stringify(message));
-      return true;
-    }
-    return false;
+    return sendOrQueue('/app/chat', message);
   },
 
   sendImage: (recipientId: string, fileUrl: string, fileName?: string) => {
-    if (stompClient && stompClient.connected) {
-      stompClient.send('/app/chat.image', {}, JSON.stringify({ recipientId, fileUrl, fileName }));
-      return true;
-    }
-    return false;
+    return sendOrQueue('/app/chat.image', { recipientId, fileUrl, fileName });
   },
 
   sendTyping: (conversationId: string, isTyping: boolean) => {

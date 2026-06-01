@@ -61,7 +61,10 @@ const ChatManager: React.FC = () => {
         return;
       }
 
-      if (activeChatRef.current?.recipientId === senderId) return;
+      if (activeChatRef.current?.recipientId === senderId) {
+        setIncomingToast(null);
+        return;
+      }
 
       setIncomingToast({ senderId, senderName, content });
       window.setTimeout(() => {
@@ -124,7 +127,7 @@ const ChatManager: React.FC = () => {
       </AnimatePresence>
 
       <AnimatePresence>
-        {incomingToast && !showList && !activeChat && (
+        {incomingToast && !showList && (
           <div className="fixed bottom-6 right-6 z-50 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
             <button
               type="button"
