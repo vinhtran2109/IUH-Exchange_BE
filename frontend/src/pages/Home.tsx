@@ -174,53 +174,64 @@ const Home: React.FC = () => {
 
         <div className="overflow-hidden" aria-live="polite">
           {loading ? (
-            <div className="grid gap-3">
+            <div className="grid gap-3 lg:grid-cols-3">
               {Array.from({ length: 3 }, (_, i) => (
-                <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+                <div key={i} className="h-28 animate-pulse rounded-2xl bg-slate-100" />
               ))}
             </div>
           ) : visibleActivityProducts.length > 0 ? (
-            <div className="grid gap-3">
-              <AnimatePresence mode="popLayout">
+            <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr_1fr]">
+              <AnimatePresence mode="wait">
                 {visibleActivityProducts.map((product, index) => (
                   <motion.div
                     key={`${product.id}-${index}-${activityIndex}`}
-                    layout
-                    initial={{ opacity: 0, y: 18 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -18 }}
-                    transition={{ duration: 0.35, ease: 'easeOut' }}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.32, ease: 'easeOut', delay: index * 0.04 }}
                   >
                     <Link
                       to={`/products/${product.id}`}
-                      className={`flex items-center gap-3 rounded-2xl border p-3 transition hover:border-indigo-200 hover:bg-white hover:shadow-sm ${
-                        index === 0 ? 'border-indigo-100 bg-indigo-50/60' : 'border-slate-100 bg-slate-50'
+                      className={`group flex h-full min-h-28 items-center gap-3 rounded-2xl border p-3 transition hover:border-indigo-200 hover:bg-white hover:shadow-sm ${
+                        index === 0 ? 'border-indigo-100 bg-indigo-50/70 shadow-sm' : 'border-slate-100 bg-slate-50'
                       }`}
                     >
-                      <img
-                        src={product.imageUrls?.[0] || 'https://placehold.co/160x120/e2e8f0/64748b?text=IUH'}
-                        alt={product.title}
-                        className="h-16 w-20 shrink-0 rounded-xl object-cover"
-                      />
+                      <div className={index === 0 ? 'relative h-20 w-24 shrink-0 overflow-hidden rounded-xl bg-white' : 'relative h-16 w-20 shrink-0 overflow-hidden rounded-xl bg-white'}>
+                        <img
+                          src={product.imageUrls?.[0] || 'https://placehold.co/160x120/e2e8f0/64748b?text=IUH'}
+                          alt={product.title}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                        />
+                      </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700 ring-1 ring-indigo-100">{categoryLabel(product.category)}</span>
-                          <span className="text-[11px] font-semibold text-slate-400">{formatActivityTime(product.createdAt)}</span>
-                          {index === 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">Mới nhất</span>}
+                          {index === 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">Moi nhat</span>}
                         </div>
-                        <div className="mt-1 truncate text-sm font-black text-slate-900">{product.title}</div>
-                        <div className="mt-0.5 truncate text-xs font-medium text-slate-500">
-                          {product.sellerName || 'Sinh viên IUH'} vừa đăng bán
+                        <div className={index === 0 ? 'line-clamp-2 text-base font-black leading-snug text-slate-950' : 'line-clamp-2 text-sm font-black leading-snug text-slate-900'}>{product.title}</div>
+                        <div className="mt-2 truncate text-xs font-semibold text-slate-500">
+                          {product.sellerName || 'Sinh vien IUH'} - {formatActivityTime(product.createdAt)}
                         </div>
                       </div>
                     </Link>
                   </motion.div>
                 ))}
               </AnimatePresence>
+              <div className="flex items-center justify-center gap-1.5 lg:col-span-3">
+                {recentProducts.map((product, index) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => setActivityIndex(index)}
+                    className={`h-1.5 rounded-full transition-all ${index === activityIndex ? 'w-6 bg-indigo-600' : 'w-1.5 bg-slate-300 hover:bg-slate-400'}`}
+                    aria-label={`Xem hoat dong ${index + 1}`}
+                  />
+                ))}
+              </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-medium text-slate-400">
-              Chưa có hoạt động mới.
+              Chua co hoat dong moi.
             </div>
           )}
         </div>
