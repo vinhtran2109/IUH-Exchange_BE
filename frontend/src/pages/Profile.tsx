@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import {
   AlertCircle,
   BadgeCheck,
+  Bell,
   Bookmark,
   Camera,
   Check,
@@ -36,6 +37,7 @@ import type { LostFoundItem } from '../services/lostFoundService';
 import type { User as ProfileUser } from '../types/api';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Dialogs';
+import Notifications from './Notifications';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
@@ -43,7 +45,7 @@ const Profile: React.FC = () => {
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const { confirm } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'sales' | 'wishlist' | 'history'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'notifications' | 'password' | 'products' | 'orders' | 'sales' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
 
   const [name, setName] = useState(user?.name || '');
@@ -153,6 +155,8 @@ const Profile: React.FC = () => {
       console.error(error);
     }
   }, []);
+
+  
 
   useEffect(() => {
     fetchProfile();
@@ -353,8 +357,10 @@ const Profile: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div className="space-y-1 lg:col-span-1">
+          {/* Notifications menu item is shown as a regular tab below */}
           {[
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
+            { id: 'notifications', label: 'Thông báo', icon: Bell },
             { id: 'products', label: 'Bài đăng của tôi', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
             { id: 'sales', label: 'Đơn từ người mua', icon: Receipt },
@@ -399,6 +405,12 @@ const Profile: React.FC = () => {
               >
                 {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 <span className="font-medium">{message.text}</span>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div>
+                <Notifications />
               </div>
             )}
 
@@ -617,36 +629,53 @@ const Profile: React.FC = () => {
                           </div>
                         </div>
                         {myProducts.map((p) => (
-                          <div key={p.id} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
-                              <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={p.title} className="h-full w-full object-cover" />
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => navigate(`/products/${p.id}`)}
+                            className="flex w-full items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left min-h-[84px] hover:shadow-sm"
+                          >
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                                <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={p.title} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-slate-800">{p.title}</div>
+                                <div className="text-sm font-bold text-slate-900">{p.price.toLocaleString()}đ</div>
+                                <span
+                                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    p.status === 'AVAILABLE'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : p.status === 'PENDING_APPROVAL'
+                                        ? 'bg-amber-50 text-amber-700'
+                                        : p.status === 'SOLD'
+                                          ? 'bg-slate-100 text-slate-600'
+                                          : 'bg-red-50 text-red-700'
+                                  }`}
+                                >
+                                  {p.status === 'PENDING_APPROVAL' ? 'Chờ duyệt' : p.status === 'AVAILABLE' ? 'Đang bán' : p.status === 'SOLD' ? 'Đã bán' : p.status}
+                                </span>
+                              </div>
                             </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate text-sm font-medium text-slate-800">{p.title}</div>
-                              <div className="text-sm font-bold text-slate-900">{p.price.toLocaleString()}đ</div>
-                              <span
-                                className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                                  p.status === 'AVAILABLE'
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : p.status === 'PENDING_APPROVAL'
-                                      ? 'bg-amber-50 text-amber-700'
-                                      : p.status === 'SOLD'
-                                        ? 'bg-slate-100 text-slate-600'
-                                        : 'bg-red-50 text-red-700'
-                                }`}
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                title="Chỉnh sửa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/products/${p.id}/edit`); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700"
+                                aria-label={`Chỉnh sửa ${p.title}`}
                               >
-                                {p.status === 'PENDING_APPROVAL' ? 'Chờ duyệt' : p.status === 'AVAILABLE' ? 'Đang bán' : p.status === 'SOLD' ? 'Đã bán' : p.status}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => navigate(`/products/${p.id}/edit`)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700">
                                 <Pencil size={16} />
                               </button>
-                              <button onClick={() => handleDeleteProduct(p.id)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500">
+                              <button
+                                title="Gỡ bài"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleDeleteProduct(p.id); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500"
+                                aria-label={`Gỡ bài ${p.title}`}
+                              >
                                 <Trash2 size={16} />
                               </button>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -660,32 +689,49 @@ const Profile: React.FC = () => {
                           </div>
                         </div>
                         {myLostFoundItems.map((item) => (
-                          <div key={item.id} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
-                              <img src={item.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={item.title} className="h-full w-full object-cover" />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
-                                <span className="truncate">{item.title}</span>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
-                                  {item.type === ItemType.LOST ? 'Tìm đồ thất lạc' : 'Nhặt được đồ'}
-                                </span>
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => navigate(`/lost-found/${item.id}`)}
+                            className="flex w-full items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left min-h-[84px] hover:shadow-sm"
+                          >
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                                <img src={item.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={item.title} className="h-full w-full object-cover" />
                               </div>
-                              <div className="mt-1 text-xs text-slate-500">{item.location || 'Địa điểm chưa rõ'}</div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                <span>{new Date(item.createdAt).toLocaleDateString()}</span>
-                                <span className="rounded-full bg-slate-100 px-2 py-0.5 uppercase">{item.status}</span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
+                                  <span className="truncate">{item.title}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                                    {item.type === ItemType.LOST ? 'Tìm đồ thất lạc' : 'Nhặt được đồ'}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">{item.location || 'Địa điểm chưa rõ'}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                  <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 uppercase">{item.status}</span>
+                                </div>
                               </div>
                             </div>
-                            <div className="flex items-center gap-1">
-                              <button onClick={() => navigate(`/lost-found/${item.id}/edit`)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700">
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                title="Chỉnh sửa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/lost-found/${item.id}/edit`); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700"
+                                aria-label={`Chỉnh sửa ${item.title}`}
+                              >
                                 <Pencil size={16} />
                               </button>
-                              <button onClick={() => handleDeleteLostFound(item.id)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500">
+                              <button
+                                title="Xóa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleDeleteLostFound(item.id); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500"
+                                aria-label={`Xóa ${item.title}`}
+                              >
                                 <Trash2 size={16} />
                               </button>
                             </div>
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}
