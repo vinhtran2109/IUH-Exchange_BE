@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "dev": "docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis zookeeper kafka elasticsearch && npm run dev:services",
-    "dev:local": "docker compose --profile local-db up -d mongodb redis zookeeper kafka elasticsearch && npm run dev:services",
+    "dev:local": "docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile local-db up -d mongodb redis zookeeper kafka elasticsearch && npm run dev:services",
     "dev:services": "concurrently \"npm run dev --workspace=packages/api-gateway\" \"npm run dev --workspace=packages/user-service\" \"npm run dev --workspace=packages/product-service\" \"npm run dev --workspace=packages/order-service\" \"npm run dev --workspace=packages/notification-service\" \"npm run dev --workspace=packages/chat-service\" \"npm run dev --workspace=packages/lost-found-service\" \"npm run dev --workspace=packages/ws-gateway\"",
     "dev:gateway": "npm run dev --workspace=packages/api-gateway",
     "dev:user": "npm run dev --workspace=packages/user-service",
