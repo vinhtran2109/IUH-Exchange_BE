@@ -4,6 +4,7 @@ import {
   Ban,
   CheckCircle2,
   Clock3,
+  Home,
   Loader2,
   MapPin,
   PackageX,
@@ -14,6 +15,7 @@ import {
   UserRound,
   XCircle,
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   adminService,
   type LostFoundAdminData,
@@ -427,6 +429,13 @@ const ModerationDashboard: React.FC = () => {
             {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
             Làm mới
           </button>
+          <Link
+            to="/"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white transition hover:bg-slate-800"
+          >
+            <Home size={16} />
+            Về trang chủ
+          </Link>
         </div>
 
         <div className="mt-6 grid gap-4 md:grid-cols-4">
