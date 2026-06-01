@@ -9,6 +9,7 @@ import {
   CreditCard,
   ExternalLink,
   Loader2,
+  MessageSquare,
   Package,
   Receipt,
   ShoppingBag,
@@ -326,10 +327,23 @@ const OrderDetail: React.FC = () => {
   const isSeller = !!(user?.id && order?.sellerId && user.id === order.sellerId);
   const isBuyer = !!(user?.id && order?.buyerId && user.id === order.buyerId);
   const orderProductId = getOrderProductId(order);
+  const buyerId = String(order?.buyerId || order?.buyer?._id || order?.buyer?.id || '');
+  const sellerId = String(order?.sellerId || order?.seller?._id || order?.seller?.id || product?.sellerId || '');
   const buyerDisplayName = order?.buyer?.name || order?.buyerName || (isBuyer ? user?.name : '') || order?.buyerId;
+  const sellerDisplayName = order?.seller?.name || order?.sellerName || product?.sellerName || (isSeller ? user?.name : '') || order?.sellerId;
   const productTitle = product?.title || order?.product?.title || order?.productTitle || 'Đang tải...';
   const productDescription = product?.description || order?.product?.description || '';
   const productImageUrl = product?.imageUrls?.[0] || order?.product?.imageUrls?.[0] || '';
+
+  const handleChatParticipant = (participantId: string, participantName: string) => {
+    if (!participantId || participantId === user?.id) return;
+    chatService.triggerOpenChat(participantId, participantName || 'Người dùng IUH', {
+      id: orderProductId || order?.productId || order?.id || order?._id,
+      title: productTitle,
+      price: Number(order?.price || product?.price || 0),
+      imageUrl: productImageUrl,
+    });
+  };
 
   const currentStatus = (order?.status || 'PENDING') as OrderStatusKey;
   const paymentMethod = payment?.paymentMethod || order?.paymentMethod;
@@ -676,17 +690,40 @@ const OrderDetail: React.FC = () => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <section>
               <h3 className="mb-3 flex items-center gap-1.5 text-sm font-semibold text-slate-800">
-                <User size={16} className="text-slate-400" /> Người mua
+                <User size={16} className="text-slate-400" /> Người tham gia
               </h3>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="text-slate-500">Họ tên</span>
-                  <span className="font-medium text-slate-700">{buyerDisplayName}</span>
-                </div>
-                <div className="flex items-center justify-between rounded-lg bg-slate-50 p-3 text-sm">
-                  <span className="text-slate-500">Ghi chú</span>
-                  <span className="max-w-[60%] text-right font-medium text-slate-700">{order.buyerNote || 'Không có'}</span>
-                </div>
+              <div className="space-y-3">
+                {[
+                  { role: 'Người mua', id: buyerId, name: buyerDisplayName, note: order.buyerNote || 'Không có ghi chú' },
+                  { role: 'Người bán', id: sellerId, name: sellerDisplayName, note: 'Chủ bài đăng sản phẩm' },
+                ].map((participant) => {
+                  const isSelf = participant.id && participant.id === user?.id;
+                  const canChat = Boolean(participant.id && !isSelf);
+                  return (
+                    <div key={participant.role} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold uppercase tracking-wide text-slate-400">{participant.role}</div>
+                          <div className="mt-1 truncate text-sm font-bold text-slate-800">{participant.name || 'Người dùng IUH'}</div>
+                          <div className="mt-1 line-clamp-2 text-xs text-slate-500">{participant.note}</div>
+                        </div>
+                        {isSelf ? (
+                          <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-bold text-slate-500 ring-1 ring-slate-200">Bạn</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleChatParticipant(participant.id, participant.name)}
+                            disabled={!canChat}
+                            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                          >
+                            <MessageSquare size={13} />
+                            Nhắn tin
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
