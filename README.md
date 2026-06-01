@@ -1,647 +1,373 @@
-# 🏫 IUH Campus Exchange Platform — Backend
+# IUH Campus Exchange Platform
 
-> Nền tảng mua bán, trao đổi đồ cũ và đồ thất lạc dành cho cộng đồng sinh viên Đại học Công nghiệp TP.HCM (IUH).
+Nền tảng mua bán, trao đổi đồ cũ, chat realtime và quản lý đồ thất lạc cho cộng đồng sinh viên IUH. Repo hiện tại là monorepo gồm backend microservices Node.js, frontend React/Vite và cấu hình hạ tầng Docker/Kubernetes.
 
-[![Node.js](https://img.shields.io/badge/Node.js-20+-green)](https://nodejs.org/)
-[![MongoDB](https://img.shields.io/badge/MongoDB-7.0-green)](https://www.mongodb.com/)
-[![Redis](https://img.shields.io/badge/Redis-7.2-red)](https://redis.io/)
-[![Kafka](https://img.shields.io/badge/Apache%20Kafka-7.6-blue)](https://kafka.apache.org/)
-[![ElasticSearch](https://img.shields.io/badge/ElasticSearch-8.13-yellow)](https://www.elastic.co/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-blue)](https://www.docker.com/)
+## Tổng quan tính năng
 
----
+- Đăng ký, đăng nhập, OTP email, refresh token bằng HttpOnly cookie.
+- Quản lý hồ sơ, xác minh sinh viên, avatar, karma và phân quyền admin/moderator.
+- Đăng bán sản phẩm, kiểm duyệt sản phẩm, tìm kiếm Elasticsearch, gợi ý, wishlist, lịch sử xem, theo dõi seller.
+- Offer/checkout, tạo đơn hàng, xác nhận/từ chối/hủy đơn, handover, dispute, no-show, payment issue và receipt.
+- Review sản phẩm/seller sau giao dịch.
+- Chat realtime bằng SockJS/STOMP, upload ảnh chat, báo cáo tin nhắn và AI assistant dùng Gemini.
+- Lost & Found có OCR/image processing, matching, claim, moderation, report và heatmap.
+- Notification in-app, WebSocket, email, Firebase FCM, notification preferences và DLQ retry.
+- Metrics Prometheus, dashboard Grafana, logging tùy chọn qua Logstash/Kibana.
 
-## 📖 Giới thiệu
+## Kiến trúc hiện tại
 
-IUH Campus Exchange Platform là hệ thống microservices cho phép sinh viên IUH:
-- **Mua bán đồ cũ**: Đăng tin, tìm kiếm, đặt hàng với quy trình Saga an toàn
-- **Chat realtime**: Trò chuyện trực tiếp giữa buyer và seller qua WebSocket (STOMP)
-- **Đồ thất lạc**: Đăng và tìm kiếm đồ thất lạc trong khuôn viên trường
-- **Hệ thống Karma**: Điểm uy tín, chống spam và lừa đảo
-- **Thông báo realtime**: Push notification qua WebSocket, email và FCM
+```text
+React/Vite frontend (:5173)
+        |
+        | REST /api/v1
+        v
+API Gateway (:8080) ---- WebSocket /ws ---- WS Gateway (:3007)
+        |
+        +-- User Service (:3001)          -> Supabase + Mongo audit logs
+        +-- Product Service (:3002)       -> MongoDB + Elasticsearch + Kafka
+        +-- Order Service (:3003)         -> Supabase + Redis + Kafka
+        +-- Notification Service (:3004)  -> MongoDB + Kafka + FCM/Email
+        +-- Chat Service (:3005)          -> MongoDB + SockJS/STOMP + Gemini
+        +-- Lost-Found Service (:3006)    -> MongoDB + Kafka + OCR/Matching
 
----
-
-## 🏗️ Kiến trúc tổng thể
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Client (React/Vite)                       │
-│                  TailwindCSS + Shadcn/UI + Zustand                │
-└──────────────┬──────────────────────────────┬────────────────────┘
-               │ HTTPS/REST                   │ WebSocket
-       ┌───────▼────────┐             ┌───────▼────────┐
-       │  API Gateway    │             │  WS Gateway     │
-       │  (Port 8080)    │             │  (Port 3007)    │
-       │  Rate Limiting  │             │  Redis Pub/Sub  │
-       │  JWT Auth       │             │  STOMP Protocol │
-       │  Circuit Breaker│             └───────┬────────┘
-       └───────┬────────┘                      │
-               │                               │
-    ┌──────────┼──────────┬──────────┐         │
-    │          │          │          │         │
-┌───▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼───┐ ┌───▼───┐
-│ User  │ │Product│ │ Order │ │Lost&  │ │ Chat  │
-│Service│ │Service│ │Service│ │Found  │ │Service│
-│ :3001 │ │ :3002 │ │ :3003 │ │ :3006 │ │ :3005 │
-└───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘ └───┬───┘
-    │         │         │         │         │
-    │    ┌────▼────┐    │         │         │
-    │    │Elastic  │    │         │         │
-    │    │Search   │    │         │         │
-    │    └─────────┘    │         │         │
-    │                   │         │         │
-┌───▼───────────────────▼─────────▼─────────▼───┐
-│                  Apache Kafka                    │
-│          (Event-Driven Communication)            │
-│                  + DLQ                           │
-└───────────────────────┬─────────────────────────┘
-                        │
-               ┌────────▼────────┐
-               │  Notification   │
-               │  Service :3004  │
-               └────────┬────────┘
-                        │
-    ┌───────────────────┼───────────────────┐
-    │                   │                   │
-┌───▼───┐         ┌────▼────┐        ┌────▼────┐
-│MongoDB│         │  Redis  │        │Firebase │
-│Atlas  │         │ Cache   │        │  FCM    │
-└───────┘         └─────────┘        └─────────┘
+Shared infrastructure: Redis, Kafka, Zookeeper, Elasticsearch.
+Optional profiles: local MongoDB, monitoring stack, Nginx load balancer.
 ```
 
-### Kiến trúc chi tiết (Mermaid)
+![Architecture](./architecture.png)
 
-```mermaid
-graph TD
-    Client[React/Vite Frontend] -->|HTTPS/REST| Gateway[API Gateway :8080]
-    Client -->|WebSocket| WSGW[WS Gateway :3007]
-    
-    Gateway --> US[User Service :3001]
-    Gateway --> PS[Product Service :3002]
-    Gateway --> OS[Order Service :3003]
-    Gateway --> NS[Notification Service :3004]
-    Gateway --> CS[Chat Service :3005]
-    Gateway --> LF[Lost-Found Service :3006]
-    
-    WSGW -->|Proxy| CS
-    
-    US --> MongoDB[(MongoDB)]
-    PS --> MongoDB
-    OS --> MongoDB
-    NS --> MongoDB
-    CS --> MongoDB
-    LF --> MongoDB
-    
-    PS --> ES[(ElasticSearch)]
-    
-    US --> Redis[(Redis Cache)]
-    PS --> Redis
-    CS --> Redis
-    Gateway --> Redis
-    
-    OS -->|Events| Kafka[Kafka Broker]
-    PS -->|Events| Kafka
-    US -->|Events| Kafka
-    LF -->|Events| Kafka
-    Kafka -->|Listen| NS
-    
-    NS --> FCM[Firebase FCM]
-    NS --> SMTP[Email SMTP]
-    
-    PS --> S3[AWS S3]
-    CS --> S3
-    LF --> S3
-    
-    subgraph Monitoring
-        Prometheus[Prometheus :9090]
-        Grafana[Grafana :3100]
-        ELK[ELK Stack :5601]
-    end
-```
+## Tech stack
 
----
+| Phần | Công nghệ |
+| --- | --- |
+| Backend | Node.js 20+, Express, npm workspaces |
+| Frontend | React 19, Vite 8, TypeScript, React Router, React Query, Zustand, Tailwind CSS 4 |
+| Database | Supabase cho user/order, MongoDB cho các service còn lại và audit logs |
+| Cache/Queue/Search | Redis, Apache Kafka, Zookeeper, Elasticsearch |
+| Realtime | SockJS + STOMP, WebSocket gateway riêng |
+| AI/OCR | Gemini API, Tesseract trained data cho lost-found |
+| Upload | AWS S3 presigned URL |
+| Monitoring | Prometheus, Grafana, Logstash, Kibana |
+| Test | Vitest, shell smoke tests, JMeter load tests |
 
-## 🛠️ Tech Stack
+## Yêu cầu
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| **Runtime** | Node.js | 20+ |
-| **Framework** | Express.js | 4.x |
-| **Database** | MongoDB | 7.0 |
-| **Cache** | Redis | 7.2 |
-| **Message Broker** | Apache Kafka | 7.6 |
-| **Search Engine** | ElasticSearch | 8.13 |
-| **Frontend** | React + Vite + TypeScript | Latest |
-| **UI** | TailwindCSS + Shadcn/UI | Latest |
-| **State** | Zustand | Latest |
-| **Container** | Docker + Docker Compose | 3.9 |
-| **Monitoring** | Prometheus + Grafana | Latest |
-| **Logging** | ELK Stack (Elasticsearch + Logstash + Kibana) | 8.13 |
-| **Push Notification** | Firebase Cloud Messaging | - |
-| **File Storage** | AWS S3 (Presigned URL) | - |
+- Node.js >= 20
+- npm >= 10
+- Docker và Docker Compose
+- Git
+- Tài khoản/credential cho Supabase, MongoDB Atlas hoặc local MongoDB, AWS S3, SMTP, Firebase FCM và Gemini nếu dùng đầy đủ tính năng.
 
----
-
-## 📋 Prerequisites
-
-- **Node.js** >= 20.0.0
-- **Docker** & **Docker Compose** (cho infrastructure)
-- **npm** >= 10.x
-- **Git**
-
----
-
-## 🚀 Hướng dẫn cài đặt & chạy
-
-### 1. Clone repository
+## Cài đặt nhanh
 
 ```bash
 git clone <repository-url>
 cd IUH-Exchange_BE
-```
-
-### 2. Cấu hình Environment Variables
-
-```bash
+npm install
+cd frontend
+npm install
+cd ..
 cp .env.example .env
-# Chỉnh sửa .env với các giá trị phù hợp
 ```
 
-Các biến môi trường chính:
+Sau đó điền `.env`. Các biến bắt buộc/tối thiểu:
 
 ```env
-# MongoDB
-MONGO_ROOT_USERNAME=root
-MONGO_ROOT_PASSWORD=
-MONGODB_URI=
-USER_SERVICE_MONGO_URI=
-PRODUCT_SERVICE_MONGO_URI=
-ORDER_SERVICE_MONGO_URI=
-NOTIFICATION_SERVICE_MONGO_URI=
-CHAT_SERVICE_MONGO_URI=
-LOSTFOUND_SERVICE_MONGO_URI=
+JWT_SECRET=your_jwt_secret
 
-# Redis
-REDIS_URL=
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_PUBLISHABLE_KEY=...
 
-# JWT
-JWT_SECRET=your-super-secret-jwt-key
-JWT_EXPIRATION=15m
-JWT_REFRESH_EXPIRATION=7d
+MONGODB_URI=...
+PRODUCT_SERVICE_MONGO_URI=...
+NOTIFICATION_SERVICE_MONGO_URI=...
+CHAT_SERVICE_MONGO_URI=...
+LOSTFOUND_SERVICE_MONGO_URI=...
 
-# AWS S3 (cho upload ảnh)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=iuh_exchange_redis
+KAFKA_BROKERS=localhost:9092
+ELASTICSEARCH_NODE=http://localhost:9200
+
+CORS_ORIGIN=http://localhost:5173,http://localhost:3000
+FRONTEND_URL=http://localhost:5173
+```
+
+Các biến nên cấu hình khi dùng tính năng tương ứng:
+
+```env
 AWS_REGION=ap-southeast-1
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_S3_BUCKET=iuh-exchange-images
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+S3_BUCKET_NAME=...
 
-# SMTP (cho gửi email OTP)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
+SMTP_USER=...
+SMTP_PASS=...
 
-# Firebase (cho push notification)
-FIREBASE_PROJECT_ID=your-project-id
-FIREBASE_PRIVATE_KEY=your-private-key
-FIREBASE_CLIENT_EMAIL=your-client-email
+FIREBASE_ADMINSDK_PATH=./firebase-adminsdk.json
+# hoặc FIREBASE_PROJECT_ID / FIREBASE_PRIVATE_KEY / FIREBASE_CLIENT_EMAIL
 
-# Gateway
-GATEWAY_SECRET=your-gateway-hmac-secret
-CORS_ORIGIN=http://localhost:5173
+GEMINI_API_KEY=...
+GEMINI_MODEL=gemini-2.5-flash
+PRODUCT_MODERATION_MODEL=gemini-2.5-flash
+
+GATEWAY_SECRET=...
+INTERNAL_SERVICE_TOKEN=...
+INTERNAL_API_KEY=...
 ```
 
-### 3. Chạy Infrastructure (Docker)
+## Chạy ở môi trường development
+
+### Cách 1: Dùng MongoDB Atlas/Supabase và Docker cho hạ tầng phụ
+
+Lệnh này khởi động Redis, Zookeeper, Kafka, Elasticsearch bằng Docker, sau đó chạy toàn bộ backend service bằng `concurrently`.
 
 ```bash
-# Khởi động tất cả infrastructure services
-docker compose up -d redis kafka zookeeper elasticsearch logstash kibana prometheus grafana
-
-# Optional: start local MongoDB instead of Atlas
-docker compose --profile local-db up -d mongodb redis kafka zookeeper elasticsearch logstash kibana prometheus grafana
-
-# Kiểm tra trạng thái
-docker compose ps
-```
-
-### 4. Cài đặt dependencies
-
-```bash
-npm install
-```
-
-### 5. Chạy Backend Services
-
-```bash
-# Chạy tất cả services cùng lúc
 npm run dev
-
-# Hoặc chạy từng service riêng lẻ
-npm run dev:gateway     # API Gateway (port 8080)
-npm run dev:user        # User Service (port 3001)
-npm run dev:product     # Product Service (port 3002)
-npm run dev:order       # Order Service (port 3003)
-npm run dev:notification # Notification Service (port 3004)
-npm run dev:chat        # Chat Service (port 3005)
-npm run dev:lostfound   # Lost & Found Service (port 3006)
 ```
 
-### 6. Chạy Frontend
+### Cách 2: Dùng local MongoDB container
+
+```bash
+npm run dev:local
+```
+
+Lệnh này bật thêm profile `local-db` trong `docker-compose.yml`.
+
+### Chạy từng backend service
+
+```bash
+npm run dev:gateway       # API Gateway :8080
+npm run dev:user          # User Service :3001
+npm run dev:product       # Product Service :3002
+npm run dev:order         # Order Service :3003
+npm run dev:notification  # Notification Service :3004
+npm run dev:chat          # Chat Service :3005
+npm run dev:lostfound     # Lost & Found Service :3006
+npm run dev --workspace=packages/ws-gateway  # WS Gateway :3007
+```
+
+### Chạy frontend
 
 ```bash
 cd frontend
-npm install
 npm run dev
-# Frontend sẽ chạy tại http://localhost:5173
 ```
 
-### 7. Chạy Tests
+Frontend mặc định chạy tại `http://localhost:5173`, gọi API qua `http://localhost:8080/api/v1` và WebSocket qua `http://localhost:8080/ws`. Có thể override bằng:
+
+```env
+VITE_API_URL=http://localhost:8080/api/v1
+VITE_WS_URL=http://localhost:8080/ws
+```
+
+## Docker Compose
+
+Chạy hạ tầng dev và publish port ra localhost:
 
 ```bash
-# Chạy tất cả tests
-npm test
-
-# Chạy tests cho service cụ thể
-npm test --workspace=packages/user-service
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d redis zookeeper kafka elasticsearch
 ```
 
----
+Chạy thêm MongoDB local:
 
-## 📡 API Documentation
-
-### API Gateway (Port 8080)
-
-Tất cả API đều được prefix `/api/v1`. Gateway xử lý:
-- JWT Authentication
-- Rate Limiting (Redis-backed)
-- Circuit Breaker
-- Request Logging (Correlation ID)
-- CORS
-
-### User Service (`/api/v1/auth` & `/api/v1/users`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| POST | `/auth/register` | Đăng ký tài khoản | Public |
-| POST | `/auth/verify-otp` | Xác nhận OTP | Public |
-| POST | `/auth/resend-otp` | Gửi lại OTP | Public |
-| POST | `/auth/login` | Đăng nhập | Public |
-| POST | `/auth/refresh-token` | Làm mới access token | Cookie |
-| POST | `/auth/logout` | Đăng xuất | Required |
-| PUT | `/auth/change-password` | Đổi mật khẩu | Required |
-| POST | `/auth/forgot-password` | Quên mật khẩu | Public |
-| POST | `/auth/reset-password` | Đặt lại mật khẩu | Public |
-| GET | `/users/me` | Lấy profile cá nhân | Required |
-| GET | `/users/:id` | Lấy profile người khác | Required |
-| PATCH | `/users/me` | Cập nhật profile | Required |
-| POST | `/users/avatar/presign` | Lấy URL upload avatar | Required |
-
-### Admin (`/api/v1/admin`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| GET | `/admin/users` | Danh sách users (phân trang) | Admin |
-| GET | `/admin/users/:id/detail` | Chi tiết user | Admin |
-| PUT | `/admin/users/:id/role` | Cập nhật vai trò | Admin |
-| PUT | `/admin/users/:id/permissions` | Cập nhật quyền | Admin |
-| PUT | `/admin/users/:id/karma` | Điều chỉnh karma | Admin |
-| POST | `/admin/users/:id/ban` | Khóa tài khoản | Admin |
-| POST | `/admin/users/:id/unban` | Mở khóa tài khoản | Admin |
-| GET | `/admin/stats` | Thống kê users | Admin |
-
-### Product Service (`/api/v1/products`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| GET | `/products` | Danh sách sản phẩm (phân trang, sort) | Optional |
-| GET | `/products/search?keyword=` | Tìm kiếm qua ElasticSearch | Optional |
-| GET | `/products/me` | Sản phẩm của tôi | Required |
-| GET | `/products/:id` | Chi tiết sản phẩm | Optional |
-| POST | `/products` | Đăng bán sản phẩm | Required |
-| PUT | `/products/:id` | Cập nhật sản phẩm | Required |
-| DELETE | `/products/:id` | Xóa sản phẩm | Required |
-| POST | `/products/upload-url` | Lấy presigned URL upload ảnh | Required |
-| GET | `/products/admin/pending` | Sản phẩm chờ duyệt | Admin |
-| PATCH | `/products/admin/:id/resolve` | Duyệt/từ chối sản phẩm | Admin |
-| GET | `/products/admin/stats` | Thống kê sản phẩm | Admin |
-
-### Order Service (`/api/v1/orders`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| POST | `/orders` | Tạo đơn hàng (Idempotency-Key required) | Required |
-| GET | `/orders` | Danh sách đơn hàng (phân trang, filter) | Required |
-| GET | `/orders/me` | Tất cả đơn hàng của tôi | Required |
-| GET | `/orders/:id` | Chi tiết đơn hàng | Required |
-| PATCH | `/orders/:id/confirm` | Seller xác nhận đơn | Required |
-| PATCH | `/orders/:id/reject` | Seller từ chối đơn | Required |
-
-### Chat Service (`/api/v1/chat`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| GET | `/chat/conversations` | Danh sách hội thoại | Required |
-| GET | `/chat/conversations/:id` | Lịch sử tin nhắn | Required |
-| PATCH | `/chat/conversations/:id/read` | Đánh dấu đã đọc | Required |
-| PATCH | `/chat/conversations/read-all` | Đọc tất cả | Required |
-| GET | `/chat/search?q=` | Tìm kiếm tin nhắn | Required |
-| POST | `/chat/upload-url` | Upload ảnh chat | Required |
-
-### WebSocket (STOMP via SockJS)
-
-Kết nối tại `ws://localhost:3007/ws` hoặc `ws://localhost:8080/ws` (qua Gateway).
-
-| Destination | Mô tả |
-|-------------|--------|
-| `/app/chat` | Gửi tin nhắn |
-| `/app/chat.image` | Gửi ảnh |
-| `/app/chat.read` | Đánh dấu đã đọc |
-| `/app/typing` | Typing indicator |
-| `/topic/chat/{conversationId}` | Subscribe chat topic |
-| `/user/queue/messages` | Tin nhắn riêng |
-
-### Notification Service (`/api/v1/notifications`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| GET | `/notifications` | Danh sách thông báo | Required |
-| GET | `/notifications/unread-count` | Số thông báo chưa đọc | Required |
-| PATCH | `/notifications/:id/read` | Đánh dấu đã đọc | Required |
-| PATCH | `/notifications/read-all` | Đọc tất cả | Required |
-| DELETE | `/notifications/:id` | Xóa thông báo | Required |
-| POST | `/notifications/fcm/register` | Đăng ký FCM token | Required |
-| DELETE | `/notifications/fcm/unregister` | Hủy FCM token | Required |
-| POST | `/notifications/fcm/test` | Gửi test push | Required |
-| POST | `/notifications/fcm/subscribe-topic` | Subscribe FCM topic | Required |
-| GET | `/notifications/dlq` | Danh sách DLQ events | Admin |
-| POST | `/notifications/dlq/:id/retry` | Retry DLQ event | Admin |
-
-### Lost & Found Service (`/api/v1/lost-found`)
-
-| Method | Endpoint | Mô tả | Auth |
-|--------|----------|--------|------|
-| GET | `/lost-found` | Danh sách đồ thất lạc | Optional |
-| GET | `/lost-found/:id` | Chi tiết | Optional |
-| POST | `/lost-found` | Đăng đồ thất lạc | Required |
-| PUT | `/lost-found/:id` | Cập nhật | Required |
-| DELETE | `/lost-found/:id` | Xóa | Required |
-| POST | `/lost-found/:id/claim` | Claim đồ | Required |
-| POST | `/lost-found/upload-url` | Upload ảnh | Required |
-
----
-
-## 📁 Project Structure
-
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile local-db up -d mongodb redis zookeeper kafka elasticsearch
 ```
+
+Chạy full backend container:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
+
+Monitoring:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile monitoring up -d
+```
+
+Các port dev chính:
+
+| Service | Port |
+| --- | --- |
+| API Gateway | 8080 |
+| User | 3001 |
+| Product | 3002 |
+| Order | 3003 |
+| Notification | 3004 |
+| Chat | 3005 |
+| Lost & Found | 3006 |
+| WS Gateway | 3007 |
+| Frontend | 5173 |
+| Redis | 6379 |
+| Kafka | 9092 |
+| Elasticsearch | 9200 |
+| Prometheus | 9090 |
+| Grafana | 3100 |
+| Kibana | 5601 |
+
+## API qua Gateway
+
+Gateway mount các route dưới prefix `http://localhost:8080/api/v1`.
+
+| Nhóm | Prefix | Ghi chú |
+| --- | --- | --- |
+| Auth | `/auth` | Public: register, verify/resend OTP, login, refresh, forgot/reset password; một số route cần token như logout/change-password |
+| Users | `/users` | Profile, avatar presign, student verification, karma history, delete account |
+| Admin | `/admin` và `/users/admin` | User moderation, role/permissions, ban/unban, audit logs, stats |
+| Products | `/products` | Public GET list/search/suggestions/detail; mutation cần token và quyền |
+| Product admin | `/products/admin` | Duyệt/xóa sản phẩm, danh sách pending, stats |
+| Offers | `/products/:productId/offers`, `/products/offers/*` | Tạo/list/resolve/withdraw offer, checkout nội bộ |
+| Reviews | `/products/:productId/reviews`, `/products/seller/:userId/reviews` | Review sản phẩm/seller |
+| Wishlist & trust | `/products/*/wishlist`, `/products/sellers/*`, `/products/me/history` | Wishlist, trust profile, follow seller, view history |
+| Orders | `/orders` | CRUD order, confirm/reject/cancel, admin list/stats, receipt, review eligibility |
+| Payments | `/orders/:id/payment*` | Create/callback/bank transfer/refund/payment detail |
+| Chat | `/chat` | Messages, conversations, read state, search, upload URL, report/admin reported messages, AI assistant |
+| Notifications | `/notifications` | List/read/delete/unread count, admin email compose |
+| FCM | `/notifications/fcm/*` | Register/unregister/test/subscribe topic |
+| Preferences | `/notifications/preferences` | Get/update notification preferences |
+| DLQ | `/notifications/dlq` | List/retry/delete failed notification events |
+| Lost & Found | `/lost-found` | List/detail/create/update/delete, upload URL, match preview, matches, claim/review claim |
+| Lost & Found admin | `/lost-found/admin*` | Admin list, heatmap, bulk moderate, delete |
+| Reports | `/reports` | Create report, my reports, admin resolve |
+
+Health và metrics của từng service:
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:3001/health
+curl http://localhost:3001/metrics
+```
+
+## WebSocket
+
+Frontend dùng SockJS/STOMP tại:
+
+```text
+http://localhost:8080/ws
+```
+
+Khi chạy trực tiếp chat service hoặc ws-gateway:
+
+```text
+http://localhost:3005/ws
+http://localhost:3007/ws
+```
+
+Các destination chính đang được frontend/service dùng gồm gửi tin nhắn, ảnh, trạng thái đọc, typing/presence, nhận tin nhắn riêng và notification theo user.
+
+## Cấu trúc thư mục
+
+```text
 IUH-Exchange_BE/
-├── packages/                          # Backend microservices (npm workspaces)
-│   ├── common/                        # Shared library
-│   │   └── src/
-│   │       ├── config/                # App configuration
-│   │       ├── dto/                   # ApiResponse, PageResponse
-│   │       ├── exceptions/            # Custom exception classes
-│   │       ├── middleware/            # auth, errorHandler, validate
-│   │       └── utils/                 # cache, helpers, kafka, logger, metrics, mongo, redis
-│   │
-│   ├── api-gateway/                   # API Gateway (Express proxy)
-│   │   └── src/
-│   │       ├── config/routes.js       # Route definitions & service URLs
-│   │       ├── middleware/             # auth-filter, circuit-breaker, request-logger
-│   │       └── index.js               # Entry point
-│   │
-│   ├── user-service/                  # Authentication & User Management
-│   │   └── src/
-│   │       ├── controllers/           # auth, user, admin, karma
-│   │       ├── models/                # User, KarmaHistory
-│   │       ├── routes/                # auth, user, admin (+ Joi/Zod schemas)
-│   │       ├── services/              # email, s3
-│   │       └── index.js
-│   │
-│   ├── product-service/               # Product CRUD & Search
-│   │   └── src/
-│   │       ├── controllers/           # product, review, wishlist
-│   │       ├── models/                # Product, Review, Wishlist
-│   │       ├── routes/                # product, review, wishlist
-│   │       ├── services/              # elasticsearch, kafka, profanity-filter, s3, saga
-│   │       ├── validations/           # product validation schemas
-│   │       └── index.js
-│   │
-│   ├── order-service/                 # Order Management & Saga
-│   │   └── src/
-│   │       ├── controllers/           # order
-│   │       ├── models/                # Order
-│   │       ├── routes/                # order
-│   │       ├── services/              # order (business logic), saga (Kafka events)
-│   │       └── index.js
-│   │
-│   ├── notification-service/          # Notifications (In-app, Email, Push)
-│   │   └── src/
-│   │       ├── controllers/           # notification
-│   │       ├── models/                # Notification, FcmToken, DlqEvent
-│   │       ├── routes/                # notification, fcm, dlq
-│   │       ├── services/              # email, fcm, kafka-consumer, socket
-│   │       └── index.js
-│   │
-│   ├── chat-service/                  # Real-time Chat
-│   │   └── src/
-│   │       ├── controllers/           # chat
-│   │       ├── models/                # ChatMessage
-│   │       ├── routes/                # chat, chat-upload
-│   │       ├── services/              # socket (SockJS+STOMP), s3
-│   │       ├── utils/                 # stomp-parser
-│   │       └── index.js
-│   │
-│   ├── lost-found-service/            # Lost & Found
-│   │   └── src/
-│   │       ├── controllers/           # lostfound, report
-│   │       ├── models/                # LostFound
-│   │       ├── routes/                # lostfound, report
-│   │       ├── services/              # kafka, s3
-│   │       └── index.js
-│   │
-│   └── ws-gateway/                    # WebSocket Gateway (separated)
-│       └── src/
-│           ├── services/              # socket (SockJS+STOMP proxy)
-│           ├── utils/                 # stomp-parser
-│           └── index.js
-│
-├── frontend/                          # React Frontend
-│   ├── src/
-│   │   ├── components/                # Reusable components
-│   │   ├── hooks/                     # Custom hooks
-│   │   ├── i18n/                      # Internationalization
-│   │   ├── pages/                     # Page components
-│   │   ├── services/                  # API services (axios)
-│   │   ├── store/                     # Zustand stores
-│   │   ├── types/                     # TypeScript types
-│   │   ├── App.tsx                    # Root component
-│   │   └── main.tsx                   # Entry point
-│   ├── public/                        # Static assets
-│   ├── index.html
-│   ├── vite.config.ts
-│   ├── tsconfig.json
-│   └── Dockerfile                     # Nginx-based frontend container
-│
-├── infra/                             # Infrastructure configs
-│   ├── mongo/init-mongo.js            # MongoDB initialization
-│   ├── elk/logstash/pipeline/         # Logstash pipeline config
-│   └── monitoring/
-│       ├── prometheus/                # Prometheus config
-│       └── grafana/                   # Grafana dashboards & provisioning
-│
-├── tests/                             # Integration & load tests
-│   ├── load/                          # JMeter load tests
-│   ├── test-api.sh                    # API smoke tests
-│   ├── test-services.js               # Service health tests
-│   └── quick-test.sh                  # Quick verification
-│
-├── docker-compose.yml                 # Full infrastructure + services
-├── Dockerfile.*                       # Per-service Dockerfiles
-├── package.json                       # Root package (npm workspaces)
-├── .env.example                       # Environment template
-├── system_design.md                   # System design document
-├── project_checklist.md               # Development progress checklist
-└── README.md                          # ← Bạn đang đọc file này
+├── packages/
+│   ├── common/                 # config, auth, audit, cache, dto, exceptions, logger, metrics
+│   ├── api-gateway/            # reverse proxy, auth filter, rate limit, circuit breaker
+│   ├── user-service/           # auth, users, admin, karma, Supabase user data
+│   ├── product-service/        # products, offers, reviews, wishlist, trust, Elasticsearch
+│   ├── order-service/          # orders, payments, saga, Supabase order data
+│   ├── notification-service/   # notifications, FCM, email, preferences, DLQ
+│   ├── chat-service/           # REST chat, SockJS/STOMP, upload, AI assistant
+│   ├── lost-found-service/     # lost-found, OCR, matching, claims, reports
+│   └── ws-gateway/             # WebSocket gateway and internal notification endpoints
+├── frontend/                   # React/Vite TypeScript app
+├── infra/                      # Mongo init, Nginx, monitoring, ELK, JMeter
+├── k8s/                        # Kubernetes base manifests
+├── tests/                      # smoke, integration helper scripts, load tests
+├── supabase/                   # Supabase schema for users/orders
+├── scripts/                    # migration scripts
+├── docker-compose.yml
+├── docker-compose.dev.yml
+└── package.json
 ```
 
----
-
-## 🔒 Bảo mật
-
-- **JWT Authentication**: Access token ngắn hạn (15 phút) + Refresh token trong HttpOnly Cookie
-- **Rate Limiting**: Redis-backed, phân cấp Global / Auth / Sensitive
-- **Circuit Breaker**: Bảo vệ cascade failure khi downstream service down
-- **Gateway Signature HMAC**: Internal service communication xác thực bằng HMAC-SHA256
-- **Input Validation**: Zod schemas cho tất cả API endpoints
-- **Profanity Filter**: Tự động lọc từ ngữ không phù hợp
-- **RBAC**: Role-Based Access Control với permissions chi tiết
-- **Karma System**: Điểm uy tín, tự động khóa đăng bài khi karma < 0
-- **XSS Prevention**: HTML escaping trong email templates
-- **CORS**: Cấu hình cụ thể, không dùng wildcard
-
----
-
-## 📊 Monitoring & Logging
-
-- **Prometheus** (`:9090`): Thu thập metrics từ tất cả services
-- **Grafana** (`:3100`): Dashboard trực quan hóa metrics
-- **Kibana** (`:5601`): Truy vết log tập trung
-- **ELK Stack**: Elasticsearch + Logstash + Kibana cho centralized logging
-- **Health Check**: Mỗi service expose `/health` endpoint
-
----
-
-## 🔄 Event-Driven Architecture (Kafka)
-
-| Topic | Producer | Consumer | Mô tả |
-|-------|----------|----------|--------|
-| `order.created` | Order Service | Product Service | Tạo đơn → Khóa sản phẩm |
-| `order.completed` | Order Service | Product Service | Hoàn tất → Đánh dấu SOLD |
-| `order.cancelled` | Order Service | Product Service | Hủy đơn → Giải phóng sản phẩm |
-| `product.reserved` | Product Service | Order Service | Khóa thành công → Chờ seller |
-| `product.reserve.failed` | Product Service | Order Service | Khóa thất bại → Hủy đơn |
-| `product.approved` | Product Service | Notification Service | Sản phẩm được duyệt |
-| `product.rejected` | Product Service | Notification Service | Sản phẩm bị từ chối |
-
-### Saga Pattern (Choreography)
-
-```
-Buyer tạo Order (PENDING)
-    → Kafka: order.created
-    → ProductService: Khóa sản phẩm (PENDING)
-        → Thành công: Kafka: product.reserved
-            → OrderService: Order → AWAITING_SELLER
-        → Thất bại: Kafka: product.reserve.failed
-            → OrderService: Hủy Order (CANCELLED)
-
-Seller xác nhận Order
-    → Order → COMPLETED
-    → Kafka: order.completed
-    → ProductService: Sản phẩm → SOLD
-    → KarmaService: Cộng/trừ điểm karma
-```
-
----
-
-## 🧪 Testing
+## Tests và kiểm tra
 
 ```bash
-# Chạy tất cả unit tests
 npm test
+npm run test:watch
+npm run test:coverage
+npm run lint
+```
 
-# Chạy tests với coverage
-npm test -- --coverage
+Một số script kiểm thử tích hợp/smoke:
 
-# Chạy tests cho service cụ thể
-npm test --workspace=packages/user-service
-npm test --workspace=packages/product-service
-npm test --workspace=packages/order-service
+```bash
+bash tests/quick-test.sh
+bash tests/test-api.sh
+node tests/test-services.js
+node tests/full-api-test.js
+```
 
-# Load testing (JMeter)
+Load test:
+
+```bash
 cd tests/load
-# Mở api-load-test.jmx trong JMeter GUI
+# Mở api-load-test.jmx hoặc infra/jmeter/load-test.jmx bằng JMeter
 ```
 
----
+## Supabase migration
 
-## 🚢 Deployment
-
-### Docker (Production)
+Repo có script chuyển dữ liệu user/order từ MongoDB sang Supabase:
 
 ```bash
-# Build tất cả images
+npm run migrate:supabase:users-orders
+```
+
+Yêu cầu `.env` có:
+
+```env
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+USER_SERVICE_MONGO_URI=...
+ORDER_SERVICE_MONGO_URI=...
+```
+
+Schema liên quan nằm ở `supabase/schema-users-orders.sql`; ghi chú migration nằm ở `docs/SUPABASE_MIGRATION.md`.
+
+## Bảo mật và vận hành
+
+- `JWT_SECRET` là biến bắt buộc, service sẽ dừng nếu thiếu.
+- Gateway hỗ trợ CORS, rate limit Redis-backed, request logging và circuit breaker.
+- Service-to-service có HMAC/gateway signature và internal token/key ở một số luồng.
+- Refresh token được lưu bằng HttpOnly cookie; frontend giữ access token để gửi Bearer token.
+- Admin/moderator route dùng RBAC/permissions từ user service.
+- Upload ảnh dùng presigned URL thay vì proxy file qua backend.
+- Không commit `.env`, Firebase Admin SDK JSON, credential Supabase/AWS/SMTP/Gemini.
+
+## Deployment
+
+Build và chạy bằng Docker Compose:
+
+```bash
 docker compose build
-
-# Chạy production
-docker compose -f docker-compose.yml up -d
+docker compose up -d
 ```
 
-### Kubernetes (EKS)
+Nginx load balancer và Certbot nằm trong profile `lb`:
 
 ```bash
-# Tạo namespace
-kubectl create namespace iuh-exchange
-
-# Apply manifests
-kubectl apply -f k8s/ -n iuh-exchange
+docker compose --profile lb up -d nginx-lb certbot
 ```
 
-### CI/CD (GitHub Actions)
+Kubernetes manifests nằm trong `k8s/base`:
 
-Pipeline tự động:
-1. **Build**: Build Docker images trên mỗi push to main
-2. **Test**: Chạy unit tests
-3. **Push**: Push images lên Docker Hub
-4. **Deploy**: Deploy lên cloud cluster
+```bash
+kubectl apply -k k8s/base
+```
 
----
+## Tài liệu liên quan
 
-## 📝 Contributing
+- `DOCKER_SETUP.md`: ghi chú setup Docker.
+- `system_design.md`: thiết kế hệ thống.
+- `PHASE1_ANALYSIS.md`, `plan.md`, `project_checklist.md`: phân tích và checklist phát triển.
+- `tests/load/README.md`: hướng dẫn load test.
 
-1. Fork repository
-2. Tạo feature branch: `git checkout -b feature/ten-feature`
-3. Commit changes: `git commit -m 'feat: them ten-feature'`
-4. Push branch: `git push origin feature/ten-feature`
-5. Tạo Pull Request
+## License
 
-### Commit Convention
-
-- `feat:` — Tính năng mới
-- `fix:` — Sửa lỗi
-- `refactor:` — Refactor code
-- `test:` — Thêm/sửa tests
-- `docs:` — Tài liệu
-- `chore:` — Công việc lặt vặt
-
----
-
-## 📄 License
-
-Đồ án môn Kiến Trúc Phần mềm — Đại học Công nghiệp TP.HCM (IUH)
-
----
-
-## 👥 Authors
-
-- **Vinh** — *Lead Developer* — IUH Student
+Đồ án môn Kiến trúc phần mềm - Đại học Công nghiệp TP.HCM (IUH).
