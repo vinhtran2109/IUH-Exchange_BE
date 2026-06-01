@@ -47,11 +47,12 @@ const OrderDetail: React.FC = () => {
   const [disputeReason, setDisputeReason] = useState('');
   const [disputeCategory, setDisputeCategory] = useState('ITEM_NOT_AS_DESCRIBED');
   const [disputeDesiredResolution, setDisputeDesiredResolution] = useState('ADMIN_REVIEW');
-  const [initialEvidenceUrl, setInitialEvidenceUrl] = useState('');
   const [initialEvidenceNote, setInitialEvidenceNote] = useState('');
-  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [initialEvidenceFile, setInitialEvidenceFile] = useState<File | null>(null);
   const [evidenceNote, setEvidenceNote] = useState('');
   const [evidenceType, setEvidenceType] = useState<'IMAGE' | 'CHAT_SCREENSHOT' | 'RECEIPT' | 'OTHER'>('IMAGE');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [uploadingEvidence, setUploadingEvidence] = useState(false);
   const [paymentIssueReason, setPaymentIssueReason] = useState('');
   const [noShowReason, setNoShowReason] = useState('');
   const [noShowEvidenceUrl, setNoShowEvidenceUrl] = useState('');
@@ -82,6 +83,25 @@ const OrderDetail: React.FC = () => {
   };
 
   const getOrderProductId = (source: any) => String(source?.productId?.id || source?.productId?._id || source?.product?.id || source?.product?._id || source?.productId || '');
+
+  const uploadEvidenceFile = async (file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('File bằng chứng tối đa 10MB.');
+    }
+    const uploadRes = await chatService.getChatUploadUrl(file.name, file.type || 'application/octet-stream');
+    if (!uploadRes?.success || !uploadRes.data?.presignedUrl || !uploadRes.data?.publicUrl) {
+      throw new Error('Không lấy được đường dẫn upload bằng chứng.');
+    }
+    const putRes = await fetch(uploadRes.data.presignedUrl, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+    if (!putRes.ok) {
+      throw new Error('Upload bằng chứng thất bại.');
+    }
+    return uploadRes.data.publicUrl as string;
+  };
 
   const fetchDetail = async (silent = false) => {
     if (!id) return;
@@ -323,44 +343,50 @@ const OrderDetail: React.FC = () => {
     if (!order || disputeReason.trim().length < 10) return;
     try {
       setActing(true);
+      setUploadingEvidence(true);
+      const uploadedEvidenceUrl = initialEvidenceFile ? await uploadEvidenceFile(initialEvidenceFile) : '';
       const res = await orderService.openDispute(order.id || order._id, {
         reason: disputeReason.trim(),
         category: disputeCategory,
         desiredResolution: disputeDesiredResolution,
-        evidenceUrl: initialEvidenceUrl.trim(),
+        evidenceUrl: uploadedEvidenceUrl,
         evidenceNote: initialEvidenceNote.trim(),
       });
       if (res.success) {
         setDisputeReason('');
-        setInitialEvidenceUrl('');
+        setInitialEvidenceFile(null);
         setInitialEvidenceNote('');
         setFlashMessage('Đã mở tranh chấp. Bên còn lại và admin sẽ nhận thông báo để phản hồi.');
         await fetchDetail(true);
       }
     } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể mở tranh chấp.');
+      toastError(error?.response?.data?.message || error?.message || 'Không thể mở tranh chấp.');
     } finally {
+      setUploadingEvidence(false);
       setActing(false);
     }
   };
 
   const handleAddEvidence = async () => {
-    if (!order || !evidenceUrl.trim()) return;
+    if (!order || !evidenceFile) return;
     try {
       setActing(true);
+      setUploadingEvidence(true);
+      const uploadedEvidenceUrl = await uploadEvidenceFile(evidenceFile);
       const res = await orderService.addDisputeEvidence(order.id || order._id, {
         type: evidenceType,
-        url: evidenceUrl.trim(),
-        note: evidenceNote.trim(),
+        url: uploadedEvidenceUrl,
+        note: evidenceNote.trim() || evidenceFile.name,
       });
       if (res.success) {
-        setEvidenceUrl('');
         setEvidenceNote('');
+        setEvidenceFile(null);
         await fetchDetail(true);
       }
     } catch (error: any) {
-      toastError(error?.response?.data?.message || 'Không thể thêm bằng chứng.');
+      toastError(error?.response?.data?.message || error?.message || 'Không thể thêm bằng chứng.');
     } finally {
+      setUploadingEvidence(false);
       setActing(false);
     }
   };
@@ -903,10 +929,22 @@ const OrderDetail: React.FC = () => {
                           <select value={evidenceType} onChange={(e) => setEvidenceType(e.target.value as any)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium">
                             {Object.entries(evidenceTypeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                           </select>
-                          <input value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} placeholder="Dán URL ảnh, biên nhận hoặc ảnh chụp đoạn chat" className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
+                          <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:bg-blue-50">
+                            <span className="truncate">{evidenceFile ? evidenceFile.name : 'Chọn file ảnh/biên nhận/ảnh chụp chat'}</span>
+                            <Upload size={15} className="shrink-0 text-slate-400" />
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept="image/*,.pdf"
+                              onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                            />
+                          </label>
                         </div>
                         <textarea value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} rows={2} placeholder="Ghi chú ngắn: bằng chứng này chứng minh điều gì?" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
-                        <button onClick={handleAddEvidence} disabled={acting || !evidenceUrl} className="mt-3 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">Thêm bằng chứng</button>
+                        <button onClick={handleAddEvidence} disabled={acting || uploadingEvidence || !evidenceFile} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-bold text-white disabled:opacity-50">
+                          {uploadingEvidence ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                          {uploadingEvidence ? 'Đang upload...' : 'Thêm bằng chứng'}
+                        </button>
                       </div>
 
                       <div className="grid gap-4 lg:grid-cols-2">
@@ -964,13 +1002,25 @@ const OrderDetail: React.FC = () => {
                         <textarea value={disputeReason} onChange={(e) => setDisputeReason(e.target.value)} rows={4} placeholder="Nêu rõ chuyện gì xảy ra, thời điểm, hai bên đã trao đổi gì, bạn muốn admin xem xét điểm nào..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                       </label>
                       <div className="grid gap-3 md:grid-cols-2">
-                        <input value={initialEvidenceUrl} onChange={(e) => setInitialEvidenceUrl(e.target.value)} placeholder="URL bằng chứng ban đầu nếu có" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+                        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:bg-blue-50">
+                          <span className="truncate">{initialEvidenceFile ? initialEvidenceFile.name : 'Chọn file bằng chứng ban đầu nếu có'}</span>
+                          <Upload size={15} className="shrink-0 text-slate-400" />
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept="image/*,.pdf"
+                            onChange={(e) => setInitialEvidenceFile(e.target.files?.[0] || null)}
+                          />
+                        </label>
                         <input value={initialEvidenceNote} onChange={(e) => setInitialEvidenceNote(e.target.value)} placeholder="Ghi chú bằng chứng" className="rounded-lg border border-slate-200 px-3 py-2 text-sm" />
                       </div>
                       <div className="rounded-xl border border-blue-100 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
                         Sau khi mở tranh chấp, hệ thống sẽ thông báo cho {otherParticipantRole} và admin. Bạn vẫn có thể bổ sung ảnh sản phẩm, biên nhận hoặc ảnh chụp đoạn chat.
                       </div>
-                      <button onClick={handleOpenDispute} disabled={acting || disputeReason.trim().length < 10} className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">Mở tranh chấp</button>
+                      <button onClick={handleOpenDispute} disabled={acting || uploadingEvidence || disputeReason.trim().length < 10} className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-600 disabled:opacity-50">
+                        {uploadingEvidence ? <Loader2 size={14} className="animate-spin" /> : <Gavel size={14} />}
+                        {uploadingEvidence ? 'Đang upload...' : 'Mở tranh chấp'}
+                      </button>
                     </div>
                   )}
                 </div>
