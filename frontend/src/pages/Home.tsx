@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productService } from '../services/productService';
+import { useAuthStore } from '../store/authStore';
 import type { Product } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import SEO from '../components/SEO';
@@ -13,15 +14,18 @@ const Home: React.FC = () => {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [stats, setStats] = React.useState({ total: 0 });
-
+  const [page, setPage] = React.useState<number>(1);
+  const [pageSize] = React.useState<number>(12);
+  const [totalPages, setTotalPages] = React.useState<number>(1);  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   React.useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const response = await productService.getProducts(1, 10);
+        const response = await productService.getProducts(page, pageSize);
         if (response.success) {
           setProducts(response.data.content);
           const total = response.data.totalElements ?? response.data.content.length;
           setStats({ total });
+          setTotalPages(Math.max(1, Math.ceil((response.data.totalElements ?? response.data.content.length) / pageSize)));
         }
       } catch (error) {
         console.error("Failed to fetch products:", error);
@@ -30,7 +34,13 @@ const Home: React.FC = () => {
       }
     };
     fetchProducts();
-  }, []);
+  }, [page, pageSize]);
+
+  React.useEffect(() => {
+    if (!isAuthenticated && page !== 1) {
+      setPage(1);
+    }
+  }, [isAuthenticated, page]);
 
   return (
     <div className="space-y-14 pb-5">
@@ -55,7 +65,7 @@ const Home: React.FC = () => {
           className="relative z-10 px-6 py-10 text-center sm:px-8 sm:py-12 md:py-14"
         >
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-semibold text-white/90 mb-4 sm:mb-5">
+          <div className="absolute left-1 top-1 inline-flex items-center gap-1 rounded-full border border-white/20 bg-white/15 px-4 py-1.5 text-xs font-semibold text-white/90 sm:left-8 sm:top-8">
             <Star size={12} className="text-yellow-300" />
             Nền tảng trao đổi #2 của sinh viên IUH
           </div>
@@ -101,29 +111,6 @@ const Home: React.FC = () => {
         </motion.div>
       </section>
 
-      {/* ── Feature cards ── */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          { icon: <Timer />, title: "Nhanh chóng", desc: "Đăng tin chỉ trong 1 phút, kết nối ngay với người mua tại trường.", color: 'bg-blue-100 text-blue-600' },
-          { icon: <Lock />, title: "An toàn",     desc: "Hệ thống Karma minh bạch, tin đăng được kiểm duyệt chặt chẽ.", color: 'bg-emerald-100 text-emerald-600' },
-          { icon: <Users />, title: "Tiết kiệm",  desc: "Nâng cao giá trị vòng đời sản phẩm, tiết kiệm tối đa cho sinh viên.", color: 'bg-purple-100 text-purple-600' },
-        ].map((feat, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 10 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.1 }}
-            className="rounded-2xl border border-(--border) bg-(--surface) p-6 transition-all hover:shadow-md"
-          >
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-4 ${feat.color}`}>
-              {React.cloneElement(feat.icon as React.ReactElement<{ size?: number }>, { size: 20 })}
-            </div>
-            <h3 className="mb-1.5 text-base font-bold text-(--foreground)">{feat.title}</h3>
-            <p className="text-slate-500 text-sm leading-relaxed">{feat.desc}</p>
-          </motion.div>
-        ))}
-      </section>
 
       {/* ── Latest products ── */}
       <section>
@@ -133,20 +120,21 @@ const Home: React.FC = () => {
               <TrendingUp size={14} />
               <span>Sản phẩm nổi bật</span>
             </div>
-            <h2 className="text-2xl font-bold text-(--foreground)">Mới nhất hôm nay</h2>
+            <h2 className="text-2xl font-bold text-(--foreground)">Hàng loạt món hot đang chờ</h2>
+            <p className="mt-1 text-sm text-slate-500">Khám phá các sản phẩm được cập nhật liên tục từ cộng đồng IUH.</p>
           </div>
           <Link to="/products" className="text-sm text-slate-500 font-medium flex items-center gap-1 hover:text-slate-900 transition-colors">
             Xem tất cả <ChevronRight size={16} />
           </Link>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
           {loading ? (
-            Array.from({ length: 10 }, (_, i) => i + 1).map((i) => (
-              <div key={i} className="rounded-2xl border border-(--border) bg-(--surface) p-4 space-y-3 animate-pulse">
-                <div className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-xl w-full"></div>
-                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-2/3"></div>
-                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-1/3"></div>
+            Array.from({ length: 8 }, (_, i) => i + 1).map((i) => (
+              <div key={i} className="rounded-2xl border border-(--border) bg-(--surface) p-5 space-y-4 animate-pulse">
+                <div className="aspect-square bg-slate-200 dark:bg-slate-700 rounded-3xl w-full"></div>
+                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                <div className="h-5 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
               </div>
             ))
           ) : products.length > 0 ? (
@@ -167,6 +155,110 @@ const Home: React.FC = () => {
               <Link to="/products/new" className="text-sm text-indigo-600 font-semibold hover:underline mt-1 inline-block">Trở thành người bán đầu tiên!</Link>
             </div>
           )}
+        </div>
+        {totalPages > 1 && !isAuthenticated && (
+          <div className="mt-6 rounded-3xl border border-dashed border-indigo-200 bg-indigo-50/70 p-6 text-center">
+            <p className="text-sm text-slate-700 mb-3">Bạn đang xem trang đầu tiên. Đăng nhập để xem thêm các trang sản phẩm tiếp theo.</p>
+            <Link
+              to="/login"
+              className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:bg-indigo-700 transition-colors"
+            >
+              Đăng nhập để xem thêm
+            </Link>
+          </div>
+        )}
+        {totalPages > 1 && isAuthenticated && (
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1 rounded-lg border bg-(--surface) text-sm disabled:opacity-50"
+            >
+              Trước
+            </button>
+
+            <div className="flex flex-wrap items-center justify-center gap-1">
+              {Array.from({ length: Math.min(totalPages, 10) }, (_, i) => i + 1).map((pn) => (
+                <button
+                  key={pn}
+                  onClick={() => setPage(pn)}
+                  className={`px-3 py-1 rounded-lg text-sm ${pn === page ? 'bg-indigo-600 text-white' : 'bg-(--surface)'} `}
+                >
+                  {pn}
+                </button>
+              ))}
+              {totalPages > 10 && <span className="px-2 text-sm">...</span>}
+            </div>
+
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="px-3 py-1 rounded-lg border bg-(--surface) text-sm disabled:opacity-50"
+            >
+              Tiếp
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* ── Community showcase ── */}
+      <section className="rounded-3xl border border-(--border) bg-(--surface) p-6 md:p-8">
+        <div className="grid gap-8 lg:grid-cols-[1.1fr,0.9fr] items-center">
+          <div>
+            <div className="flex items-center gap-2 text-indigo-600 font-semibold text-xs uppercase tracking-widest mb-3">
+              <Users size={14} />
+              Cộng đồng IUH
+            </div>
+            <h2 className="text-3xl font-bold text-(--foreground) sm:text-4xl">
+              Sàn thương mại điện tử dành cho sinh viên IUH.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">
+              Tạo dựng trải nghiệm mua sắm và trao đổi đáng tin cậy ngay trong nội bộ trường. Kết nối người bán, người mua và các hội nhóm học thuật trong một nền tảng chuyên nghiệp.
+            </p>
+
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              {[
+                { icon: <Zap />, title: 'Tối ưu chi phí', text: 'Săn đồ dùng, sách vở, thiết bị học tập với giá sinh viên.' },
+                { icon: <TrendingUp />, title: 'Giá trị bền vững', text: 'Tiếp sức nhau qua vòng đời sản phẩm tuần hoàn và thân thiện môi trường.' },
+                { icon: <Package />, title: 'Nhiều danh mục', text: 'Thiết bị, văn phòng phẩm, quần áo, sách và đồ công nghệ dành cho học tập.' },
+                { icon: <Lock />, title: 'Tin cậy', text: 'Minh bạch thông tin người bán và đánh giá của cộng đồng.' },
+              ].map((item, index) => (
+                <div key={index} className="flex items-start gap-3 rounded-3xl border border-(--border) bg-white/60 p-4 shadow-sm">
+                  <div className="mt-1 flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
+                    {React.cloneElement(item.icon as React.ReactElement<{ size?: number }>, { size: 18 })}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm text-(--foreground)">{item.title}</h3>
+                    <p className="mt-1 text-sm text-slate-500 leading-relaxed">{item.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl bg-gradient-to-br from-indigo-600 via-violet-600 to-sky-500 p-8 text-white shadow-xl">
+            <div className="rounded-3xl bg-white/10 p-6">
+              <div className="text-xs uppercase tracking-[0.3em] text-indigo-100/80">Nhiệm vụ của chúng tôi</div>
+              <h3 className="mt-4 text-2xl font-bold">Xây dựng thị trường nội bộ tin cậy cho IUH.</h3>
+              <p className="mt-4 text-sm leading-6 text-indigo-100/90">
+                Hỗ trợ sinh viên giảm chi phí học tập, trao đổi đồ dùng còn giá trị và kết nối những người cùng chí hướng trong cộng đồng trường.
+              </p>
+              <div className="mt-6 space-y-4 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/15 text-white">1</span>
+                  <span>Khuyến khích mua bán an toàn, minh bạch.</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/15 text-white">2</span>
+                  <span>Tạo cơ hội sưu tầm đồ cũ chất lượng.</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-white/15 text-white">3</span>
+                  <span>Nâng cao giá trị cộng đồng thông qua chia sẻ và hỗ trợ.</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </div>

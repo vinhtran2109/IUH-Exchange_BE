@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   AlertCircle,
   BadgeCheck,
+  Bell,
   Bookmark,
   Camera,
   Check,
@@ -31,9 +32,12 @@ import type { Product } from '../services/productService';
 import { orderService } from '../services/orderService';
 import { wishlistService } from '../services/wishlistService';
 import { chatService } from '../services/chatService';
+import { lostFoundService, ItemType } from '../services/lostFoundService';
+import type { LostFoundItem } from '../services/lostFoundService';
 import type { User as ProfileUser } from '../types/api';
 import { useToast } from '../components/Toast';
 import { useConfirm } from '../components/Dialogs';
+import Notifications from './Notifications';
 
 const Profile: React.FC = () => {
   const { user, updateUser } = useAuthStore() as any;
@@ -41,7 +45,7 @@ const Profile: React.FC = () => {
   const { success: toastSuccess, error: toastError, warning: toastWarning } = useToast();
   const { confirm } = useConfirm();
 
-  const [activeTab, setActiveTab] = useState<'info' | 'password' | 'products' | 'orders' | 'sales' | 'wishlist' | 'history'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'notifications' | 'password' | 'products' | 'orders' | 'sales' | 'wishlist' | 'history'>('info');
   const [profile, setProfile] = useState<ProfileUser | null>(user ?? null);
 
   const [name, setName] = useState(user?.name || '');
@@ -57,50 +61,21 @@ const Profile: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const [myProducts, setMyProducts] = useState<Product[]>([]);
+  const [myLostFoundItems, setMyLostFoundItems] = useState<LostFoundItem[]>([]);
   const [myOrders, setMyOrders] = useState<any[]>([]);
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
   const [viewHistory, setViewHistory] = useState<any[]>([]);
   const [sellerTrust, setSellerTrust] = useState<any>(null);
 
   const [loading, setLoading] = useState(false);
+  const [lostFoundLoading, setLostFoundLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(false);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  useEffect(() => {
-    fetchProfile();
-    fetchMyProducts();
-    fetchMyOrders();
-    fetchWishlist();
-    fetchHistory();
-    // Fetch seller trust sau khi có user id
-    if (user?.id) {
-      productService.getSellerTrust(user.id)
-        .then((res) => { if (res.success) setSellerTrust(res.data); })
-        .catch(() => {});
-    }
-  }, []);
-
-  useEffect(() => {
-    chatService.connect();
-    const removeListener = chatService.addNotificationListener((notification: any) => {
-      const type = String(notification?.type || '').toUpperCase();
-      if (type.includes('ORDER')) {
-        void fetchMyOrders();
-      }
-      if (type.includes('PRODUCT')) {
-        void fetchMyProducts();
-      }
-      if (type.includes('KARMA') || type.includes('SYSTEM')) {
-        void fetchProfile();
-      }
-    });
-    return removeListener;
-  }, []);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     setProfileLoading(true);
     try {
       const res = await api.get('/users/me');
@@ -121,9 +96,9 @@ const Profile: React.FC = () => {
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, [updateUser]);
 
-  const fetchMyProducts = async () => {
+  const fetchMyProducts = useCallback(async () => {
     setProductsLoading(true);
     try {
       const res = await productService.getMyProducts();
@@ -133,9 +108,9 @@ const Profile: React.FC = () => {
     } finally {
       setProductsLoading(false);
     }
-  };
+  }, []);
 
-  const fetchMyOrders = async () => {
+  const fetchMyOrders = useCallback(async () => {
     setOrdersLoading(true);
     try {
       const res = await orderService.getMyOrders();
@@ -145,25 +120,79 @@ const Profile: React.FC = () => {
     } finally {
       setOrdersLoading(false);
     }
-  };
+  }, []);
 
-  const fetchWishlist = async () => {
+  const fetchMyLostFoundItems = useCallback(async () => {
+    setLostFoundLoading(true);
+    try {
+      const res = await lostFoundService.getItems(ItemType.ALL, 1, 100);
+      if (res.success) {
+        const myUserId = String(user?.id || '');
+        const items = (res.data?.content ?? []).filter((item: LostFoundItem) => String(item.userId || '') === myUserId);
+        setMyLostFoundItems(items);
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLostFoundLoading(false);
+    }
+  }, [user?.id]);
+
+  const fetchWishlist = useCallback(async () => {
     try {
       const res = await wishlistService.getMyWishlist(1, 50);
       if (res.success) setWishlistItems(res.data?.content ?? []);
     } catch (error) {
       console.error(error);
     }
-  };
+  }, []);
 
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       const res = await productService.getViewHistory(1, 50);
       if (res.success) setViewHistory(res.data?.content ?? []);
     } catch (error) {
       console.error(error);
     }
-  };
+  }, []);
+
+  
+
+  useEffect(() => {
+    fetchProfile();
+    fetchMyOrders();
+    fetchWishlist();
+    fetchHistory();
+  }, [fetchProfile, fetchMyOrders, fetchWishlist, fetchHistory]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    fetchMyProducts();
+    fetchMyLostFoundItems();
+    productService.getSellerTrust(user.id)
+      .then((res) => { if (res.success) setSellerTrust(res.data); })
+      .catch(() => {});
+  }, [user?.id, fetchMyProducts, fetchMyLostFoundItems]);
+
+  useEffect(() => {
+    chatService.connect();
+    const removeListener = chatService.addNotificationListener((notification: any) => {
+      const type = String(notification?.type || '').toUpperCase();
+      if (type.includes('ORDER')) {
+        void fetchMyOrders();
+      }
+      if (type.includes('PRODUCT')) {
+        void fetchMyProducts();
+      }
+      if (type.includes('KARMA') || type.includes('SYSTEM')) {
+        void fetchProfile();
+      }
+      if (type.includes('LOST') || type.includes('FOUND')) {
+        void fetchMyLostFoundItems();
+      }
+    });
+    return removeListener;
+  }, [fetchMyOrders, fetchMyProducts, fetchProfile, fetchMyLostFoundItems]);
 
   const handleDeleteProduct = async (id: string) => {
     const confirmed = await confirm({
@@ -180,6 +209,24 @@ const Profile: React.FC = () => {
       fetchMyProducts();
     } catch {
       toastError('Lỗi khi xóa sản phẩm. Vui lòng thử lại.');
+    }
+  };
+
+  const handleDeleteLostFound = async (id: string) => {
+    const confirmed = await confirm({
+      title: 'Xóa bài đăng đồ thất lạc',
+      message: 'Bạn có chắc muốn xóa bài đăng này?',
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      variant: 'danger',
+    });
+    if (!confirmed) return;
+    try {
+      await lostFoundService.deleteItem(id);
+      toastSuccess('Xóa bài đăng đồ thất lạc thành công.');
+      fetchMyLostFoundItems();
+    } catch {
+      toastError('Lỗi khi xóa bài đăng đồ thất lạc. Vui lòng thử lại.');
     }
   };
 
@@ -310,8 +357,10 @@ const Profile: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <div className="space-y-1 lg:col-span-1">
+          {/* Notifications menu item is shown as a regular tab below */}
           {[
             { id: 'info', label: 'Hồ sơ cá nhân', icon: UserCircle },
+            { id: 'notifications', label: 'Thông báo', icon: Bell },
             { id: 'products', label: 'Bài đăng của tôi', icon: Store },
             { id: 'orders', label: 'Lịch sử mua hàng', icon: ShoppingBag },
             { id: 'sales', label: 'Đơn từ người mua', icon: Receipt },
@@ -356,6 +405,12 @@ const Profile: React.FC = () => {
               >
                 {message.type === 'success' ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
                 <span className="font-medium">{message.text}</span>
+              </div>
+            )}
+
+            {activeTab === 'notifications' && (
+              <div>
+                <Notifications />
               </div>
             )}
 
@@ -551,52 +606,141 @@ const Profile: React.FC = () => {
 
             {activeTab === 'products' && (
               <div className="space-y-3">
-                <div className="mb-4 flex items-center justify-between gap-3">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="text-base font-semibold text-slate-800">Bài đăng của tôi</h3>
-                    <p className="mt-1 text-xs text-slate-400">Những sản phẩm bạn đã đăng, gồm bài đang bán, chờ duyệt hoặc đã bán.</p>
+                    <p className="mt-1 text-xs text-slate-400">Các bài đăng của bạn trên cả phần sản phẩm và đồ thất lạc.</p>
                   </div>
                   <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-600">
-                    {myProducts.length} bài
+                    {myProducts.length + myLostFoundItems.length} bài
                   </div>
                 </div>
-                {productsLoading ? (
+
+                {(productsLoading || lostFoundLoading) ? (
                   <div className="py-16 text-center text-sm text-slate-400">Đang tải...</div>
                 ) : (
-                  myProducts.map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
-                        <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={p.title} className="h-full w-full object-cover" />
+                  <>
+                    {myProducts.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                            <span>Bài đăng sản phẩm</span>
+                            <span className="text-slate-500">{myProducts.length} bài</span>
+                          </div>
+                        </div>
+                        {myProducts.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => navigate(`/products/${p.id}`)}
+                            className="flex w-full items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left min-h-[84px] hover:shadow-sm"
+                          >
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                                <img src={p.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={p.title} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate text-sm font-medium text-slate-800">{p.title}</div>
+                                <div className="text-sm font-bold text-slate-900">{p.price.toLocaleString()}đ</div>
+                                <span
+                                  className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                                    p.status === 'AVAILABLE'
+                                      ? 'bg-emerald-50 text-emerald-700'
+                                      : p.status === 'PENDING_APPROVAL'
+                                        ? 'bg-amber-50 text-amber-700'
+                                        : p.status === 'SOLD'
+                                          ? 'bg-slate-100 text-slate-600'
+                                          : 'bg-red-50 text-red-700'
+                                  }`}
+                                >
+                                  {p.status === 'PENDING_APPROVAL' ? 'Chờ duyệt' : p.status === 'AVAILABLE' ? 'Đang bán' : p.status === 'SOLD' ? 'Đã bán' : p.status}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                title="Chỉnh sửa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/products/${p.id}/edit`); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700"
+                                aria-label={`Chỉnh sửa ${p.title}`}
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                title="Gỡ bài"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleDeleteProduct(p.id); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500"
+                                aria-label={`Gỡ bài ${p.title}`}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-slate-800">{p.title}</div>
-                        <div className="text-sm font-bold text-slate-900">{p.price.toLocaleString()}đ</div>
-                        <span
-                          className={`mt-0.5 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                            p.status === 'AVAILABLE'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : p.status === 'PENDING_APPROVAL'
-                                ? 'bg-amber-50 text-amber-700'
-                                : p.status === 'SOLD'
-                                  ? 'bg-slate-100 text-slate-600'
-                                  : 'bg-red-50 text-red-700'
-                          }`}
-                        >
-                          {p.status === 'PENDING_APPROVAL' ? 'Chờ duyệt' : p.status === 'AVAILABLE' ? 'Đang bán' : p.status === 'SOLD' ? 'Đã bán' : p.status}
-                        </span>
+                    )}
+
+                    {myLostFoundItems.length > 0 && (
+                      <div className="space-y-3">
+                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3 text-sm font-semibold text-slate-700">
+                            <span>Bài đăng đồ thất lạc</span>
+                            <span className="text-slate-500">{myLostFoundItems.length} bài</span>
+                          </div>
+                        </div>
+                        {myLostFoundItems.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => navigate(`/lost-found/${item.id}`)}
+                            className="flex w-full items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-3 text-left min-h-[84px] hover:shadow-sm"
+                          >
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-lg bg-white">
+                                <img src={item.imageUrls?.[0] || 'https://via.placeholder.com/160'} alt={item.title} className="h-full w-full object-cover" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-slate-800">
+                                  <span className="truncate">{item.title}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+                                    {item.type === ItemType.LOST ? 'Tìm đồ thất lạc' : 'Nhặt được đồ'}
+                                  </span>
+                                </div>
+                                <div className="mt-1 text-xs text-slate-500">{item.location || 'Địa điểm chưa rõ'}</div>
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                  <span>{new Date(item.createdAt).toLocaleDateString()}</span>
+                                  <span className="rounded-full bg-slate-100 px-2 py-0.5 uppercase">{item.status}</span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                title="Chỉnh sửa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); navigate(`/lost-found/${item.id}/edit`); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700"
+                                aria-label={`Chỉnh sửa ${item.title}`}
+                              >
+                                <Pencil size={16} />
+                              </button>
+                              <button
+                                title="Xóa"
+                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleDeleteLostFound(item.id); }}
+                                className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500"
+                                aria-label={`Xóa ${item.title}`}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => navigate(`/products/${p.id}/edit`)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-white hover:text-slate-700">
-                          <Pencil size={16} />
-                        </button>
-                        <button onClick={() => handleDeleteProduct(p.id)} className="rounded-lg p-2 text-slate-400 transition-all hover:bg-red-50 hover:text-red-500">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
-                  ))
+                    )}
+
+                    {myProducts.length === 0 && myLostFoundItems.length === 0 && (
+                      <div className="py-16 text-center text-sm text-slate-400">Bạn chưa đăng bài nào trên cả sản phẩm và đồ thất lạc.</div>
+                    )}
+                  </>
                 )}
-                {!productsLoading && myProducts.length === 0 && <div className="py-16 text-center text-sm text-slate-400">Bạn chưa đăng bán món đồ nào.</div>}
               </div>
             )}
 

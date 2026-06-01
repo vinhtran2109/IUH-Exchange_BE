@@ -2,7 +2,8 @@ import api from "./api";
 
 export const ItemType = {
   LOST: 'LOST',
-  FOUND: 'FOUND'
+  FOUND: 'FOUND',
+  ALL: 'ALL'
 } as const;
 
 export type ItemType = typeof ItemType[keyof typeof ItemType];
@@ -74,7 +75,10 @@ export interface ClaimPayload {
 export const lostFoundService = {
   // Lấy danh sách đồ thất lạc (Phân trang và lọc theo Loại)
   getItems: async (type: ItemType = ItemType.LOST, page = 1, size = 20) => {
-    const response = await api.get(`/lost-found?type=${type}&page=${page}&size=${size}`);
+    const query = type === ItemType.ALL
+      ? `/lost-found?page=${page}&size=${size}`
+      : `/lost-found?type=${type}&page=${page}&size=${size}`;
+    const response = await api.get(query);
     return response.data;
   },
 
