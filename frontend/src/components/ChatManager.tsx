@@ -21,11 +21,16 @@ const ChatManager: React.FC = () => {
     content: string;
   } | null>(null);
   const activeChatRef = useRef<typeof activeChat>(null);
+  const showListRef = useRef(false);
   const { user } = useAuthStore() as any;
 
   useEffect(() => {
     activeChatRef.current = activeChat;
   }, [activeChat]);
+
+  useEffect(() => {
+    showListRef.current = showList;
+  }, [showList]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -40,8 +45,6 @@ const ChatManager: React.FC = () => {
       const receiverId = String((msg as any).receiverId || msg.recipientId || '');
       if (!senderId || !receiverId || senderId === user.id || receiverId !== user.id) return;
 
-      if (activeChatRef.current?.recipientId === senderId) return;
-
       const content = msg.messageType === 'IMAGE' || msg.fileUrl ? 'Đã gửi một hình ảnh' : msg.content || 'Tin nhắn mới';
       let senderName = 'Tin nhắn mới';
       try {
@@ -50,6 +53,15 @@ const ChatManager: React.FC = () => {
       } catch {
         // Keep generic sender name if profile lookup fails.
       }
+
+      if (!activeChatRef.current || showListRef.current) {
+        setActiveChat({ recipientId: senderId, recipientName: senderName });
+        setShowList(false);
+        setIncomingToast(null);
+        return;
+      }
+
+      if (activeChatRef.current?.recipientId === senderId) return;
 
       setIncomingToast({ senderId, senderName, content });
       window.setTimeout(() => {
