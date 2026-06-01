@@ -9,6 +9,9 @@ export interface Product {
   condition: string;
   imageUrls: string[];
   sellerId: string;
+  sellerName?: string;
+  sellerStudentId?: string;
+  sellerAvatarUrl?: string;
   status: string;
   location?: string;
   listingType?: 'SELL' | 'GIVE_AWAY' | 'TRADE';

@@ -8,6 +8,7 @@ import { productService } from '../services/productService';
 import type { Product } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import SEO from '../components/SEO';
+import { categoryLabel } from '../utils/enums';
 
 const Home: React.FC = () => {
   const [products, setProducts] = React.useState<Product[]>([]);
@@ -31,6 +32,19 @@ const Home: React.FC = () => {
     };
     fetchProducts();
   }, []);
+
+  const recentProducts = products.slice(0, 4);
+  const formatActivityTime = (value?: string) => {
+    if (!value) return 'Vừa đăng';
+    const created = new Date(value).getTime();
+    if (Number.isNaN(created)) return 'Vừa đăng';
+    const minutes = Math.max(0, Math.floor((Date.now() - created) / 60000));
+    if (minutes < 1) return 'Vừa đăng';
+    if (minutes < 60) return `${minutes} phút trước`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} giờ trước`;
+    return `${Math.floor(hours / 24)} ngày trước`;
+  };
 
   return (
     <div className="space-y-14 pb-5">
@@ -123,6 +137,58 @@ const Home: React.FC = () => {
             <p className="text-slate-500 text-sm leading-relaxed">{feat.desc}</p>
           </motion.div>
         ))}
+      </section>
+
+      {/* ── Recent activity ── */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-indigo-600">
+              <Timer size={14} />
+              <span>Hoạt động gần đây</span>
+            </div>
+            <h2 className="text-xl font-black text-slate-950">Những cập nhật mới trên chợ</h2>
+          </div>
+          <Link to="/products" className="hidden rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 sm:inline-flex">
+            Xem chợ
+          </Link>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-2">
+          {loading ? (
+            Array.from({ length: 4 }, (_, i) => (
+              <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-100" />
+            ))
+          ) : recentProducts.length > 0 ? (
+            recentProducts.map((product) => (
+              <Link
+                key={product.id}
+                to={`/products/${product.id}`}
+                className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 transition hover:border-indigo-200 hover:bg-white hover:shadow-sm"
+              >
+                <img
+                  src={product.imageUrls?.[0] || 'https://placehold.co/160x120/e2e8f0/64748b?text=IUH'}
+                  alt={product.title}
+                  className="h-16 w-20 shrink-0 rounded-xl object-cover"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-black text-indigo-700">{categoryLabel(product.category)}</span>
+                    <span className="text-[11px] font-semibold text-slate-400">{formatActivityTime(product.createdAt)}</span>
+                  </div>
+                  <div className="mt-1 truncate text-sm font-black text-slate-900">{product.title}</div>
+                  <div className="mt-0.5 truncate text-xs font-medium text-slate-500">
+                    {product.sellerName || 'Sinh viên IUH'} vừa đăng bán
+                  </div>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center text-sm font-medium text-slate-400 md:col-span-2">
+              Chưa có hoạt động mới.
+            </div>
+          )}
+        </div>
       </section>
 
       {/* ── Latest products ── */}
