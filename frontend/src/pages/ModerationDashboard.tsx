@@ -138,208 +138,292 @@ const ModerationDashboard: React.FC = () => {
   };
 
   const tabs = [
-    { id: 'posts' as const, label: 'Bai cho duyet', icon: PackageX, count: canModeratePosts ? products.length : 0 },
-    { id: 'reports' as const, label: 'Tố cáo', icon: AlertTriangle, count: reports.length },
-    { id: 'chat' as const, label: 'Tin nhắn bị tố cáo', icon: MessageSquareWarning, count: messages.length },
-    { id: 'users' as const, label: 'Khóa người dùng', icon: UserRound, count: canBan ? users.length : 0 },
+    { id: 'posts' as const, label: 'Bài chờ duyệt', description: 'Sản phẩm cần quyết định', icon: PackageX, count: canModeratePosts ? products.length : 0 },
+    { id: 'reports' as const, label: 'Tố cáo', description: 'Báo cáo từ sinh viên', icon: AlertTriangle, count: reports.length },
+    { id: 'chat' as const, label: 'Tin nhắn bị tố cáo', description: 'Nội dung chat cần xem', icon: MessageSquareWarning, count: messages.length },
+    { id: 'users' as const, label: 'Khóa người dùng', description: 'Tài khoản cần can thiệp', icon: UserRound, count: canBan ? users.length : 0 },
   ];
 
+  const activeMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
+  const totalQueue = (canModeratePosts ? products.length : 0) + reports.length + messages.length;
+  const lockedUsers = users.filter((item) => item.isActive === false).length;
+
+  const formatDateTime = (value?: string) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('vi-VN');
+  };
+
+  const shortId = (value?: string) => {
+    if (!value) return 'N/A';
+    return value.length > 12 ? value.slice(0, 6) + '...' + value.slice(-4) : value;
+  };
+
+  const targetLabel = (value?: string) => {
+    switch (value) {
+      case 'USER': return 'Người dùng';
+      case 'PRODUCT': return 'Sản phẩm';
+      case 'LOST_FOUND': return 'Đồ thất lạc';
+      default: return value || 'Không rõ';
+    }
+  };
+
+  const statusBadgeClass = (status?: string) => {
+    switch (status) {
+      case 'PENDING':
+      case 'PENDING_APPROVAL':
+        return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
+      case 'REVIEWED':
+        return 'bg-blue-50 text-blue-700 ring-1 ring-blue-100';
+      case 'RESOLVED':
+        return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100';
+      case 'DISMISSED':
+        return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+      default:
+        return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+    }
+  };
+
+  const primaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60';
+  const dangerButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3.5 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60';
+  const neutralButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60';
+
+  const renderActionIcon = (id: string, fallback: React.ReactNode) => busyId === id ? <Loader2 size={15} className="animate-spin" /> : fallback;
+
   return (
-    <div className="p-4 sm:p-6 lg:p-8">
-      <div className="mb-6 flex flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-lg bg-teal-50 px-3 py-1 text-xs font-bold text-teal-700">
-            <ShieldCheck size={14} />
-            Điều phối viên
+    <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1 text-xs font-black text-teal-700">
+              <ShieldCheck size={14} />
+              Điều phối viên
+            </div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-950">Trung tâm kiểm duyệt</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Xử lý bài đăng, tố cáo, tin nhắn vi phạm và khóa tài khoản khi được cấp quyền. Giao diện ưu tiên các việc cần xử lý trước.</p>
           </div>
-          <h1 className="text-2xl font-black text-slate-950">Trung tâm kiểm duyệt</h1>
-          <p className="mt-1 text-sm text-slate-500">Xử lý báo cáo, tin nhắn vi phạm và khóa tài khoản khi được cấp quyền.</p>
+          <button
+            onClick={loadData}
+            disabled={loading}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            Làm mới
+          </button>
         </div>
-        <button
-          onClick={loadData}
-          disabled={loading}
-          className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-        >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
-          Làm mới
-        </button>
-      </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-4">
+          {[
+            { label: 'Cần xử lý', value: totalQueue, helper: 'Tổng hàng đợi', icon: AlertTriangle, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+            { label: 'Bài chờ duyệt', value: canModeratePosts ? products.length : 0, helper: canModeratePosts ? 'Có quyền duyệt bài' : 'Chưa có quyền', icon: PackageX, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+            { label: 'Tố cáo', value: reports.length + messages.length, helper: 'Báo cáo và tin nhắn', icon: MessageSquareWarning, tone: 'border-rose-100 bg-rose-50 text-rose-700' },
+            { label: 'Tài khoản khóa', value: lockedUsers, helper: canBan ? 'Có thể can thiệp' : 'Chưa có quyền', icon: Ban, tone: 'border-slate-200 bg-slate-50 text-slate-700' },
+          ].map((item) => (
+            <div key={item.label} className={'rounded-2xl border p-4 ' + item.tone}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs font-black uppercase tracking-wide opacity-80">{item.label}</div>
+                  <div className="mt-2 text-3xl font-black leading-none">{item.value.toLocaleString('vi-VN')}</div>
+                </div>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/80">
+                  <item.icon size={22} />
+                </div>
+              </div>
+              <div className="mt-3 text-xs font-bold opacity-80">{item.helper}</div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {error && (
-        <div className="mb-5 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+        <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
           {error}
         </div>
       )}
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold transition ${
-              activeTab === tab.id ? 'bg-slate-950 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <tab.icon size={16} />
-            {tab.label}
-            <span className={activeTab === tab.id ? 'text-teal-200' : 'text-slate-400'}>{tab.count}</span>
-          </button>
-        ))}
-      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-[300px_1fr]">
+        <aside className="space-y-3">
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={'flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition ' + (active ? 'border-slate-950 bg-slate-950 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50')}
+              >
+                <div className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ' + (active ? 'bg-white/10 text-blue-100' : 'bg-slate-50 text-slate-500')}>
+                  <tab.icon size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-black">{tab.label}</span>
+                    <span className={'rounded-full px-2 py-0.5 text-xs font-black ' + (active ? 'bg-white/15 text-white' : 'bg-slate-100 text-slate-500')}>{tab.count}</span>
+                  </div>
+                  <div className={'mt-1 truncate text-xs font-medium ' + (active ? 'text-slate-300' : 'text-slate-400')}>{tab.description}</div>
+                </div>
+              </button>
+            );
+          })}
+        </aside>
 
-      {loading ? (
-        <div className="grid min-h-72 place-items-center rounded-lg border border-slate-200 bg-white">
-          <Loader2 size={28} className="animate-spin text-slate-400" />
-        </div>
-      ) : activeTab === 'reports' ? (
-        <div className="space-y-3">
-          {reports.map((report) => {
-            const id = getId(report);
-            return (
-              <div key={id} className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                      <span className="rounded bg-amber-50 px-2 py-1 text-amber-700">{statusLabel[report.status] || report.status}</span>
-                      <span>{report.targetType}</span>
-                      <span>{new Date(report.createdAt).toLocaleString('vi-VN')}</span>
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{report.reason}</p>
-                    <p className="mt-1 break-all text-xs text-slate-400">Target: {report.targetId}</p>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button onClick={() => resolveReport(id, 'DISMISSED')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
-                      <XCircle size={15} /> Bỏ qua
-                    </button>
-                    <button onClick={() => resolveReport(id, 'RESOLVED')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-                      <CheckCircle2 size={15} /> Xử lý
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {reports.length === 0 && <EmptyState text="Không có tố cáo đang chờ xử lý." />}
-        </div>
-      ) : activeTab === 'posts' ? (
-        <div className="space-y-3">
-          {!canModeratePosts ? (
-            <EmptyState text="Tai khoan nay chua co quyen CAN_APPROVE_POST." />
-          ) : (
-            products.map((product) => {
-              const id = getId(product);
-              return (
-                <div key={id} className="rounded-lg border border-slate-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                        <span className="rounded bg-sky-50 px-2 py-1 text-sky-700">{product.status}</span>
-                        {product.category && <span>{product.category}</span>}
-                        <span>{new Date(product.createdAt).toLocaleString('vi-VN')}</span>
-                      </div>
-                      <p className="mt-3 text-sm font-semibold text-slate-900">{product.title}</p>
-                      {product.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{product.description}</p>}
-                      {product.sellerId && <p className="mt-1 break-all text-xs text-slate-400">Seller: {product.sellerId}</p>}
-                    </div>
-                    <div className="flex shrink-0 gap-2">
-                      <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100">
-                        <XCircle size={15} /> An bai
-                      </button>
-                      <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-                        <CheckCircle2 size={15} /> Duyet
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          {canModeratePosts && products.length === 0 && <EmptyState text="Khong co bai dang cho duyet." />}
-        </div>
-      ) : activeTab === 'chat' ? (
-        <div className="space-y-3">
-          {messages.map((message) => {
-            const id = getId(message);
-            return (
-              <div key={id} className="rounded-lg border border-slate-200 bg-white p-4">
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-                      <span className="rounded bg-rose-50 px-2 py-1 text-rose-700">{statusLabel[message.moderationStatus] || message.moderationStatus}</span>
-                      <span>{message.senderId} {'->'} {message.receiverId}</span>
-                    </div>
-                    <p className="mt-3 text-sm font-semibold text-slate-900">{message.content}</p>
-                    {message.reports?.map((report, index) => (
-                      <p key={`${id}-${index}`} className="mt-1 text-xs text-slate-500">Lý do: {report.reason}</p>
-                    ))}
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <button onClick={() => resolveMessage(id, 'DISMISSED')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
-                      <XCircle size={15} /> Bỏ qua
-                    </button>
-                    <button onClick={() => resolveMessage(id, 'REVIEWED')} disabled={busyId === id} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700">
-                      <CheckCircle2 size={15} /> Đã xử lý
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          {messages.length === 0 && <EmptyState text="Không có tin nhắn bị tố cáo đang chờ xử lý." />}
-        </div>
-      ) : (
-        <div className="rounded-lg border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 p-4">
-            <label className="relative block max-w-md">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-slate-400"
-                placeholder="Tìm sinh viên theo tên, email, MSSV"
-              />
-            </label>
+        <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-slate-950">{activeMeta.label}</h2>
+              <p className="mt-1 text-sm text-slate-500">{activeMeta.description}</p>
+            </div>
+            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{activeMeta.count.toLocaleString('vi-VN')} mục</div>
           </div>
-          {!canBan ? (
-            <EmptyState text="Tài khoản này chưa có quyền CAN_BAN." />
-          ) : (
-            <div className="divide-y divide-slate-100">
-              {visibleUsers.map((item) => {
-                const id = getId(item);
-                const locked = item.isActive === false;
-                const disabled = item.role === 'ADMIN' || busyId === id;
+
+          {loading ? (
+            <div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
+              <div className="text-center">
+                <Loader2 size={30} className="mx-auto animate-spin text-slate-400" />
+                <p className="mt-3 text-sm font-bold text-slate-500">Đang tải dữ liệu kiểm duyệt...</p>
+              </div>
+            </div>
+          ) : activeTab === 'reports' ? (
+            <div className="space-y-3">
+              {reports.map((report) => {
+                const id = getId(report);
                 return (
-                  <div key={id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div>
-                      <div className="font-bold text-slate-900">{item.name || item.email}</div>
-                      <div className="mt-1 text-xs text-slate-500">{item.email} • {item.studentId || 'Chưa có MSSV'} • {item.role}</div>
+                  <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(report.status)}>{statusLabel[report.status] || report.status}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{targetLabel(report.targetType)}</span>
+                          <span className="text-xs font-medium text-slate-400">{formatDateTime(report.createdAt)}</span>
+                        </div>
+                        <p className="mt-3 text-base font-black text-slate-950">{report.reason}</p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                          <span>Target</span>
+                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(report.targetId)}</span>
+                          <span>Reporter</span>
+                          <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(report.reporterId)}</span>
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button onClick={() => resolveReport(id, 'DISMISSED')} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Bỏ qua</button>
+                        <button onClick={() => resolveReport(id, 'RESOLVED')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Xử lý</button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => toggleBan(item)}
-                      disabled={disabled}
-                      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-50 ${
-                        locked ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
-                      }`}
-                    >
-                      {locked ? <CheckCircle2 size={15} /> : <Ban size={15} />}
-                      {locked ? 'Mở khóa' : 'Khóa'}
-                    </button>
-                  </div>
+                  </article>
                 );
               })}
+              {reports.length === 0 && <EmptyState title="Không có tố cáo đang chờ" text="Những báo cáo mới từ sinh viên sẽ xuất hiện ở đây." />}
+            </div>
+          ) : activeTab === 'posts' ? (
+            <div className="space-y-3">
+              {!canModeratePosts ? (
+                <EmptyState title="Chưa có quyền duyệt bài" text="Tài khoản này cần quyền CAN_APPROVE_POST để thao tác." />
+              ) : (
+                products.map((product) => {
+                  const id = getId(product);
+                  return (
+                    <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-100">{product.status}</span>
+                            {product.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category}</span>}
+                            <span className="text-xs font-medium text-slate-400">{formatDateTime(product.createdAt)}</span>
+                          </div>
+                          <p className="mt-3 text-base font-black text-slate-950">{product.title}</p>
+                          {product.description && <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-500">{product.description}</p>}
+                          {product.sellerId && <p className="mt-2 text-xs text-slate-500">Seller <span className="rounded-lg bg-slate-50 px-2 py-1 font-mono font-bold text-slate-600">{shortId(product.sellerId)}</span></p>}
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Ẩn bài</button>
+                          <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+              {canModeratePosts && products.length === 0 && <EmptyState title="Không có bài chờ duyệt" text="Hàng đợi duyệt bài đang trống." />}
+            </div>
+          ) : activeTab === 'chat' ? (
+            <div className="space-y-3">
+              {messages.map((message) => {
+                const id = getId(message);
+                return (
+                  <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(message.moderationStatus)}>{statusLabel[message.moderationStatus] || message.moderationStatus}</span>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-bold text-slate-600">{shortId(message.senderId)} → {shortId(message.receiverId)}</span>
+                        </div>
+                        <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800">{message.content}</p>
+                        <div className="mt-3 space-y-1">
+                          {(message.reports || []).map((report, index) => <p key={id + '-' + index} className="text-xs font-medium text-rose-600">Lý do: {report.reason}</p>)}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button onClick={() => resolveMessage(id, 'DISMISSED')} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Bỏ qua</button>
+                        <button onClick={() => resolveMessage(id, 'REVIEWED')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Đã xử lý</button>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+              {messages.length === 0 && <EmptyState title="Không có tin nhắn bị tố cáo" text="Tin nhắn vi phạm đang chờ xử lý sẽ hiển thị tại đây." />}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <label className="relative block max-w-xl">
+                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50" placeholder="Tìm sinh viên theo tên, email, MSSV" />
+              </label>
+              {!canBan ? (
+                <EmptyState title="Chưa có quyền khóa" text="Tài khoản này cần quyền CAN_BAN để thao tác." />
+              ) : (
+                <div className="divide-y divide-slate-100 rounded-2xl border border-slate-100">
+                  {visibleUsers.map((item) => {
+                    const id = getId(item);
+                    const locked = item.isActive === false;
+                    const disabled = item.role === 'ADMIN' || busyId === id;
+                    return (
+                      <div key={id} className="flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="min-w-0">
+                          <div className="truncate font-black text-slate-950">{item.name || item.email}</div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                            <span>{item.email}</span>
+                            <span>{item.studentId || 'Chưa có MSSV'}</span>
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 font-bold text-slate-600">{item.role}</span>
+                            <span className={'rounded-full px-2 py-0.5 font-bold ' + (locked ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700')}>{locked ? 'Đang khóa' : 'Hoạt động'}</span>
+                          </div>
+                        </div>
+                        <button onClick={() => toggleBan(item)} disabled={disabled} className={(locked ? primaryButtonClass : dangerButtonClass)}>
+                          {renderActionIcon(id, locked ? <CheckCircle2 size={15} /> : <Ban size={15} />)}
+                          {locked ? 'Mở khóa' : 'Khóa'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                  {visibleUsers.length === 0 && <EmptyState title="Không tìm thấy sinh viên" text="Thử thay đổi từ khóa tìm kiếm." />}
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        </main>
+      </div>
     </div>
   );
+
 };
 
-const EmptyState = ({ text }: { text: string }) => (
-  <div className="grid min-h-48 place-items-center rounded-lg border border-dashed border-slate-200 bg-white p-8 text-center">
+const EmptyState = ({ title = 'Chưa có dữ liệu', text }: { title?: string; text: string }) => (
+  <div className="grid min-h-56 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
     <div>
-      <PackageX size={28} className="mx-auto text-slate-300" />
-      <p className="mt-3 text-sm font-semibold text-slate-500">{text}</p>
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-slate-400 shadow-sm">
+        <PackageX size={24} />
+      </div>
+      <p className="mt-4 text-sm font-black text-slate-800">{title}</p>
+      <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">{text}</p>
     </div>
   </div>
 );
