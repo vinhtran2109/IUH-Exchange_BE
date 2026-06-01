@@ -1,7 +1,7 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ShoppingBag, ChevronRight, Package, TrendingUp, Timer, Lock, Users, Zap, Star,
+  ShoppingBag, ChevronRight, Package, TrendingUp, Timer, Lock, Users, Zap, Star, MapPin,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productService } from '../services/productService';
@@ -9,10 +9,13 @@ import type { Product } from '../services/productService';
 import ProductCard from '../components/ProductCard';
 import SEO from '../components/SEO';
 import { categoryLabel } from '../utils/enums';
+import { lostFoundService, ItemType } from '../services/lostFoundService';
+import type { LostFoundItem } from '../services/lostFoundService';
 
 const Home: React.FC = () => {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [lostFoundItems, setLostFoundItems] = React.useState<LostFoundItem[]>([]);
   const [stats, setStats] = React.useState({ total: 0 });
   const [activityIndex, setActivityIndex] = React.useState(0);
 
@@ -32,6 +35,30 @@ const Home: React.FC = () => {
       }
     };
     fetchProducts();
+  }, []);
+
+  React.useEffect(() => {
+    const fetchLostFound = async () => {
+      try {
+        const [lostResponse, foundResponse] = await Promise.all([
+          lostFoundService.getItems(ItemType.LOST, 1, 4),
+          lostFoundService.getItems(ItemType.FOUND, 1, 4),
+        ]);
+        const items = [
+          ...(lostResponse?.data?.content || lostResponse?.content || []),
+          ...(foundResponse?.data?.content || foundResponse?.content || []),
+        ] as LostFoundItem[];
+        setLostFoundItems(
+          items
+            .filter((item) => item.status !== 'CLOSED' && item.status !== 'RESOLVED')
+            .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+            .slice(0, 4),
+        );
+      } catch (error) {
+        console.error('Failed to fetch lost-found items:', error);
+      }
+    };
+    fetchLostFound();
   }, []);
 
   const recentProducts = React.useMemo(() => products.slice(0, 3), [products]);
@@ -206,7 +233,6 @@ const Home: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
                           <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-black text-indigo-700 ring-1 ring-indigo-100">{categoryLabel(product.category)}</span>
-                          {index === 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-black text-emerald-700">Moi nhat</span>}
                         </div>
                         <div className={index === 0 ? 'line-clamp-2 text-base font-black leading-snug text-slate-950' : 'line-clamp-2 text-sm font-black leading-snug text-slate-900'}>{product.title}</div>
                         <div className="mt-2 truncate text-xs font-semibold text-slate-500">
@@ -235,6 +261,68 @@ const Home: React.FC = () => {
             </div>
           )}
         </div>
+      </section>
+
+      {/* Lost & found */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-black uppercase tracking-widest text-cyan-700">
+              <MapPin size={14} />
+              <span>Đồ thất lạc</span>
+            </div>
+            <h2 className="text-xl font-black text-slate-950">Tin mất đồ và nhặt được gần đây</h2>
+          </div>
+          <Link to="/lost-found" className="hidden rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-600 transition hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-700 sm:inline-flex">
+            Xem tất cả
+          </Link>
+        </div>
+
+        {lostFoundItems.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {lostFoundItems.map((item) => (
+              <Link
+                key={item.id}
+                to={`/lost-found/${item.id}`}
+                className="group overflow-hidden rounded-2xl border border-slate-100 bg-slate-50 transition hover:border-cyan-200 hover:bg-white hover:shadow-sm"
+              >
+                <div className="aspect-[4/3] overflow-hidden bg-slate-100">
+                  <img
+                    src={item.imageUrls?.[0] || 'https://placehold.co/480x360/e2e8f0/64748b?text=IUH'}
+                    alt={item.title}
+                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.04]"
+                  />
+                </div>
+                <div className="space-y-3 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-black ${item.type === ItemType.LOST ? 'bg-rose-50 text-rose-700' : 'bg-sky-50 text-sky-700'}`}>
+                      {item.type === ItemType.LOST ? 'Đồ mất' : 'Nhặt được'}
+                    </span>
+                    <span className="truncate text-[11px] font-bold text-slate-400">{formatActivityTime(item.createdAt)}</span>
+                  </div>
+                  <div>
+                    <div className="line-clamp-1 text-sm font-black text-slate-950">{item.title}</div>
+                    <div className="mt-1 flex items-center gap-1.5 truncate text-xs font-semibold text-slate-500">
+                      <MapPin size={13} className="shrink-0 text-cyan-600" />
+                      <span className="truncate">{item.location || 'Chưa rõ vị trí'}</span>
+                    </div>
+                  </div>
+                  <div className="truncate rounded-xl bg-white px-3 py-2 text-xs font-bold text-slate-600 ring-1 ring-slate-100">
+                    {item.userName || item.studentId || 'Sinh viên IUH'}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
+            <MapPin size={34} className="mx-auto mb-3 text-slate-300" />
+            <p className="text-sm font-semibold text-slate-500">Chưa có tin thất lạc đang mở.</p>
+            <Link to="/lost-found/new" className="mt-2 inline-flex text-sm font-bold text-cyan-700 hover:underline">
+              Đăng tin mất đồ hoặc nhặt được
+            </Link>
+          </div>
+        )}
       </section>
 
       {/* ── Latest products ── */}
