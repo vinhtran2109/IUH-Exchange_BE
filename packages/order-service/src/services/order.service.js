@@ -785,9 +785,17 @@ export class OrderService {
     };
   }
 
-  async openDispute(orderId, userId, reason) {
+  async openDispute(orderId, userId, disputeInput) {
     const order = await Order.findById(orderId);
     if (!order) throw new ResourceNotFoundException('Order', orderId);
+    const details = typeof disputeInput === 'string'
+      ? { reason: disputeInput }
+      : (disputeInput || {});
+    const reason = String(details.reason || '').trim();
+    const category = String(details.category || '').trim();
+    const desiredResolution = String(details.desiredResolution || '').trim();
+    const evidenceUrl = String(details.evidenceUrl || '').trim();
+    const evidenceNote = String(details.evidenceNote || '').trim();
 
     if (String(order.buyerId) !== String(userId) && String(order.sellerId) !== String(userId)) {
       throw new ForbiddenException('Bạn không có quyền mở tranh chấp cho đơn hàng này');
@@ -805,12 +813,22 @@ export class OrderService {
     order.disputeReason = reason;
     order.disputeOpenedBy = userId;
     order.disputeOpenedAt = new Date();
+    if (evidenceUrl) {
+      order.disputeEvidence = order.disputeEvidence || [];
+      order.disputeEvidence.push({
+        submittedBy: userId,
+        type: 'OTHER',
+        url: evidenceUrl,
+        note: evidenceNote || 'Bằng chứng ban đầu khi mở tranh chấp',
+      });
+    }
     order.disputeTimeline = order.disputeTimeline || [];
     order.disputeTimeline.push({
       action: 'OPENED',
       actorId: userId,
       actorRole: actorRoleFor(order, userId),
       note: reason,
+      metadata: { category, desiredResolution, evidenceUrl },
     });
     await order.save();
 

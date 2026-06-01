@@ -65,6 +65,11 @@ export interface AdminOrderData {
   paymentMethod?: string;
   disputeStatus?: string;
   disputeReason?: string;
+  disputeResolution?: string;
+  disputeOutcome?: string;
+  disputeRemedy?: string;
+  disputeEvidence?: Array<{ _id?: string; submittedBy?: string; type?: string; url?: string; note?: string }>;
+  disputeTimeline?: Array<{ _id?: string; action?: string; actorRole?: string; note?: string; metadata?: Record<string, string> }>;
   paymentIssueStatus?: string;
   paymentIssueReason?: string;
   cancellationCategory?: string;

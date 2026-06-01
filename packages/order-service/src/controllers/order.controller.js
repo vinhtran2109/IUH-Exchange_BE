@@ -132,7 +132,13 @@ export class OrderController {
     if (!userId) throw new BadRequestException('Missing X-User-Id header');
     const reason = String(req.body?.reason || '').trim();
     if (reason.length < 10) throw new BadRequestException('Dispute reason must be at least 10 characters');
-    const order = await this.orderService.openDispute(req.params.id, userId, reason);
+    const order = await this.orderService.openDispute(req.params.id, userId, {
+      reason,
+      category: String(req.body?.category || '').trim(),
+      desiredResolution: String(req.body?.desiredResolution || '').trim(),
+      evidenceUrl: String(req.body?.evidenceUrl || '').trim(),
+      evidenceNote: String(req.body?.evidenceNote || '').trim(),
+    });
     return res.status(201).json(ApiResponse.created(order, 'Dispute opened'));
   }
 
