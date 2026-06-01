@@ -17,10 +17,43 @@ const Register: React.FC = () => {
   const { success: toastSuccess } = useToast();
   const navigate = useNavigate();
 
+  const normalizeEmail = (email: string) => email.trim().toLowerCase();
+
+  const getEmailPrefix = (email: string) => normalizeEmail(email).split('@')[0] || '';
+
+  const validateStudentInput = () => {
+    const email = normalizeEmail(formData.email);
+    const studentId = formData.studentId.trim();
+    const prefix = getEmailPrefix(email);
+    const emailDigitsMatch = prefix.match(/^[0-9]{8}/);
+
+    if (!/^[0-9]{8}$/.test(studentId)) {
+      setError('Mã số sinh viên phải là 8 chữ số');
+      return false;
+    }
+
+    if (!/^([0-9]{8}|[0-9]{8}[a-z0-9._-]*)@student\.iuh\.edu\.vn$/.test(email)) {
+      setError('Email phải là email sinh viên hợp lệ');
+      return false;
+    }
+
+    if (!emailDigitsMatch || emailDigitsMatch[0] !== studentId) {
+      setError('Mã số sinh viên không khớp với email sinh viên');
+      return false;
+    }
+
+    return true;
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    if (!validateStudentInput()) {
+      setLoading(false);
+      return;
+    }
     
     try {
       const response = await authService.register(formData);
@@ -97,7 +130,7 @@ const Register: React.FC = () => {
                   <input 
                     type="email" 
                     required
-                    placeholder="user@student.iuh.edu.vn"
+                    placeholder="21091234@student.iuh.edu.vn"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
