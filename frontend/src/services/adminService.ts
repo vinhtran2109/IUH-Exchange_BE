@@ -85,14 +85,20 @@ export interface ReportedMessageData {
 
 export interface LostFoundAdminData {
   id: string;
+  _id?: string;
+  userId?: string;
+  userName?: string;
   title: string;
   description?: string;
   type: 'LOST' | 'FOUND';
   status: string;
+  category?: string;
+  tags?: string[];
   location?: string;
   contactInfo?: string;
   studentId?: string;
   imageUrls?: string[];
+  images?: string[];
   createdAt: string;
 }
 

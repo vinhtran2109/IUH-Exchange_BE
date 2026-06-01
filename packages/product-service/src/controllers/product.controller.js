@@ -476,8 +476,10 @@ export async function getPendingProducts(req, res) {
     Product.countDocuments({ status: 'PENDING_APPROVAL' }),
   ]);
 
+  const content = await Promise.all(products.map(enrichProductModerationSummary));
+
   const pageResponse = new PageResponse({
-    content: products.map(toResponse),
+    content,
     page,
     size,
     totalElements: total,
@@ -508,8 +510,10 @@ export async function listAdminProducts(req, res) {
     Product.countDocuments(filter),
   ]);
 
+  const content = await Promise.all(products.map(enrichProductModerationSummary));
+
   const pageResponse = new PageResponse({
-    content: products.map(toResponse),
+    content,
     page,
     size,
     totalElements: total,

@@ -3,19 +3,26 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  Clock3,
   Loader2,
-  MessageSquareWarning,
+  MapPin,
   PackageX,
   RefreshCw,
   Search,
   ShieldCheck,
+  Trash2,
   UserRound,
   XCircle,
 } from 'lucide-react';
-import { adminService, type ReportData, type ReportedMessageData, type UserAdminData } from '../services/adminService';
+import {
+  adminService,
+  type LostFoundAdminData,
+  type ReportData,
+  type UserAdminData,
+} from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
 
-type TabId = 'reports' | 'posts' | 'chat' | 'users';
+type TabId = 'posts' | 'lostFound' | 'reports' | 'users';
 
 type ProductModerationData = {
   id: string;
@@ -45,6 +52,8 @@ const getList = <T,>(response: any): T[] => {
 };
 
 const getId = (item: any) => String(item?.id || item?._id || '');
+
+const normalizeSearch = (value?: string | number) => String(value || '').toLowerCase();
 
 const enrichProductsWithSellerProfiles = async (items: ProductModerationData[]) => {
   const missingSellerIds = Array.from(new Set(
@@ -81,19 +90,32 @@ const enrichProductsWithSellerProfiles = async (items: ProductModerationData[]) 
 
 const statusLabel: Record<string, string> = {
   PENDING: 'Chờ xử lý',
+  PENDING_APPROVAL: 'Chờ duyệt',
+  AVAILABLE: 'Đang bán',
+  SOLD: 'Đã bán',
+  HIDDEN: 'Đã ẩn',
+  REJECTED: 'Từ chối',
   REVIEWED: 'Đã xem',
   RESOLVED: 'Đã xử lý',
   DISMISSED: 'Bỏ qua',
+  OPEN: 'Đang mở',
+  CLAIMED: 'Có người nhận',
+  CLOSED: 'Đã đóng',
+};
+
+const typeLabel: Record<string, string> = {
+  LOST: 'Đồ thất lạc',
+  FOUND: 'Nhặt được',
 };
 
 const ModerationDashboard: React.FC = () => {
   const user = useAuthStore((state) => state.user);
-  const [activeTab, setActiveTab] = useState<TabId>('reports');
+  const [activeTab, setActiveTab] = useState<TabId>('posts');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reports, setReports] = useState<ReportData[]>([]);
-  const [messages, setMessages] = useState<ReportedMessageData[]>([]);
   const [products, setProducts] = useState<ProductModerationData[]>([]);
+  const [lostFoundItems, setLostFoundItems] = useState<LostFoundAdminData[]>([]);
   const [users, setUsers] = useState<UserAdminData[]>([]);
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState('');
@@ -101,11 +123,55 @@ const ModerationDashboard: React.FC = () => {
   const canBan = user?.role === 'ADMIN' || user?.permissions?.includes('CAN_BAN');
   const canModeratePosts = user?.role === 'ADMIN' || user?.permissions?.includes('CAN_APPROVE_POST');
 
+  const filteredProducts = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return products;
+    return products.filter((item) =>
+      [
+        item.title,
+        item.description,
+        item.category,
+        item.condition,
+        item.location,
+        item.status,
+        item.sellerName,
+        item.sellerStudentId,
+        item.sellerEmail,
+      ].some((value) => normalizeSearch(value).includes(query))
+    );
+  }, [products, search]);
+
+  const filteredLostFoundItems = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return lostFoundItems;
+    return lostFoundItems.filter((item) =>
+      [
+        item.title,
+        item.description,
+        item.type,
+        item.status,
+        item.location,
+        item.contactInfo,
+        item.studentId,
+        item.userName,
+        item.category,
+      ].some((value) => normalizeSearch(value).includes(query))
+    );
+  }, [lostFoundItems, search]);
+
+  const filteredReports = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return reports;
+    return reports.filter((item) =>
+      [item.reason, item.targetType, item.status].some((value) => normalizeSearch(value).includes(query))
+    );
+  }, [reports, search]);
+
   const visibleUsers = useMemo(() => {
     const query = search.trim().toLowerCase();
     if (!query) return users;
     return users.filter((item) =>
-      [item.name, item.email, item.studentId, item.role].some((value) => String(value || '').toLowerCase().includes(query))
+      [item.name, item.email, item.studentId, item.role].some((value) => normalizeSearch(value).includes(query))
     );
   }, [search, users]);
 
@@ -113,16 +179,17 @@ const ModerationDashboard: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const [reportRes, messageRes, productRes, userRes] = await Promise.all([
-        adminService.getReports('PENDING', 1, 50),
-        adminService.getReportedMessages('PENDING', 1, 50),
-        canModeratePosts ? adminService.getPendingProducts(1, 50) : Promise.resolve({ data: { content: [] } }),
+      const [reportRes, productRes, lostFoundRes, userRes] = await Promise.all([
+        adminService.getReports('PENDING', 1, 100),
+        canModeratePosts ? adminService.getAdminProducts('ALL', 1, 100) : Promise.resolve({ data: { content: [] } }),
+        adminService.getAdminLostFoundItems('ALL', 'ALL', 1, 100),
         canBan ? adminService.getAllUsers(1, 100) : Promise.resolve({ data: { content: [] } }),
       ]);
-      setReports(getList<ReportData>(reportRes));
-      setMessages(getList<ReportedMessageData>(messageRes));
+
       const productItems = getList<ProductModerationData>(productRes);
+      setReports(getList<ReportData>(reportRes));
       setProducts(await enrichProductsWithSellerProfiles(productItems));
+      setLostFoundItems(getList<LostFoundAdminData>(lostFoundRes));
       setUsers(getList<UserAdminData>(userRes));
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Không thể tải dữ liệu kiểm duyệt.');
@@ -146,21 +213,39 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
-  const resolveMessage = async (messageId: string, status: 'REVIEWED' | 'DISMISSED') => {
-    setBusyId(messageId);
+  const resolveProduct = async (productId: string, action: 'APPROVE' | 'REJECT') => {
+    setBusyId(productId);
     try {
-      await adminService.resolveReportedMessage(messageId, status);
-      setMessages((current) => current.filter((item) => getId(item) !== messageId));
+      await adminService.resolveProductStatus(productId, action);
+      setProducts((current) =>
+        current.map((item) =>
+          getId(item) === productId
+            ? { ...item, status: action === 'APPROVE' ? 'AVAILABLE' : 'REJECTED' }
+            : item
+        )
+      );
     } finally {
       setBusyId('');
     }
   };
 
-  const resolveProduct = async (productId: string, action: 'APPROVE' | 'REJECT') => {
-    setBusyId(productId);
+  const closeLostFoundItem = async (itemId: string) => {
+    setBusyId(itemId);
     try {
-      await adminService.resolveProductStatus(productId, action);
-      setProducts((current) => current.filter((item) => getId(item) !== productId));
+      await adminService.bulkModerateLostFound([itemId], 'CLOSE');
+      setLostFoundItems((current) =>
+        current.map((item) => (getId(item) === itemId ? { ...item, status: 'CLOSED' } : item))
+      );
+    } finally {
+      setBusyId('');
+    }
+  };
+
+  const deleteLostFoundItem = async (itemId: string) => {
+    setBusyId(itemId);
+    try {
+      await adminService.deleteLostFoundItem(itemId);
+      setLostFoundItems((current) => current.filter((item) => getId(item) !== itemId));
     } finally {
       setBusyId('');
     }
@@ -179,27 +264,25 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
+  const pendingProducts = products.filter((item) => item.status === 'PENDING_APPROVAL').length;
+  const openLostFound = lostFoundItems.filter((item) => item.status !== 'CLOSED' && item.status !== 'RESOLVED').length;
+  const lockedUsers = users.filter((item) => item.isActive === false).length;
+  const totalQueue = pendingProducts + reports.length + openLostFound;
+
   const tabs = [
-    { id: 'posts' as const, label: 'Bài chờ duyệt', description: 'Sản phẩm cần quyết định', icon: PackageX, count: canModeratePosts ? products.length : 0 },
+    { id: 'posts' as const, label: 'Bài đăng sản phẩm', description: 'Quản lý tất cả sản phẩm', icon: PackageX, count: canModeratePosts ? products.length : 0 },
+    { id: 'lostFound' as const, label: 'Mất / nhặt đồ', description: 'Tin mất đồ và tìm được đồ', icon: MapPin, count: lostFoundItems.length },
     { id: 'reports' as const, label: 'Tố cáo', description: 'Báo cáo từ sinh viên', icon: AlertTriangle, count: reports.length },
-    { id: 'chat' as const, label: 'Tin nhắn bị tố cáo', description: 'Nội dung chat cần xem', icon: MessageSquareWarning, count: messages.length },
     { id: 'users' as const, label: 'Khóa người dùng', description: 'Tài khoản cần can thiệp', icon: UserRound, count: canBan ? users.length : 0 },
   ];
 
   const activeMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
-  const totalQueue = (canModeratePosts ? products.length : 0) + reports.length + messages.length;
-  const lockedUsers = users.filter((item) => item.isActive === false).length;
 
   const formatDateTime = (value?: string) => {
     if (!value) return 'N/A';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
     return date.toLocaleString('vi-VN');
-  };
-
-  const shortId = (value?: string) => {
-    if (!value) return 'N/A';
-    return value.length > 12 ? value.slice(0, 6) + '...' + value.slice(-4) : value;
   };
 
   const targetLabel = (value?: string) => {
@@ -228,11 +311,19 @@ const ModerationDashboard: React.FC = () => {
     switch (status) {
       case 'PENDING':
       case 'PENDING_APPROVAL':
+      case 'CLAIMED':
         return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100';
+      case 'OPEN':
       case 'REVIEWED':
         return 'bg-blue-50 text-blue-700 ring-1 ring-blue-100';
+      case 'AVAILABLE':
       case 'RESOLVED':
         return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100';
+      case 'SOLD':
+        return 'bg-violet-50 text-violet-700 ring-1 ring-violet-100';
+      case 'HIDDEN':
+      case 'REJECTED':
+      case 'CLOSED':
       case 'DISMISSED':
         return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
       default:
@@ -240,11 +331,24 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
+  const typeBadgeClass = (type?: string) =>
+    type === 'FOUND'
+      ? 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100'
+      : 'bg-rose-50 text-rose-700 ring-1 ring-rose-100';
+
   const primaryButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3.5 py-2.5 text-xs font-black text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60';
   const dangerButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-rose-50 px-3.5 py-2.5 text-xs font-black text-rose-700 transition hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60';
   const neutralButtonClass = 'inline-flex items-center justify-center gap-2 rounded-xl bg-slate-100 px-3.5 py-2.5 text-xs font-black text-slate-700 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60';
 
-  const renderActionIcon = (id: string, fallback: React.ReactNode) => busyId === id ? <Loader2 size={15} className="animate-spin" /> : fallback;
+  const renderActionIcon = (id: string, fallback: React.ReactNode) =>
+    busyId === id ? <Loader2 size={15} className="animate-spin" /> : fallback;
+
+  const searchPlaceholder = {
+    posts: 'Tìm sản phẩm, người bán, trạng thái...',
+    lostFound: 'Tìm tin mất đồ, nhặt được, người đăng, vị trí...',
+    reports: 'Tìm tố cáo theo lý do hoặc loại đối tượng...',
+    users: 'Tìm sinh viên theo tên, email, MSSV...',
+  }[activeTab];
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -256,7 +360,9 @@ const ModerationDashboard: React.FC = () => {
               Điều phối viên
             </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-950">Trung tâm kiểm duyệt</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">Xử lý bài đăng, tố cáo, tin nhắn vi phạm và khóa tài khoản khi được cấp quyền. Giao diện ưu tiên các việc cần xử lý trước.</p>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+              Quản lý bài đăng sản phẩm, tin mất đồ, tin tìm được đồ, tố cáo và tài khoản cần can thiệp.
+            </p>
           </div>
           <button
             onClick={loadData}
@@ -270,9 +376,9 @@ const ModerationDashboard: React.FC = () => {
 
         <div className="mt-6 grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Cần xử lý', value: totalQueue, helper: 'Tổng hàng đợi', icon: AlertTriangle, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
-            { label: 'Bài chờ duyệt', value: canModeratePosts ? products.length : 0, helper: canModeratePosts ? 'Có quyền duyệt bài' : 'Chưa có quyền', icon: PackageX, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
-            { label: 'Tố cáo', value: reports.length + messages.length, helper: 'Báo cáo và tin nhắn', icon: MessageSquareWarning, tone: 'border-rose-100 bg-rose-50 text-rose-700' },
+            { label: 'Cần xử lý', value: totalQueue, helper: 'Bài chờ duyệt, tin mở và tố cáo', icon: AlertTriangle, tone: 'border-amber-100 bg-amber-50 text-amber-700' },
+            { label: 'Bài đăng', value: canModeratePosts ? products.length : 0, helper: `${pendingProducts.toLocaleString('vi-VN')} bài chờ duyệt`, icon: PackageX, tone: 'border-blue-100 bg-blue-50 text-blue-700' },
+            { label: 'Mất / nhặt đồ', value: lostFoundItems.length, helper: `${openLostFound.toLocaleString('vi-VN')} tin đang mở`, icon: MapPin, tone: 'border-cyan-100 bg-cyan-50 text-cyan-700' },
             { label: 'Tài khoản khóa', value: lockedUsers, helper: canBan ? 'Có thể can thiệp' : 'Chưa có quyền', icon: Ban, tone: 'border-slate-200 bg-slate-50 text-slate-700' },
           ].map((item) => (
             <div key={item.label} className={'rounded-2xl border p-4 ' + item.tone}>
@@ -323,12 +429,25 @@ const ModerationDashboard: React.FC = () => {
         </aside>
 
         <main className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex flex-col gap-3 border-b border-slate-100 pb-5 sm:flex-row sm:items-start sm:justify-between">
+          <div className="mb-5 flex flex-col gap-4 border-b border-slate-100 pb-5 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-lg font-black text-slate-950">{activeMeta.label}</h2>
               <p className="mt-1 text-sm text-slate-500">{activeMeta.description}</p>
             </div>
-            <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{activeMeta.count.toLocaleString('vi-VN')} mục</div>
+            <div className="flex w-full flex-col gap-3 sm:flex-row xl:w-auto xl:items-center">
+              <label className="relative block min-w-0 flex-1 xl:w-96 xl:flex-none">
+                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50"
+                  placeholder={searchPlaceholder}
+                />
+              </label>
+              <div className="self-start rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 sm:self-center">
+                {activeMeta.count.toLocaleString('vi-VN')} mục
+              </div>
+            </div>
           </div>
 
           {loading ? (
@@ -338,9 +457,139 @@ const ModerationDashboard: React.FC = () => {
                 <p className="mt-3 text-sm font-bold text-slate-500">Đang tải dữ liệu kiểm duyệt...</p>
               </div>
             </div>
+          ) : activeTab === 'posts' ? (
+            <div className="space-y-3">
+              {!canModeratePosts ? (
+                <EmptyState title="Chưa có quyền duyệt bài" text="Tài khoản này cần quyền CAN_APPROVE_POST để thao tác." />
+              ) : (
+                filteredProducts.map((product) => {
+                  const id = getId(product);
+                  const imageUrl = product.imageUrls?.[0] || '';
+                  const sellerLabel = product.sellerName || product.sellerEmail || 'Chưa có tên người bán';
+                  const requiresAction = product.status === 'PENDING_APPROVAL';
+                  return (
+                    <article key={id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-200 hover:shadow-sm">
+                      <div className="grid gap-0 lg:grid-cols-[220px_1fr]">
+                        <div className="relative aspect-[4/3] bg-slate-100 lg:aspect-auto lg:min-h-[190px]">
+                          {imageUrl ? (
+                            <img src={imageUrl} alt={product.title} className="h-full w-full object-cover" />
+                          ) : (
+                            <ImageFallback label="Chưa có ảnh" />
+                          )}
+                          {product.imageUrls && product.imageUrls.length > 1 && (
+                            <span className="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-black text-white">
+                              {product.imageUrls.length} ảnh
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex min-w-0 flex-col gap-4 p-4">
+                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(product.status)}>{statusLabel[product.status] || product.status}</span>
+                                {product.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category}</span>}
+                                <span className="text-xs font-medium text-slate-400">{formatDateTime(product.createdAt)}</span>
+                              </div>
+                              <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">{product.title}</h3>
+                              {product.description && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{product.description}</p>}
+                            </div>
+                            <div className="text-left xl:text-right">
+                              <div className="text-2xl font-black text-slate-950">{currency(product.price)}</div>
+                              <div className="mt-1 text-xs font-bold text-slate-400">Giá niêm yết</div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 md:grid-cols-3">
+                            <InfoTile label="Người bán" value={sellerLabel} helper={product.sellerStudentId || product.sellerEmail || 'Chưa cập nhật MSSV'} />
+                            <InfoTile label="Tình trạng" value={conditionLabel(product.condition)} helper={product.location || 'Chưa có vị trí'} />
+                            <InfoTile label="Hình ảnh" value={`${product.imageUrls?.length || 0} ảnh`} helper="Dùng để kiểm tra nội dung" />
+                          </div>
+
+                          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+                            {requiresAction ? (
+                              <>
+                                <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Ẩn bài</button>
+                                <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
+                              </>
+                            ) : (
+                              <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs font-black text-slate-500">
+                                <CheckCircle2 size={15} />
+                                Không có thao tác bắt buộc
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+              {canModeratePosts && filteredProducts.length === 0 && <EmptyState title="Không có bài đăng phù hợp" text="Thử đổi từ khóa tìm kiếm hoặc làm mới dữ liệu." />}
+            </div>
+          ) : activeTab === 'lostFound' ? (
+            <div className="space-y-3">
+              {filteredLostFoundItems.map((item) => {
+                const id = getId(item);
+                const imageUrl = item.imageUrls?.[0] || item.images?.[0] || '';
+                const ownerLabel = item.userName || item.contactInfo || 'Chưa có tên người đăng';
+                const isClosed = item.status === 'CLOSED' || item.status === 'RESOLVED';
+                return (
+                  <article key={id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-200 hover:shadow-sm">
+                    <div className="grid gap-0 lg:grid-cols-[220px_1fr]">
+                      <div className="relative aspect-[4/3] bg-slate-100 lg:aspect-auto lg:min-h-[190px]">
+                        {imageUrl ? (
+                          <img src={imageUrl} alt={item.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <ImageFallback label="Chưa có ảnh" />
+                        )}
+                        {item.imageUrls && item.imageUrls.length > 1 && (
+                          <span className="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-black text-white">
+                            {item.imageUrls.length} ảnh
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex min-w-0 flex-col gap-4 p-4">
+                        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={'rounded-full px-3 py-1 text-xs font-black ' + typeBadgeClass(item.type)}>{typeLabel[item.type] || item.type}</span>
+                              <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(item.status)}>{statusLabel[item.status] || item.status}</span>
+                              <span className="text-xs font-medium text-slate-400">{formatDateTime(item.createdAt)}</span>
+                            </div>
+                            <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">{item.title}</h3>
+                            {item.description && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{item.description}</p>}
+                          </div>
+                          <div className="rounded-2xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-left xl:min-w-44">
+                            <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người đăng</div>
+                            <div className="mt-1 text-sm font-black text-slate-800">{ownerLabel}</div>
+                            <div className="mt-0.5 text-xs font-medium text-slate-500">{item.studentId || 'Chưa cập nhật MSSV'}</div>
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <InfoTile label="Vị trí" value={item.location || 'Chưa có vị trí'} helper="Nơi mất hoặc nhặt được" />
+                          <InfoTile label="Liên hệ" value={item.contactInfo || item.studentId || 'Chưa có'} helper="Thông tin liên hệ" />
+                          <InfoTile label="Phân loại" value={item.category || 'Khác'} helper={item.tags?.length ? item.tags.join(', ') : 'Chưa gắn thẻ'} />
+                        </div>
+
+                        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
+                          {!isClosed && (
+                            <button onClick={() => closeLostFoundItem(id)} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <Clock3 size={15} />)} Đóng tin</button>
+                          )}
+                          <button onClick={() => deleteLostFoundItem(id)} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Trash2 size={15} />)} Gỡ tin</button>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+              {filteredLostFoundItems.length === 0 && <EmptyState title="Không có tin mất / nhặt đồ phù hợp" text="Tin đồ thất lạc và tin tìm được đồ sẽ hiển thị tại đây." />}
+            </div>
           ) : activeTab === 'reports' ? (
             <div className="space-y-3">
-              {reports.map((report) => {
+              {filteredReports.map((report) => {
                 const id = getId(report);
                 return (
                   <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
@@ -365,116 +614,10 @@ const ModerationDashboard: React.FC = () => {
                   </article>
                 );
               })}
-              {reports.length === 0 && <EmptyState title="Không có tố cáo đang chờ" text="Những báo cáo mới từ sinh viên sẽ xuất hiện ở đây." />}
-            </div>
-          ) : activeTab === 'posts' ? (
-            <div className="space-y-3">
-              {!canModeratePosts ? (
-                <EmptyState title="Chưa có quyền duyệt bài" text="Tài khoản này cần quyền CAN_APPROVE_POST để thao tác." />
-              ) : (
-                products.map((product) => {
-                  const id = getId(product);
-                  const imageUrl = product.imageUrls?.[0] || '';
-                  const sellerLabel = product.sellerName || product.sellerEmail || 'Chưa có tên người bán';
-                  return (
-                    <article key={id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition hover:border-blue-200 hover:shadow-sm">
-                      <div className="grid gap-0 lg:grid-cols-[220px_1fr]">
-                        <div className="relative aspect-[4/3] bg-slate-100 lg:aspect-auto lg:min-h-[190px]">
-                          {imageUrl ? (
-                            <img src={imageUrl} alt={product.title} className="h-full w-full object-cover" />
-                          ) : (
-                            <div className="flex h-full w-full flex-col items-center justify-center text-slate-400">
-                              <PackageX size={32} />
-                              <span className="mt-2 text-xs font-bold">Chưa có ảnh</span>
-                            </div>
-                          )}
-                          {product.imageUrls && product.imageUrls.length > 1 && (
-                            <span className="absolute bottom-3 right-3 rounded-full bg-slate-950/80 px-2.5 py-1 text-xs font-black text-white">
-                              {product.imageUrls.length} ảnh
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="flex min-w-0 flex-col gap-4 p-4">
-                          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 ring-1 ring-blue-100">Chờ duyệt</span>
-                                {product.category && <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{product.category}</span>}
-                                <span className="text-xs font-medium text-slate-400">{formatDateTime(product.createdAt)}</span>
-                              </div>
-                              <h3 className="mt-3 text-xl font-black tracking-tight text-slate-950">{product.title}</h3>
-                              {product.description && <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{product.description}</p>}
-                            </div>
-                            <div className="text-left xl:text-right">
-                              <div className="text-2xl font-black text-slate-950">{currency(product.price)}</div>
-                              <div className="mt-1 text-xs font-bold text-slate-400">Giá niêm yết</div>
-                            </div>
-                          </div>
-
-                          <div className="grid gap-3 md:grid-cols-3">
-                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
-                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Người bán</div>
-                              <div className="mt-1 truncate text-sm font-black text-slate-800">{sellerLabel}</div>
-                              <div className="mt-0.5 text-xs font-medium text-slate-500">{product.sellerStudentId || product.sellerEmail || 'Chưa cập nhật MSSV'}</div>
-                            </div>
-                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
-                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Tình trạng</div>
-                              <div className="mt-1 text-sm font-black text-slate-800">{conditionLabel(product.condition)}</div>
-                              <div className="mt-0.5 text-xs font-medium text-slate-500">{product.location || 'Chưa có vị trí'}</div>
-                            </div>
-                            <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
-                              <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">Hình ảnh</div>
-                              <div className="mt-1 text-sm font-black text-slate-800">{product.imageUrls?.length || 0} ảnh</div>
-                              <div className="mt-0.5 text-xs font-medium text-slate-500">Dùng để kiểm tra nội dung</div>
-                            </div>
-                          </div>
-
-                          <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-4">
-                            <button onClick={() => resolveProduct(id, 'REJECT')} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Ẩn bài</button>
-                            <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
-                          </div>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })
-              )}
-              {canModeratePosts && products.length === 0 && <EmptyState title="Không có bài chờ duyệt" text="Hàng đợi duyệt bài đang trống." />}
-            </div>
-          ) : activeTab === 'chat' ? (
-            <div className="space-y-3">
-              {messages.map((message) => {
-                const id = getId(message);
-                return (
-                  <article key={id} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-blue-200 hover:shadow-sm">
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={'rounded-full px-3 py-1 text-xs font-black ' + statusBadgeClass(message.moderationStatus)}>{statusLabel[message.moderationStatus] || message.moderationStatus}</span>
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono font-bold text-slate-600">{shortId(message.senderId)} → {shortId(message.receiverId)}</span>
-                        </div>
-                        <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-800">{message.content}</p>
-                        <div className="mt-3 space-y-1">
-                          {(message.reports || []).map((report, index) => <p key={id + '-' + index} className="text-xs font-medium text-rose-600">Lý do: {report.reason}</p>)}
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <button onClick={() => resolveMessage(id, 'DISMISSED')} disabled={busyId === id} className={neutralButtonClass}>{renderActionIcon(id, <XCircle size={15} />)} Bỏ qua</button>
-                        <button onClick={() => resolveMessage(id, 'REVIEWED')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Đã xử lý</button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
-              {messages.length === 0 && <EmptyState title="Không có tin nhắn bị tố cáo" text="Tin nhắn vi phạm đang chờ xử lý sẽ hiển thị tại đây." />}
+              {filteredReports.length === 0 && <EmptyState title="Không có tố cáo đang chờ" text="Những báo cáo mới từ sinh viên sẽ xuất hiện ở đây." />}
             </div>
           ) : (
             <div className="space-y-4">
-              <label className="relative block max-w-xl">
-                <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={search} onChange={(event) => setSearch(event.target.value)} className="h-11 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm font-medium outline-none transition focus:border-blue-300 focus:ring-4 focus:ring-blue-50" placeholder="Tìm sinh viên theo tên, email, MSSV" />
-              </label>
               {!canBan ? (
                 <EmptyState title="Chưa có quyền khóa" text="Tài khoản này cần quyền CAN_BAN để thao tác." />
               ) : (
@@ -510,8 +653,22 @@ const ModerationDashboard: React.FC = () => {
       </div>
     </div>
   );
-
 };
+
+const ImageFallback = ({ label }: { label: string }) => (
+  <div className="flex h-full w-full flex-col items-center justify-center text-slate-400">
+    <PackageX size={32} />
+    <span className="mt-2 text-xs font-bold">{label}</span>
+  </div>
+);
+
+const InfoTile = ({ label, value, helper }: { label: string; value: string; helper: string }) => (
+  <div className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3">
+    <div className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</div>
+    <div className="mt-1 truncate text-sm font-black text-slate-800">{value}</div>
+    <div className="mt-0.5 truncate text-xs font-medium text-slate-500">{helper}</div>
+  </div>
+);
 
 const EmptyState = ({ title = 'Chưa có dữ liệu', text }: { title?: string; text: string }) => (
   <div className="grid min-h-56 place-items-center rounded-2xl border border-dashed border-slate-200 bg-slate-50/70 p-8 text-center">
