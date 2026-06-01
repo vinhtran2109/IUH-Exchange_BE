@@ -1,7 +1,7 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
-  ShoppingBag, ChevronRight, Package, TrendingUp, Timer, Lock, Users, Zap, Star, MapPin,
+  ShoppingBag, ChevronRight, Package, TrendingUp, Timer, Lock, Users, Star, MapPin, CheckCircle2, ShieldCheck, Flag,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { productService } from '../services/productService';
@@ -147,9 +147,9 @@ const Home: React.FC = () => {
           {/* Live stats */}
           <div className="mt-7 flex items-center justify-center gap-6 sm:gap-8 md:gap-10">
             {[
-              { label: 'Sản phẩm đang bán', value: loading ? '...' : `${stats.total > 0 ? stats.total.toLocaleString() : '--'}+` },
-              { label: 'Hệ thống Karma', value: <span className="flex items-center gap-1"><Zap size={14} className="text-yellow-300" />Minh bạch</span> },
-              { label: 'Cộng đồng IUH', value: 'Tin cậy' },
+              { label: 'Sản phẩm', value: loading ? '...' : `${stats.total > 0 ? stats.total.toLocaleString() : '--'}+` },
+              { label: 'Sinh viên', value: '30+' },
+              { label: 'Giao dịch', value: '15+' },
             ].map((s, i) => (
               <div key={i} className="text-center">
                 <div className="text-lg font-black text-white sm:text-xl md:text-2xl">{s.value}</div>
@@ -158,6 +158,29 @@ const Home: React.FC = () => {
             ))}
           </div>
         </motion.div>
+      </section>
+
+      {/* Trust signals */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            { icon: <ShieldCheck size={17} />, label: 'Xác thực email IUH' },
+            { icon: <Users size={17} />, label: 'Chỉ sinh viên IUH mới tham gia' },
+            { icon: <Star size={17} />, label: 'Hệ thống Karma uy tín' },
+            { icon: <MapPin size={17} />, label: 'Hỗ trợ đồ thất lạc' },
+            { icon: <Flag size={17} />, label: 'Báo cáo vi phạm' },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center gap-3 rounded-xl border border-slate-100 bg-slate-50 px-3 py-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                {item.icon}
+              </div>
+              <div className="flex min-w-0 items-center gap-1.5 text-sm font-bold text-slate-700">
+                <CheckCircle2 size={14} className="shrink-0 text-emerald-500" />
+                <span className="truncate">{item.label}</span>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
       {/* ── Feature cards ── */}
