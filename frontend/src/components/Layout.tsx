@@ -21,6 +21,7 @@ const Layout: React.FC = () => {
   const { theme, toggleTheme } = useThemeStore();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -56,16 +57,27 @@ const Layout: React.FC = () => {
       }
     });
 
+    const removeChatListener = chatService.addListener((msg) => {
+      const senderId = String(msg.senderId || '');
+      const receiverId = String((msg as any).receiverId || msg.recipientId || '');
+      if (!user?.id || !senderId || !receiverId) return;
+      if (senderId !== user.id && receiverId === user.id) {
+        setChatUnreadCount((count) => Math.min(count + 1, 99));
+      }
+    });
+
     const interval = setInterval(fetchNotifs, 120000);
     return () => {
       clearInterval(interval);
       removeNotifListener();
+      removeChatListener();
     };
-  }, [fetchNotifs, updateUser, isAuthenticated]);
+  }, [fetchNotifs, updateUser, isAuthenticated, user?.id]);
 
   useEffect(() => {
     if (!isAuthenticated) {
       setNotifications([]);
+      setChatUnreadCount(0);
       setShowNotifications(false);
     }
   }, [isAuthenticated]);
@@ -289,8 +301,19 @@ const Layout: React.FC = () => {
                   )}
                 </div>
 
-                <button onClick={() => chatService.triggerOpenChat('list', 'Hộp thư')} className="p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all">
+                <button
+                  onClick={() => {
+                    setChatUnreadCount(0);
+                    chatService.triggerOpenChat('list', 'Hộp thư');
+                  }}
+                  className="relative p-2.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-all"
+                >
                   <MessageSquare size={18} />
+                  {chatUnreadCount > 0 && (
+                    <span className="absolute top-1.5 right-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white ring-2 ring-white">
+                      {chatUnreadCount > 9 ? '9+' : chatUnreadCount}
+                    </span>
+                  )}
                 </button>
 
                 <Link to="/products/new" className="hidden sm:flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-sm shadow-indigo-200">
