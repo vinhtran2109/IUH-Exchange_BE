@@ -22,6 +22,10 @@ const mockKarmaHistoryModel = {
 
 vi.mock('../models/User.js', () => ({ User: mockUserModel }));
 vi.mock('../models/KarmaHistory.js', () => ({ KarmaHistory: mockKarmaHistoryModel }));
+vi.mock('../services/kafka.service.js', () => ({
+  publishUserEvent: vi.fn().mockResolvedValue(true),
+  initKafkaProducer: vi.fn().mockResolvedValue(true),
+}));
 
 vi.mock('@iuh-exchange/common', async (importOriginal) => {
   const actual = await importOriginal();

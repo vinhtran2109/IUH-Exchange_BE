@@ -14,6 +14,9 @@ const mockOfferModel = {
 
 vi.mock('../models/Product.js', () => ({ Product: mockProductModel }));
 vi.mock('../models/Offer.js', () => ({ Offer: mockOfferModel }));
+vi.mock('../services/kafka.service.js', () => ({
+  publishProductEvent: vi.fn().mockResolvedValue(true),
+}));
 vi.mock('@iuh-exchange/common', async (importOriginal) => {
   const actual = await importOriginal();
   return actual;
