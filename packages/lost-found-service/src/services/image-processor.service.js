@@ -28,7 +28,7 @@ import { findMatches } from './matching.service.js';
  *   'mock'            — Giả lập cho development/testing
  */
 const PROVIDER = process.env.IMAGE_ANALYSIS_PROVIDER || 'tesseract';
-const MATCH_THRESHOLD = parseFloat(process.env.MATCH_THRESHOLD) || 0.3;
+const MATCH_THRESHOLD = parseFloat(process.env.MATCH_THRESHOLD) || 0.6;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 2000; // 2s → 4s → 6s (Exponential Backoff)
 

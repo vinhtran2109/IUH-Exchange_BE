@@ -631,25 +631,7 @@ const eventHandlers = {
   },
 
   'lostfound.analyzed': async (payload) => {
-    const { userId, itemId, title, detectedType, studentId, confidence, type } = payload;
-
-    const label = detectedType ? ` (${detectedType})` : '';
-    const confidencePercent = Math.round((confidence || 0) * 100);
-
-    let message = `Bài đăng "${title}" đã được phân tích${label}. Độ tin cậy: ${confidencePercent}%.`;
-
-    if (studentId) {
-      message += ` Phát hiện MSSV: ${studentId}.`;
-    }
-
-    await sendNotification({
-      recipientId: userId,
-      title: 'Phân tích hoàn tất',
-      message,
-      type: 'SYSTEM',
-      targetId: itemId,
-      link: `/lost-found/${itemId}`,
-    });
+    const { itemId, title, studentId, type } = payload;
 
     // If MSSV found and item is FOUND, try to notify the owner of that student ID
     if (studentId && type === 'FOUND') {
@@ -678,8 +660,14 @@ const eventHandlers = {
 
     if (!matches?.length) return;
 
-    const matchCount = matches.length;
-    const bestScore = Math.round((matches[0]?.score || 0) * 100);
+    const reliableMatches = matches
+      .filter((match) => Number(match.score || 0) >= 0.6)
+      .sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+
+    if (!reliableMatches.length) return;
+
+    const matchCount = reliableMatches.length;
+    const bestScore = Math.round((reliableMatches[0]?.score || 0) * 100);
 
     await sendNotification({
       recipientId: userId,
@@ -691,7 +679,7 @@ const eventHandlers = {
     });
 
     const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
-    for (const match of matches.slice(0, 3)) {
+    for (const match of reliableMatches.slice(0, 2)) {
       if (match.ownerId && match.ownerId !== userId) {
         const matchScore = Math.round((match.score || 0) * 100);
         await sendNotification({

@@ -10,6 +10,13 @@ const STOP_WORDS = new Set([
   'một', 'cái', 'chiếc', 'bộ', 'đôi', 'cặp',
   'tôi', 'bạn', 'anh', 'chị', 'em', 'họ',
   'ở', 'tại', 'về', 'theo', 'sau', 'trước',
+  'va', 'cua', 'la', 'co', 'duoc', 'cho', 'voi', 'nay', 'do', 'tu',
+  'trong', 'tren', 'duoi', 'cung', 'nhu', 'hay', 'hoac', 'nhung',
+  'mot', 'cai', 'chiec', 'bo', 'doi', 'cap',
+  'toi', 'ban', 'anh', 'chi', 'em', 'ho',
+  'o', 'tai', 've', 'theo', 'sau', 'truoc',
+  'mat', 'nhat', 'tim', 'thay', 'vat', 'mon', 'bai', 'dang',
+  'khu', 'vuc', 'gan', 'quanh', 'loanh', 'nha', 'toa', 'ham', 'xe',
 ]);
 
 /**
@@ -57,6 +64,34 @@ function overlapRatio(sourceKeywords, targetKeywords) {
   return matches.length / sourceKeywords.length;
 }
 
+function keywordIntersection(sourceKeywords, targetKeywords) {
+  const targetSet = new Set(targetKeywords);
+  return sourceKeywords.filter((w) => targetSet.has(w));
+}
+
+function itemKeywords(item) {
+  const text = [
+    item.title,
+    item.description,
+    item.detectedType,
+    ...(item.tags || []),
+  ].filter(Boolean).join(' ');
+  return extractKeywords(text);
+}
+
+function categoriesCompatible(source, candidate) {
+  if (!source.category || !candidate.category) return true;
+  if (source.category === 'OTHER' || candidate.category === 'OTHER') return true;
+  return source.category === candidate.category;
+}
+
+function detectedTypesCompatible(source, candidate) {
+  const sourceType = normalizeText(source.detectedType || '');
+  const candidateType = normalizeText(candidate.detectedType || '');
+  if (!sourceType || !candidateType || sourceType === 'unknown' || candidateType === 'unknown') return true;
+  return sourceType === candidateType || sourceType.includes(candidateType) || candidateType.includes(sourceType);
+}
+
 /**
  * Normalize location for comparison (simplified).
  */
@@ -73,6 +108,21 @@ function normalizeLocation(loc) {
  * Không duplicate lại logic này ở chỗ khác (BUG FIX #9).
  */
 export function calculateMatchScore(source, candidate) {
+  if (!categoriesCompatible(source, candidate) || !detectedTypesCompatible(source, candidate)) {
+    return 0;
+  }
+
+  const sourceAllKeywords = itemKeywords(source);
+  const candidateAllKeywords = itemKeywords(candidate);
+  const sharedKeywords = keywordIntersection(sourceAllKeywords, candidateAllKeywords);
+  const sameSpecificCategory = source.category
+    && candidate.category
+    && source.category === candidate.category
+    && source.category !== 'OTHER';
+
+  if (sharedKeywords.length === 0) return 0;
+  if (!sameSpecificCategory && sharedKeywords.length < 2) return 0;
+
   let score = 0;
   let weights = 0;
 
@@ -140,7 +190,7 @@ export function calculateMatchScore(source, candidate) {
  * @returns {Array<{ item, score }>} Sorted by score descending
  */
 export async function findMatches(itemId, options = {}) {
-  const { limit = 10, minScore = 0.15 } = options;
+  const { limit = 10, minScore = 0.55 } = options;
 
   const source = await LostFoundItem.findById(itemId);
   if (!source) {
@@ -197,7 +247,7 @@ export async function findMatches(itemId, options = {}) {
  */
 export async function autoMatchOnCreate(item) {
   try {
-    const matches = await findMatches(item._id.toString(), { limit: 5, minScore: 0.2 });
+    const matches = await findMatches(item._id.toString(), { limit: 5, minScore: 0.6 });
     return matches;
   } catch (err) {
     logger.warn(`Auto-match failed for item ${item._id}: ${err.message}`);

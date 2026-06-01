@@ -26,12 +26,32 @@ const Layout: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const notificationsHydratedRef = useRef(false);
+  const knownNotificationIdsRef = useRef<Set<string>>(new Set());
 
   const fetchNotifs = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
       const res = await notificationService.getNotifications();
-      if (res.success) setNotifications(res.data);
+      if (res.success) {
+        const normalized: Notification[] = res.data.map((n: Notification) => normalizeNotification(n));
+        const knownIds = knownNotificationIdsRef.current;
+        const unseen = normalized.filter(n => n.id && !knownIds.has(n.id));
+        setNotifications(normalized);
+        normalized.forEach(n => {
+          if (n.id) knownIds.add(n.id);
+        });
+        if (notificationsHydratedRef.current && unseen.length > 0) {
+          const newestUnread = unseen.find(n => !n.isRead) || unseen[0];
+          if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
+          setNotificationToast(newestUnread);
+          notificationToastTimer.current = setTimeout(() => {
+            setNotificationToast(current => current?.id === newestUnread.id ? null : current);
+            notificationToastTimer.current = null;
+          }, 6500);
+        }
+        notificationsHydratedRef.current = true;
+      }
     } catch (e) {
       console.error('Lỗi fetch thông báo', e);
     }
@@ -44,6 +64,7 @@ const Layout: React.FC = () => {
 
     const removeNotifListener = chatService.addNotificationListener((notif: Notification) => {
       const normalized = normalizeNotification(notif);
+      if (normalized.id) knownNotificationIdsRef.current.add(normalized.id);
       setNotifications(prev => {
         const notificationId = normalized.id;
         if (notificationId && prev.some(n => n.id === notificationId)) return prev;
@@ -74,7 +95,7 @@ const Layout: React.FC = () => {
       }
     });
 
-    const interval = setInterval(fetchNotifs, 120000);
+    const interval = setInterval(fetchNotifs, 15000);
     return () => {
       clearInterval(interval);
       removeNotifListener();
@@ -89,6 +110,8 @@ const Layout: React.FC = () => {
       setChatUnreadCount(0);
       setNotificationToast(null);
       setShowNotifications(false);
+      notificationsHydratedRef.current = false;
+      knownNotificationIdsRef.current.clear();
     }
   }, [isAuthenticated]);
 
