@@ -22,7 +22,7 @@ import {
 } from '../services/adminService';
 import { useAuthStore } from '../store/authStore';
 
-type TabId = 'posts' | 'lostFound' | 'reports' | 'users';
+type TabId = 'postsPending' | 'postsApproved' | 'lostFound' | 'reports' | 'users';
 
 type ProductModerationData = {
   id: string;
@@ -110,7 +110,7 @@ const typeLabel: Record<string, string> = {
 
 const ModerationDashboard: React.FC = () => {
   const user = useAuthStore((state) => state.user);
-  const [activeTab, setActiveTab] = useState<TabId>('posts');
+  const [activeTab, setActiveTab] = useState<TabId>('postsPending');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [reports, setReports] = useState<ReportData[]>([]);
@@ -140,6 +140,16 @@ const ModerationDashboard: React.FC = () => {
       ].some((value) => normalizeSearch(value).includes(query))
     );
   }, [products, search]);
+
+  const pendingProductItems = useMemo(
+    () => filteredProducts.filter((item) => item.status === 'PENDING_APPROVAL'),
+    [filteredProducts]
+  );
+
+  const approvedProductItems = useMemo(
+    () => filteredProducts.filter((item) => item.status === 'AVAILABLE' || item.status === 'SOLD'),
+    [filteredProducts]
+  );
 
   const filteredLostFoundItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -229,6 +239,16 @@ const ModerationDashboard: React.FC = () => {
     }
   };
 
+  const deleteApprovedProduct = async (productId: string) => {
+    setBusyId(productId);
+    try {
+      await adminService.deleteProduct(productId);
+      setProducts((current) => current.filter((item) => getId(item) !== productId));
+    } finally {
+      setBusyId('');
+    }
+  };
+
   const closeLostFoundItem = async (itemId: string) => {
     setBusyId(itemId);
     try {
@@ -265,12 +285,14 @@ const ModerationDashboard: React.FC = () => {
   };
 
   const pendingProducts = products.filter((item) => item.status === 'PENDING_APPROVAL').length;
+  const approvedProducts = products.filter((item) => item.status === 'AVAILABLE' || item.status === 'SOLD').length;
   const openLostFound = lostFoundItems.filter((item) => item.status !== 'CLOSED' && item.status !== 'RESOLVED').length;
   const lockedUsers = users.filter((item) => item.isActive === false).length;
   const totalQueue = pendingProducts + reports.length + openLostFound;
 
   const tabs = [
-    { id: 'posts' as const, label: 'Bài đăng sản phẩm', description: 'Quản lý tất cả sản phẩm', icon: PackageX, count: canModeratePosts ? products.length : 0 },
+    { id: 'postsPending' as const, label: 'Bài chờ duyệt', description: 'Sản phẩm cần quyết định', icon: PackageX, count: canModeratePosts ? pendingProducts : 0 },
+    { id: 'postsApproved' as const, label: 'Bài đã duyệt', description: 'Bài đang hiển thị trên chợ', icon: CheckCircle2, count: canModeratePosts ? approvedProducts : 0 },
     { id: 'lostFound' as const, label: 'Mất / nhặt đồ', description: 'Tin mất đồ và tìm được đồ', icon: MapPin, count: lostFoundItems.length },
     { id: 'reports' as const, label: 'Tố cáo', description: 'Báo cáo từ sinh viên', icon: AlertTriangle, count: reports.length },
     { id: 'users' as const, label: 'Khóa người dùng', description: 'Tài khoản cần can thiệp', icon: UserRound, count: canBan ? users.length : 0 },
@@ -344,7 +366,8 @@ const ModerationDashboard: React.FC = () => {
     busyId === id ? <Loader2 size={15} className="animate-spin" /> : fallback;
 
   const searchPlaceholder = {
-    posts: 'Tìm sản phẩm, người bán, trạng thái...',
+    postsPending: 'Tìm bài chờ duyệt theo sản phẩm, người bán...',
+    postsApproved: 'Tìm bài đã duyệt theo sản phẩm, người bán...',
     lostFound: 'Tìm tin mất đồ, nhặt được, người đăng, vị trí...',
     reports: 'Tìm tố cáo theo lý do hoặc loại đối tượng...',
     users: 'Tìm sinh viên theo tên, email, MSSV...',
@@ -457,12 +480,12 @@ const ModerationDashboard: React.FC = () => {
                 <p className="mt-3 text-sm font-bold text-slate-500">Đang tải dữ liệu kiểm duyệt...</p>
               </div>
             </div>
-          ) : activeTab === 'posts' ? (
+          ) : activeTab === 'postsPending' || activeTab === 'postsApproved' ? (
             <div className="space-y-3">
               {!canModeratePosts ? (
                 <EmptyState title="Chưa có quyền duyệt bài" text="Tài khoản này cần quyền CAN_APPROVE_POST để thao tác." />
               ) : (
-                filteredProducts.map((product) => {
+                (activeTab === 'postsPending' ? pendingProductItems : approvedProductItems).map((product) => {
                   const id = getId(product);
                   const imageUrl = product.imageUrls?.[0] || '';
                   const sellerLabel = product.sellerName || product.sellerEmail || 'Chưa có tên người bán';
@@ -513,10 +536,7 @@ const ModerationDashboard: React.FC = () => {
                                 <button onClick={() => resolveProduct(id, 'APPROVE')} disabled={busyId === id} className={primaryButtonClass}>{renderActionIcon(id, <CheckCircle2 size={15} />)} Duyệt</button>
                               </>
                             ) : (
-                              <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-2.5 text-xs font-black text-slate-500">
-                                <CheckCircle2 size={15} />
-                                Không có thao tác bắt buộc
-                              </span>
+                              <button onClick={() => deleteApprovedProduct(id)} disabled={busyId === id} className={dangerButtonClass}>{renderActionIcon(id, <Trash2 size={15} />)} Gỡ bài</button>
                             )}
                           </div>
                         </div>
@@ -525,7 +545,8 @@ const ModerationDashboard: React.FC = () => {
                   );
                 })
               )}
-              {canModeratePosts && filteredProducts.length === 0 && <EmptyState title="Không có bài đăng phù hợp" text="Thử đổi từ khóa tìm kiếm hoặc làm mới dữ liệu." />}
+              {canModeratePosts && activeTab === 'postsPending' && pendingProductItems.length === 0 && <EmptyState title="Không có bài chờ duyệt" text="Các bài mới cần quyết định sẽ xuất hiện tại đây." />}
+              {canModeratePosts && activeTab === 'postsApproved' && approvedProductItems.length === 0 && <EmptyState title="Không có bài đã duyệt phù hợp" text="Các bài đang bán hoặc đã bán sẽ xuất hiện tại đây." />}
             </div>
           ) : activeTab === 'lostFound' ? (
             <div className="space-y-3">
