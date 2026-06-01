@@ -10,14 +10,16 @@ const TOPICS = {
 
 /**
  * Initialize the Kafka producer. Call once at startup.
+ * Throws on failure so the caller can decide to exit.
  */
 export async function initKafkaProducer() {
   try {
     producer = await createProducer('product-service');
     logger.info('Kafka producer initialized for product-service');
   } catch (err) {
-    logger.error(`Kafka producer init failed: ${err.message}`);
     producer = null;
+    logger.error(`Kafka producer init failed: ${err.message}`);
+    throw err; // propagate to caller
   }
 }
 
@@ -28,8 +30,9 @@ export async function initKafkaProducer() {
  */
 export async function publishProductEvent(topic, event) {
   if (!producer) {
-    logger.warn(`Kafka producer not available, skipping event: ${topic}`);
-    return;
+    const msg = `Kafka producer not available, cannot publish event: ${topic}`;
+    logger.error(msg);
+    throw new Error(msg);
   }
   try {
     await producer.send({
@@ -39,6 +42,7 @@ export async function publishProductEvent(topic, event) {
     logger.info(`Kafka event published: ${topic} for product ${event.id}`);
   } catch (err) {
     logger.error(`Kafka publish failed (${topic}): ${err.message}`);
+    throw err;
   }
 }
 

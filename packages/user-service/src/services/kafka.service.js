@@ -7,15 +7,17 @@ export async function initKafkaProducer() {
     producer = await createProducer('user-service');
     logger.info('Kafka producer initialized for user-service');
   } catch (err) {
-    logger.warn(`User Kafka producer init failed (non-fatal): ${err.message}`);
     producer = null;
+    logger.error(`User Kafka producer init failed: ${err.message}`);
+    throw err; // propagate to caller
   }
 }
 
 export async function publishUserEvent(topic, event) {
   if (!producer) {
-    logger.warn(`Kafka producer unavailable, skipping event: ${topic}`);
-    return;
+    const msg = `Kafka producer unavailable, cannot publish event: ${topic}`;
+    logger.error(msg);
+    throw new Error(msg);
   }
 
   try {
@@ -25,6 +27,7 @@ export async function publishUserEvent(topic, event) {
     });
     logger.info(`User event published: ${topic}`);
   } catch (err) {
-    logger.warn(`User event publish failed (${topic}): ${err.message}`);
+    logger.error(`User event publish failed (${topic}): ${err.message}`);
+    throw err;
   }
 }

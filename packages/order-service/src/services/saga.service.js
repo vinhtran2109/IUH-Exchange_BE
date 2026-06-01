@@ -21,6 +21,7 @@ let producer = null;
 
 /**
  * Initialize Kafka producer.
+ * Throws on failure so the caller can decide to retry or exit.
  */
 export async function initProducer() {
   try {
@@ -28,7 +29,8 @@ export async function initProducer() {
     logger.info('[Saga] Kafka producer ready');
   } catch (err) {
     producer = null;
-    logger.warn(`[Saga] Kafka producer init failed (non-fatal): ${err.message}`);
+    logger.error(`[Saga] Kafka producer init failed: ${err.message}`);
+    throw err; // propagate — caller must handle
   }
 }
 
@@ -39,6 +41,11 @@ export async function initProducer() {
  * @param {{ orderId: string, productId: string, buyerId: string, sellerId: string, price: number }} event
  */
 export async function publishOrderCreated(event) {
+  if (!producer) {
+    const msg = '[Saga] Kafka producer not initialized — cannot publish order.created';
+    logger.error(msg);
+    throw new Error(msg);
+  }
   try {
     await producer.send({
       topic: TOPICS.ORDER_CREATED,
@@ -51,7 +58,8 @@ export async function publishOrderCreated(event) {
     });
     logger.info(`[Saga] OrderCreatedEvent published: orderId=${event.orderId}`);
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, OrderCreatedEvent not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish order.created: ${err.message}`);
+    throw err;
   }
 }
 
@@ -61,6 +69,11 @@ export async function publishOrderCreated(event) {
  * @param {{ orderId: string, productId: string, reason: string }} event
  */
 export async function publishOrderCancelled(event) {
+  if (!producer) {
+    const msg = '[Saga] Kafka producer not initialized — cannot publish order.cancelled';
+    logger.error(msg);
+    throw new Error(msg);
+  }
   try {
     await producer.send({
       topic: TOPICS.ORDER_CANCELLED,
@@ -73,7 +86,8 @@ export async function publishOrderCancelled(event) {
     });
     logger.info(`[Saga] OrderCancelledEvent published: orderId=${event.orderId}`);
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, OrderCancelledEvent not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish order.cancelled: ${err.message}`);
+    throw err;
   }
 }
 
@@ -84,6 +98,11 @@ export async function publishOrderCancelled(event) {
  * @param {{ orderId: string, buyerId: string, sellerId: string, productId: string }} event
  */
 export async function publishOrderCompleted(event) {
+  if (!producer) {
+    const msg = '[Saga] Kafka producer not initialized — cannot publish order.completed';
+    logger.error(msg);
+    throw new Error(msg);
+  }
   try {
     await producer.send({
       topic: TOPICS.ORDER_COMPLETED,
@@ -98,11 +117,16 @@ export async function publishOrderCompleted(event) {
       `[Saga] OrderCompletedEvent published: orderId=${event.orderId}, buyerId=${event.buyerId}, sellerId=${event.sellerId}`
     );
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, OrderCompletedEvent not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish order.completed: ${err.message}`);
+    throw err;
   }
 }
 
 export async function publishOrderEvent(topic, event) {
+  if (!producer) {
+    logger.error(`[Saga] Kafka producer not initialized — cannot publish ${topic}`);
+    throw new Error(`[Saga] Kafka producer not initialized — cannot publish ${topic}`);
+  }
   try {
     await producer.send({
       topic,
@@ -110,11 +134,16 @@ export async function publishOrderEvent(topic, event) {
     });
     logger.info(`[Saga] ${topic} published: orderId=${event.orderId || event.id}`);
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, ${topic} not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish ${topic}: ${err.message}`);
+    throw err;
   }
 }
 
 export async function publishOrderDisputeOpened(event) {
+  if (!producer) {
+    logger.error('[Saga] Kafka producer not initialized — cannot publish order.dispute.opened');
+    throw new Error('[Saga] Kafka producer not initialized');
+  }
   try {
     await producer.send({
       topic: TOPICS.ORDER_DISPUTE_OPENED,
@@ -122,11 +151,16 @@ export async function publishOrderDisputeOpened(event) {
     });
     logger.info(`[Saga] OrderDisputeOpenedEvent published: orderId=${event.orderId}`);
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, OrderDisputeOpenedEvent not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish order.dispute.opened: ${err.message}`);
+    throw err;
   }
 }
 
 export async function publishOrderRefunded(event) {
+  if (!producer) {
+    logger.error('[Saga] Kafka producer not initialized — cannot publish order.refunded');
+    throw new Error('[Saga] Kafka producer not initialized');
+  }
   try {
     await producer.send({
       topic: TOPICS.ORDER_REFUNDED,
@@ -134,7 +168,8 @@ export async function publishOrderRefunded(event) {
     });
     logger.info(`[Saga] OrderRefundedEvent published: orderId=${event.orderId}`);
   } catch (err) {
-    logger.warn(`[Saga] Kafka unavailable, OrderRefundedEvent not published: ${err.message}`);
+    logger.error(`[Saga] Failed to publish order.refunded: ${err.message}`);
+    throw err;
   }
 }
 

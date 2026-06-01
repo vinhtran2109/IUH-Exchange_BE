@@ -10,13 +10,16 @@ const REPORT_RESOLVED_TOPIC = 'report.resolved';
 
 /**
  * Initialize Kafka producer. Call once at startup.
+ * Throws on failure so the caller can handle it.
  */
 export async function initKafka() {
   try {
     producer = await createProducer('lost-found-service');
     logger.info('Lost-found Kafka producer ready');
   } catch (err) {
-    logger.warn(`Kafka producer init failed (non-fatal): ${err.message}`);
+    producer = null;
+    logger.error(`Kafka producer init failed: ${err.message}`);
+    throw err; // propagate to caller
   }
 }
 

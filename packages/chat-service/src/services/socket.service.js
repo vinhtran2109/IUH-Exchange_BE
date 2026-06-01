@@ -66,6 +66,8 @@ export function publishNotification(notification) {
 
 /**
  * Send a notification to a specific user via their WebSocket sessions.
+ * Matches any /user/queue/* subscription (not just /user/queue/notifications)
+ * so it works regardless of which destination the client subscribed to.
  */
 export function sendNotificationToUser(userId, notification) {
   const connIds = userSessions.get(userId);
@@ -76,7 +78,8 @@ export function sendNotificationToUser(userId, notification) {
     if (!sessionData) continue;
 
     for (const sub of sessionData.subscriptions.values()) {
-      if (sub.destination === '/user/queue/notifications') {
+      // Match any /user/queue/* destination (notifications, messages, etc.)
+      if (sub.destination.startsWith('/user/queue/')) {
         const conn = sessionData.conn;
         if (conn) {
           sendFrame(conn, 'MESSAGE', {

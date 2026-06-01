@@ -65,13 +65,3 @@ process.on('uncaughtException', (err) => {
   logger.error('[ws-gateway] Uncaught exception:', err);
   process.exit(1);
 });
-
-// ── Process Error Handlers ──
-process.on('unhandledRejection', (reason) => {
-  logger.error('[ws-gateway] Unhandled rejection:', reason);
-});
-
-process.on('uncaughtException', (err) => {
-  logger.error('[ws-gateway] Uncaught exception:', err);
-  process.exit(1);
-});

@@ -163,7 +163,10 @@ function buildNotificationLink(type, targetId, explicitLink) {
 }
 
 async function sendNotification({ recipientId, title, message, type, targetId, link }) {
-  if (!recipientId) return;
+  if (!recipientId) {
+    logger.warn(`sendNotification skipped: missing recipientId (title=${title}, type=${type})`);
+    return;
+  }
 
   // Check user's notification preferences
   let shouldSendInApp = true;
@@ -226,6 +229,14 @@ async function sendNotification({ recipientId, title, message, type, targetId, l
 const eventHandlers = {
   'order.created': async (payload) => {
     const { sellerId, orderId } = payload;
+    if (!sellerId) {
+      logger.error(`[order.created] Missing sellerId in payload: ${JSON.stringify(payload)}`);
+      return;
+    }
+    if (!orderId) {
+      logger.error(`[order.created] Missing orderId in payload`);
+      return;
+    }
     const orderDetails = await buildOrderEmailDetails(payload, 'Chờ xác nhận');
     const result = await sendNotification({
       recipientId: sellerId,

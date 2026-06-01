@@ -86,13 +86,3 @@ process.on('uncaughtException', (err) => {
   logger.error('[product-service] Uncaught exception:', err);
   process.exit(1);
 });
-
-// ── Process Error Handlers ──
-process.on('unhandledRejection', (reason) => {
-  logger.error('[product-service] Unhandled rejection:', reason);
-});
-
-process.on('uncaughtException', (err) => {
-  logger.error('[product-service] Uncaught exception:', err);
-  process.exit(1);
-});
