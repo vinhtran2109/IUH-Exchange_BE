@@ -129,6 +129,11 @@ export const adminService = {
     return response.data;
   },
 
+  getUserProfile: async (userId: string) => {
+    const response = await api.get(`/users/${userId}`);
+    return response.data;
+  },
+
   // Reports Management
   getReports: async (status = "ALL", page = 1, size = 20, targetType?: string) => {
     const validPage = Math.max(1, page);

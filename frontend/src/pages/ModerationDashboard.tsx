@@ -46,6 +46,39 @@ const getList = <T,>(response: any): T[] => {
 
 const getId = (item: any) => String(item?.id || item?._id || '');
 
+const enrichProductsWithSellerProfiles = async (items: ProductModerationData[]) => {
+  const missingSellerIds = Array.from(new Set(
+    items
+      .filter((item) => item.sellerId && !item.sellerName && !item.sellerEmail)
+      .map((item) => String(item.sellerId))
+  ));
+  if (missingSellerIds.length === 0) return items;
+
+  const profileEntries = await Promise.all(
+    missingSellerIds.map(async (sellerId) => {
+      try {
+        const response = await adminService.getUserProfile(sellerId);
+        return [sellerId, response?.data] as const;
+      } catch {
+        return [sellerId, null] as const;
+      }
+    })
+  );
+  const profiles = new Map(profileEntries);
+
+  return items.map((item) => {
+    const profile = item.sellerId ? profiles.get(String(item.sellerId)) : null;
+    if (!profile) return item;
+    return {
+      ...item,
+      sellerName: item.sellerName || profile.name || '',
+      sellerStudentId: item.sellerStudentId || profile.studentId || '',
+      sellerEmail: item.sellerEmail || profile.email || '',
+      sellerAvatarUrl: item.sellerAvatarUrl || profile.avatarUrl || '',
+    };
+  });
+};
+
 const statusLabel: Record<string, string> = {
   PENDING: 'Chờ xử lý',
   REVIEWED: 'Đã xem',
@@ -88,7 +121,8 @@ const ModerationDashboard: React.FC = () => {
       ]);
       setReports(getList<ReportData>(reportRes));
       setMessages(getList<ReportedMessageData>(messageRes));
-      setProducts(getList<ProductModerationData>(productRes));
+      const productItems = getList<ProductModerationData>(productRes);
+      setProducts(await enrichProductsWithSellerProfiles(productItems));
       setUsers(getList<UserAdminData>(userRes));
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Không thể tải dữ liệu kiểm duyệt.');
