@@ -636,7 +636,8 @@ const AdminDashboard: React.FC = () => {
       return (
         targetUser.email.toLowerCase().includes(normalized) ||
         targetUser.name.toLowerCase().includes(normalized) ||
-        (targetUser.studentId || '').toLowerCase().includes(normalized)
+        (targetUser.studentId || '').toLowerCase().includes(normalized) ||
+        (targetUser.id || '').toLowerCase().includes(normalized)
       );
     });
   }, [users, searchQuery]);
@@ -1072,7 +1073,7 @@ const AdminDashboard: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Tìm email, tên, MSSV..."
+            placeholder="Tìm email, tên, MSSV, mã hệ thống..."
             className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-300 transition-all font-medium text-sm"
           />
         </div>

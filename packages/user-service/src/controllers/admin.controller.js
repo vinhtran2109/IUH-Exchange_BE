@@ -50,12 +50,16 @@ export async function listUsers(req, res) {
   const filter = { isDeleted: { $ne: true } };
 
   if (search) {
-    const regex = new RegExp(escapeRegex(search), 'i');
+    const normalizedSearch = String(search).trim();
+    const regex = new RegExp(escapeRegex(normalizedSearch), 'i');
     filter.$or = [
       { email: regex },
       { name: regex },
       { studentId: regex },
     ];
+    if (/^[0-9a-fA-F]{24}$/.test(normalizedSearch)) {
+      filter.$or.push({ _id: normalizedSearch });
+    }
   }
 
   if (role) {
