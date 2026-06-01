@@ -113,7 +113,38 @@ function broadcastToTopic(destination, command, headers, body, excludeConnId) {
 }
 
 /**
+ * Initialize Redis pub/sub for notification delivery only.
+ * Does NOT create a SockJS/STOMP server — WS connections are handled by ws-gateway.
+ */
+export function initNotificationSocket() {
+  redisPublisher = createRedis();
+  redisSubscriber = createRedis();
+
+  redisSubscriber.subscribe(REDIS_NOTIF_CHANNEL, (err) => {
+    if (err) {
+      logger.error('Failed to subscribe to Redis notification channel', { error: err.message });
+    } else {
+      logger.info('[chat-service] Subscribed to Redis notification channel (no local WS server)');
+    }
+  });
+
+  redisSubscriber.on('message', (channel, message) => {
+    if (channel !== REDIS_NOTIF_CHANNEL) return;
+    try {
+      const notification = JSON.parse(message);
+      const recipientId = String(notification.recipientId);
+      sendNotificationToUser(recipientId, notification);
+    } catch (err) {
+      logger.error('Error processing Redis notification message', { error: err.message });
+    }
+  });
+
+  logger.info('[chat-service] Notification socket initialized (Redis-only, no SockJS server)');
+}
+
+/**
  * Create and attach the SockJS + STOMP server to the given HTTP server.
+ * @deprecated Use initNotificationSocket() instead.
  *
  * @param {import('http').Server} httpServer
  * @returns {{ sockServer: Object, publishNotification: Function, sendNotificationToUser: Function }}

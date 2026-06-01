@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { MessageCircle, X } from 'lucide-react';
 import ChatList from './ChatList';
 import ChatWindow from './ChatWindow';
@@ -100,30 +100,33 @@ const ChatManager: React.FC = () => {
 
   return (
     <>
+      {/* Single child AnimatePresence — use key to distinguish list vs window */}
       <AnimatePresence mode="wait">
-        {showList && !activeChat && (
-          <ChatList
-            onClose={() => setShowList(false)}
-            onSelectUser={(id, name) => {
-              setActiveChat({ recipientId: id, recipientName: name });
-              setShowList(false);
-              setIncomingToast(null);
-            }}
-          />
-        )}
-
-        {activeChat && (
-          <ChatWindow
-            recipientId={activeChat.recipientId}
-            recipientName={activeChat.recipientName}
-            productContext={activeChat.productContext}
-            onClose={() => setActiveChat(null)}
-            onBack={() => {
-              setActiveChat(null);
-              setShowList(true);
-            }}
-          />
-        )}
+        {showList && !activeChat ? (
+          <motion.div key="chat-list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ChatList
+              onClose={() => setShowList(false)}
+              onSelectUser={(id, name) => {
+                setActiveChat({ recipientId: id, recipientName: name });
+                setShowList(false);
+                setIncomingToast(null);
+              }}
+            />
+          </motion.div>
+        ) : activeChat ? (
+          <motion.div key="chat-window" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <ChatWindow
+              recipientId={activeChat.recipientId}
+              recipientName={activeChat.recipientName}
+              productContext={activeChat.productContext}
+              onClose={() => setActiveChat(null)}
+              onBack={() => {
+                setActiveChat(null);
+                setShowList(true);
+              }}
+            />
+          </motion.div>
+        ) : null}
       </AnimatePresence>
 
       <AnimatePresence>
