@@ -22,8 +22,10 @@ const Layout: React.FC = () => {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [chatUnreadCount, setChatUnreadCount] = useState(0);
+  const [notificationToast, setNotificationToast] = useState<Notification | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchNotifs = useCallback(async () => {
     if (!isAuthenticated) return;
@@ -47,6 +49,12 @@ const Layout: React.FC = () => {
         if (notificationId && prev.some(n => n.id === notificationId)) return prev;
         return [normalized, ...prev];
       });
+      if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
+      setNotificationToast(normalized);
+      notificationToastTimer.current = setTimeout(() => {
+        setNotificationToast(current => current?.id === normalized.id ? null : current);
+        notificationToastTimer.current = null;
+      }, 6500);
       if (String(normalized.type || '').toUpperCase().includes('KARMA')) {
         refreshAccessToken()
           .then(() => api.get('/users/me'))
@@ -71,6 +79,7 @@ const Layout: React.FC = () => {
       clearInterval(interval);
       removeNotifListener();
       removeChatListener();
+      if (notificationToastTimer.current) clearTimeout(notificationToastTimer.current);
     };
   }, [fetchNotifs, updateUser, isAuthenticated, user?.id]);
 
@@ -78,6 +87,7 @@ const Layout: React.FC = () => {
     if (!isAuthenticated) {
       setNotifications([]);
       setChatUnreadCount(0);
+      setNotificationToast(null);
       setShowNotifications(false);
     }
   }, [isAuthenticated]);
@@ -159,6 +169,14 @@ const Layout: React.FC = () => {
     if (t.includes('KARMA'))   return '/karma-history';
     if (t.includes('REPORT'))  return '/my-reports';
     return null;
+  };
+
+  const openNotification = async (notification: Notification) => {
+    if (notification.id) await handleMarkRead(notification.id);
+    const route = getNotifRoute(notification);
+    if (route) navigate(route);
+    setNotificationToast(null);
+    setShowNotifications(false);
   };
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
@@ -258,12 +276,7 @@ const Layout: React.FC = () => {
                           notifications.slice(0, 8).map(n => (
                             <div 
                               key={n.id} 
-                              onClick={() => {
-                                if (n.id) handleMarkRead(n.id);
-                                const route = getNotifRoute(n);
-                                if (route) navigate(route);
-                                setShowNotifications(false);
-                              }}
+                              onClick={() => openNotification(n)}
                               className={`block p-3 cursor-pointer hover:bg-slate-50 transition-colors ${!n.isRead ? 'bg-indigo-50/40' : ''}`}
                             >
                               <div className="flex gap-2.5">
@@ -371,6 +384,38 @@ const Layout: React.FC = () => {
       <main className="container mx-auto px-6 py-8">
         <Outlet />
       </main>
+
+      {notificationToast && (
+        <div className="fixed right-6 top-20 z-60 w-[340px] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+          <button
+            type="button"
+            onClick={() => openNotification(notificationToast)}
+            className="flex w-full items-start gap-3 p-4 text-left transition hover:bg-slate-50"
+          >
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${notifIconBg(notificationToast.type)}`}>
+              {notifIcon(notificationToast.type)}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-black text-slate-900">Thông báo mới</p>
+                <span className="shrink-0 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-600">Mới</span>
+              </div>
+              <p className="line-clamp-2 text-sm leading-snug text-slate-600">{notificationToast.message}</p>
+              {getNotifRoute(notificationToast) && (
+                <p className="mt-2 text-xs font-bold text-indigo-600">Xem chi tiết →</p>
+              )}
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNotificationToast(null)}
+            className="absolute right-2 top-2 rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Đóng thông báo"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <footer className="bg-(--surface) border-t border-(--border) mt-auto py-12">
         <div className="container mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-8">
