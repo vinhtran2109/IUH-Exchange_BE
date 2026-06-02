@@ -91,6 +91,19 @@ export const lostFoundService = {
     return response.data;
   },
 
+  createAiAutoPost: async (data: {
+    type?: ItemType;
+    title: string;
+    location: string;
+    contactInfo?: string;
+    imageUrls?: string[];
+    consentImageAnalysis?: boolean;
+    consentMssvExtraction?: boolean;
+  }) => {
+    const response = await api.post("/lost-found/ai-post", data);
+    return response.data;
+  },
+
   // Cập nhật tin
   updateItem: async (id: string, data: Partial<LostFoundItem>) => {
     const response = await api.put(`/lost-found/${id}`, data);
