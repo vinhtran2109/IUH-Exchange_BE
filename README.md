@@ -363,10 +363,14 @@ kubectl apply -k k8s/base
 
 ## Tài liệu liên quan
 
-- `DOCKER_SETUP.md`: ghi chú setup Docker.
-- `system_design.md`: thiết kế hệ thống.
-- `PHASE1_ANALYSIS.md`, `plan.md`, `project_checklist.md`: phân tích và checklist phát triển.
-- `tests/load/README.md`: hướng dẫn load test.
+- `DOCKER_SETUP.md`: Ghi chú cấu hình Docker.
+- `system_design.md`: Thiết kế hệ thống tổng quan.
+- `PHASE1_ANALYSIS.md`, `plan.md`, `project_checklist.md`: Tài liệu phân tích và danh sách công việc phát triển.
+- [API_REFERENCE_GUIDE.md](file:///d:/D%E1%BB%AF%20li%E1%BB%87u/HK2_Nam4/BTnhomKTTKHT/IUH-Exchange_BE/docs/API_REFERENCE_GUIDE.md): Tài liệu hướng dẫn chi tiết toàn bộ API, Request/Response Schema và mã lỗi.
+- [DEVELOPER_HANDBOOK.md](file:///d:/D%E1%BB%AF%20li%E1%BB%87u/HK2_Nam4/BTnhomKTTKHT/IUH-Exchange_BE/docs/DEVELOPER_HANDBOOK.md): Cẩm nang lập trình viên (Kiến trúc Microservices, quy trình Saga, cơ chế Circuit Breaker, Logging ELK, v.v.).
+- [TESTING_PLAYBOOK.md](file:///d:/D%E1%BB%AF%20li%E1%BB%87u/HK2_Nam4/BTnhomKTTKHT/IUH-Exchange_BE/docs/TESTING_PLAYBOOK.md): Hướng dẫn kiểm thử đơn vị, kiểm thử tích hợp và kiểm thử hiệu năng/tải qua JMeter.
+- `tests/load/README.md`: Hướng dẫn cấu hình và chạy load test chi tiết.
+
 
 ## License
 

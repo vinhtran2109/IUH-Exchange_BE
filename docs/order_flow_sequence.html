@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sơ đồ Sequence - Luồng Tạo Đơn Hàng IUH-Exchange</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --border-color: #334155;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    header h1 {
+      font-size: 2.25rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.025em;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .tabs {
+      display: flex;
+      justify-content: center;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+    }
+
+    .tab-button {
+      background-color: var(--card-bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .tab-button:hover {
+      color: var(--text-main);
+      border-color: var(--text-muted);
+    }
+
+    .tab-button.active {
+      background-color: var(--primary);
+      color: var(--text-main);
+      border-color: var(--primary);
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+    }
+
+    .tab-content {
+      display: none;
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 0.75rem;
+      padding: 2rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .diagram-container {
+      background-color: #0b0f19;
+      border: 1px solid #1e293b;
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      overflow-x: auto;
+      margin-bottom: 1.5rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    .diagram-info {
+      margin-top: 1.5rem;
+    }
+
+    .diagram-info h3 {
+      font-size: 1.25rem;
+      color: var(--text-main);
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .diagram-info p {
+      color: var(--text-muted);
+      margin-bottom: 1rem;
+    }
+
+    .step-list {
+      list-style-type: none;
+    }
+
+    .step-item {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #334155;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .step-item:last-child {
+      border-bottom: none;
+    }
+
+    .step-num {
+      background-color: var(--primary);
+      color: var(--text-main);
+      font-weight: 700;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 0.85rem;
+    }
+
+    .step-num.success-num {
+      background-color: var(--success);
+    }
+
+    .step-num.danger-num {
+      background-color: var(--danger);
+    }
+
+    .step-desc {
+      color: var(--text-main);
+    }
+
+    .step-desc strong {
+      color: #fff;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-left: 0.5rem;
+    }
+
+    .badge-success { background-color: rgba(16, 185, 129, 0.2); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-danger { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.3); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
+
+    footer {
+      text-align: center;
+      margin-top: 3rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    /* Customizing Mermaid diagram styles in DOM */
+    .mermaid svg {
+      max-width: 100% !important;
+      height: auto !important;
+    }
+  </style>
+
+  <!-- Import Mermaid JS from CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    // Initialize Mermaid with Dark Mode Configuration
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: {
+        background: '#0b0f19',
+        primaryColor: '#1e293b',
+        primaryTextColor: '#f8fafc',
+        lineColor: '#475569',
+        actorBorder: '#334155',
+        actorBkg: '#1e293b',
+        actorTextColor: '#f8fafc',
+        signalColor: '#6366f1',
+        signalTextColor: '#94a3b8',
+        labelBoxBkgColor: '#0f172a',
+        labelBoxBorderColor: '#334155',
+        labelTextColor: '#f8fafc',
+        loopBkgColor: '#1e293b',
+        noteBkgColor: '#1e293b',
+        noteBorderColor: '#475569',
+        noteTextColor: '#94a3b8'
+      }
+    });
+
+    // Javascript for switching tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+
+      document.querySelector(`button[onclick="switchTab('${tabId}')"]`).classList.add('active');
+      document.getElementById(tabId).classList.add('active');
+    }
+  </script>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>Sơ đồ Sequence - Luồng Nghiệp Vụ Đơn Hàng</h1>
+      <p>Hệ thống Trao đổi Đồ dùng Sinh viên IUH-Exchange (Microservices Architecture)</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-button active" onclick="switchTab('tab-create')">1. Tạo & Giữ Chỗ Sản Phẩm</button>
+      <button class="tab-button" onclick="switchTab('tab-confirm')">2. Người Bán Xác Nhận</button>
+      <button class="tab-button" onclick="switchTab('tab-compensation')">3. Lỗi Giữ Chỗ & Bù Trừ</button>
+      <button class="tab-button" onclick="switchTab('tab-cancel')">4. Hủy & Hết Hạn</button>
+    </div>
+
+    <!-- TAB 1: TẠO & GIỮ CHỖ SẢN PHẨM -->
+    <div id="tab-create" class="tab-content active">
+      <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Buyer as Người mua (Buyer)
+    participant Gateway as API Gateway
+    participant Redis as Redis (Idempotency)
+    participant OrderSvc as Order Service
+    participant ProdSvc as Product Service
+    participant Kafka as Kafka Broker
+
+    Note over Buyer, OrderSvc: PHẦN A: REST API KHỞI TẠO ĐƠN HÀNG SƠ BỘ
+    Buyer->>Gateway: POST /api/v1/orders (idempotencyKey, productId,...)
+    Gateway->>OrderSvc: Chuyển tiếp request với x-user-id (Buyer)
+    activate OrderSvc
+    OrderSvc->>Redis: Check & Acquire Idempotency Key (24h TTL)
+    Redis-->>OrderSvc: Key hợp lệ (Chưa tồn tại trùng lặp)
+    
+    OrderSvc->>ProdSvc: HTTP GET /api/v1/products/{productId} (Pre-check)
+    ProdSvc-->>OrderSvc: 200 OK (Product Info & status = AVAILABLE)
+    
+    OrderSvc->>OrderSvc: Kiểm tra Buyer != Seller (Tránh tự mua)
+    OrderSvc->>OrderSvc: Lưu đơn hàng MongoDB (status = PENDING)
+    
+    OrderSvc->>Kafka: Publish topic: order.created (OrderCreatedEvent)
+    OrderSvc->>Redis: Cập nhật idempotencyKey -> orderId thực tế
+    
+    OrderSvc-->>Gateway: 201 Created (Thông tin đơn hàng PENDING)
+    Gateway-->>Buyer: 201 Created (Hiển thị màn hình chờ xử lý)
+    deactivate OrderSvc
+
+    Note over ProdSvc, OrderSvc: PHẦN B: GIỮ CHỖ SẢN PHẨM BẤT ĐỒNG BỘ (SAGA CHOREOGRAPHY)
+    Kafka->>ProdSvc: Consume topic: order.created
+    activate ProdSvc
+    ProdSvc->>ProdSvc: Kiểm tra trạng thái Product == AVAILABLE
+    ProdSvc->>ProdSvc: Cập nhật Product: status = RESERVED, reservedOrderId = orderId
+    ProdSvc->>Kafka: Publish topic: product.reserved (ProductReservedEvent)
+    ProdSvc->>Kafka: Publish topic: product.updated (Clear Redis Cache)
+    deactivate ProdSvc
+
+    Kafka->>OrderSvc: Consume topic: product.reserved
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Cập nhật Order: status = AWAITING_SELLER
+    OrderSvc->>Kafka: Publish topic: order.updated (Notify cho Seller)
+    deactivate OrderSvc
+        </pre>
+      </div>
+
+      <div class="diagram-info">
+        <h3>Giải thích luồng đặt hàng & giữ chỗ <span class="badge badge-success">Thành công</span></h3>
+        <ul class="step-list">
+          <li class="step-item">
+            <span class="step-num success-num">1-5</span>
+            <div class="step-desc">Người mua điền thông tin đặt hàng và gửi request. <strong>API Gateway</strong> xác thực người dùng rồi chuyển tiếp sang <strong>Order Service</strong>.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">6</span>
+            <div class="step-desc"><strong>Order Service</strong> kiểm tra trùng lặp trên <strong>Redis Cache</strong> bằng <code>idempotencyKey</code> để loại bỏ các request nhấn đúp chuột liên tục.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">7</span>
+            <div class="step-desc">Gửi HTTP Request đồng bộ lấy thông tin từ <strong>Product Service</strong> để tiền kiểm tra xem sản phẩm còn hàng (`AVAILABLE`) và lấy thông tin người bán.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">8-9</span>
+            <div class="step-desc">Kiểm tra hợp lệ rồi lưu đơn hàng vào MongoDB với trạng thái ban đầu là <strong>PENDING</strong>.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">10-12</span>
+            <div class="step-desc">Bắn sự kiện khởi động Saga `order.created` qua <strong>Kafka</strong> và ngay lập tức phản hồi về cho Client mã trạng thái <strong>201 Created</strong> để giảm thời gian phản hồi (chờ giữ chỗ bất đồng bộ).</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">13</span>
+            <div class="step-desc"><strong>Product Service</strong> nhận sự kiện từ Kafka, thực hiện khóa sản phẩm (chuyển sang `RESERVED` và gắn `reservedOrderId`), phát sự kiện xác nhận giữ chỗ thành công `product.reserved`.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">14</span>
+            <div class="step-desc"><strong>Order Service</strong> nhận sự kiện xác nhận từ Kafka, chuyển trạng thái đơn hàng sang <strong>`AWAITING_SELLER`</strong> (Đang đợi người bán đồng ý giao dịch).</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TAB 2: NGƯỜI BÁN XÁC NHẬN -->
+    <div id="tab-confirm" class="tab-content">
+      <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Seller as Người bán (Seller)
+    participant Gateway as API Gateway
+    participant OrderSvc as Order Service
+    participant ProdSvc as Product Service
+    participant Kafka as Kafka Broker
+
+    Seller->>Gateway: POST /api/v1/orders/{orderId}/confirm
+    Gateway->>OrderSvc: Chuyển tiếp request với x-user-id (Seller)
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Kiểm tra status == AWAITING_SELLER
+    OrderSvc->>OrderSvc: Cập nhật Order: status = COMPLETED
+    OrderSvc->>Kafka: Publish topic: order.completed (OrderCompletedEvent)
+    OrderSvc-->>Gateway: 200 OK (Đơn hàng đã hoàn tất thành công)
+    Gateway-->>Seller: 200 OK
+    deactivate OrderSvc
+
+    Kafka->>ProdSvc: Consume topic: order.completed
+    activate ProdSvc
+    ProdSvc->>ProdSvc: Cập nhật Product: status = SOLD
+    ProdSvc->>Kafka: Publish topic: product.updated (Clear Redis Cache)
+    deactivate ProdSvc
+        </pre>
+      </div>
+
+      <div class="diagram-info">
+        <h3>Giải thích luồng hoàn tất giao dịch <span class="badge badge-success">Giao dịch thành công</span></h3>
+        <ul class="step-list">
+          <li class="step-item">
+            <span class="step-num success-num">1-3</span>
+            <div class="step-desc">Người bán bàn giao sản phẩm tại điểm hẹn và nhấn nút xác nhận. API Gateway gửi yêu cầu đến <strong>Order Service</strong>.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">4-5</span>
+            <div class="step-desc"><strong>Order Service</strong> kiểm tra quyền sở hữu và chuyển đơn hàng sang trạng thái cuối cùng là <strong>COMPLETED</strong>, sau đó phát đi sự kiện `order.completed` lên Kafka.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">6-8</span>
+            <div class="step-desc"><strong>Product Service</strong> nhận sự kiện hoàn thành, chuyển trạng thái sản phẩm sang <strong>`SOLD`</strong> (Đã bán vĩnh viễn), đồng thời xóa cache trong Redis để cập nhật danh sách hiển thị trên giao diện người dùng.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TAB 3: LỖI GIỮ CHỖ & BÙ TRỪ -->
+    <div id="tab-compensation" class="tab-content">
+      <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Buyer as Người mua (Buyer)
+    participant Gateway as API Gateway
+    participant OrderSvc as Order Service
+    participant ProdSvc as Product Service
+    participant Kafka as Kafka Broker
+
+    Buyer->>Gateway: Đặt mua sản phẩm X
+    Gateway->>OrderSvc: Chuyển tiếp yêu cầu tạo đơn
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Tạo Order PENDING & gửi order.created
+    OrderSvc-->>Buyer: 201 Created (Chờ hệ thống giữ sản phẩm)
+    deactivate OrderSvc
+
+    %% Sự cố giữ chỗ do sản phẩm đã bị khóa bởi người khác trước đó
+    Note over ProdSvc, OrderSvc: SỰ CỐ: SẢN PHẨM KHÔNG CÒN KHẢ DỤNG (ĐÃ BÁN/ĐÃ KHÓA)
+    Kafka->>ProdSvc: Consume topic: order.created
+    activate ProdSvc
+    ProdSvc->>ProdSvc: Kiểm tra thấy Product có status != AVAILABLE
+    ProdSvc->>Kafka: Publish topic: product.reserve.failed (ReserveFailedEvent)
+    deactivate ProdSvc
+
+    %% Giao dịch bù trừ (Compensation)
+    Note over OrderSvc, Kafka: GIAO DỊCH BÙ TRỪ (ROLLBACK TRẠNG THÁI)
+    Kafka->>OrderSvc: Consume topic: product.reserve.failed
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Hủy đơn: status = CANCELLED (Lý do: Hết hàng)
+    OrderSvc->>Kafka: Publish topic: order.cancelled (Thông báo cho Buyer)
+    deactivate OrderSvc
+        </pre>
+      </div>
+
+      <div class="diagram-info">
+        <h3>Giải thích luồng bù trừ (Compensation) <span class="badge badge-danger">Rollback thất bại</span></h3>
+        <p>Đây là kịch bản trùng lịch (concurrent order) khi hai người cùng bấm mua một sản phẩm cực kì sát giờ nhau, hoặc sản phẩm vừa bị ẩn đi ngay trong lúc đặt hàng.</p>
+        <ul class="step-list">
+          <li class="step-item">
+            <span class="step-num danger-num">1-4</span>
+            <div class="step-desc">Đơn hàng ban đầu vẫn được ghi nhận ở dạng `PENDING` và bắn sự kiện để chờ Product Service khóa chỗ.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num danger-num">5-7</span>
+            <div class="step-desc"><strong>Product Service</strong> nhận sự kiện nhưng phát hiện sản phẩm đã bị người đặt trước chiếm chỗ (`status` hiện tại là `RESERVED` hoặc `SOLD`). Service không thực hiện ghi đè mà lập tức phát ra sự kiện lỗi <strong>`product.reserve.failed`</strong> lên Kafka.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num danger-num">8-9</span>
+            <div class="step-desc"><strong>Order Service</strong> nhận sự kiện thất bại từ Kafka, chạy quy trình **Bù Trừ (Compensating Transaction)**: Chuyển trạng thái đơn hàng của người thứ hai về <strong>`CANCELLED`</strong> kèm lý do sản phẩm đã hết hàng.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- TAB 4: HỦY & HẾT HẠN GIỮ CHỖ -->
+    <div id="tab-cancel" class="tab-content">
+      <div class="diagram-container">
+        <pre class="mermaid">
+sequenceDiagram
+    autonumber
+    actor Actor as Người mua/Người bán
+    participant Gateway as API Gateway
+    participant OrderSvc as Order Service
+    participant ProdSvc as Product Service
+    participant Kafka as Kafka Broker
+
+    Note over Actor, ProdSvc: KỊCH BẢN A: CHỦ ĐỘNG HỦY ĐƠN / TỪ CHỐI ĐƠN
+    Actor->>Gateway: POST /api/v1/orders/{orderId}/cancel
+    Gateway->>OrderSvc: Chuyển tiếp request hủy
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Cập nhật Order: status = CANCELLED
+    OrderSvc->>Kafka: Publish topic: order.cancelled (OrderCancelledEvent)
+    OrderSvc-->>Gateway: 200 OK
+    deactivate OrderSvc
+
+    Kafka->>ProdSvc: Consume topic: order.cancelled
+    activate ProdSvc
+    ProdSvc->>ProdSvc: Giải phóng: status = AVAILABLE, reservedOrderId = null
+    ProdSvc->>Kafka: Publish topic: product.updated (Clear Cache)
+    deactivate ProdSvc
+
+    Note over ProdSvc, OrderSvc: KỊCH BẢN B: TỰ ĐỘNG HỦY DO HẾT HẠN GIỮ CHỖ (TTL 30 PHÚT)
+    activate ProdSvc
+    Note over ProdSvc: Cron Job quét thấy Product RESERVED đã quá hạn
+    ProdSvc->>ProdSvc: Reset Product: status = AVAILABLE, reservedOrderId = null
+    ProdSvc->>Kafka: Publish topic: product.reserve.expired (ReserveExpiredEvent)
+    deactivate ProdSvc
+
+    Kafka->>OrderSvc: Consume topic: product.reserve.expired
+    activate OrderSvc
+    OrderSvc->>OrderSvc: Tự động cập nhật Order: status = CANCELLED (Quá hạn)
+    OrderSvc->>Kafka: Publish topic: order.cancelled
+    deactivate OrderSvc
+        </pre>
+      </div>
+
+      <div class="diagram-info">
+        <h3>Giải thích luồng giải phóng & hủy đơn hàng <span class="badge badge-warning">Giải phóng & Hủy đơn</span></h3>
+        <ul class="step-list">
+          <li class="step-item">
+            <span class="step-num success-num">Kịch bản A</span>
+            <div class="step-desc">Khi một trong hai bên chủ động nhấn hủy đơn (hoặc người bán từ chối bán): <strong>Order Service</strong> chuyển đơn hàng thành <strong>`CANCELLED`</strong> và phát sự kiện `order.cancelled`. <strong>Product Service</strong> nhận sự kiện này và khôi phục sản phẩm về trạng thái tự do <strong>`AVAILABLE`</strong> để người khác có thể đặt mua.</div>
+          </li>
+          <li class="step-item">
+            <span class="step-num success-num">Kịch bản B</span>
+            <div class="step-desc">Nếu sản phẩm đã bị giữ chỗ mà Người bán "treo" đơn không xác nhận. Tác vụ ngầm (Cron) của <strong>Product Service</strong> tự động khôi phục sản phẩm sang <strong>`AVAILABLE`</strong> sau 30 phút, đồng thời phát sự kiện `product.reserve.expired` để <strong>Order Service</strong> cập nhật hủy đơn hàng tương ứng.</div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      <p>&copy; 2026 IUH-Exchange - Sơ đồ thiết kế hệ thống Microservices & Saga Choreography</p>
+    </footer>
+  </div>
+
+</body>
+</html>
