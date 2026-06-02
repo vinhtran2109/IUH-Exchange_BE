@@ -79,6 +79,75 @@ function itemKeywords(item) {
   return extractKeywords(text);
 }
 
+const ITEM_TYPE_RULES = [
+  {
+    type: 'keys',
+    categories: ['KEYS'],
+    keywords: ['chia', 'khoa', 'key', 'keys', 'smartkey', 'remote'],
+  },
+  {
+    type: 'wallet',
+    categories: ['ACCESSORIES'],
+    keywords: ['vi', 'wallet', 'bop'],
+  },
+  {
+    type: 'student_card',
+    categories: ['DOCUMENTS'],
+    keywords: ['mssv', 'sinh', 'vien', 'student', 'card', 'the', 'sv'],
+  },
+  {
+    type: 'phone',
+    categories: ['ELECTRONICS'],
+    keywords: ['dien', 'thoai', 'phone', 'iphone', 'samsung'],
+  },
+  {
+    type: 'earbuds',
+    categories: ['ELECTRONICS'],
+    keywords: ['tai', 'nghe', 'airpod', 'earbud', 'headphone'],
+  },
+  {
+    type: 'book',
+    categories: ['DOCUMENTS'],
+    keywords: ['sach', 'giao', 'trinh', 'book', 'textbook'],
+  },
+  {
+    type: 'bag',
+    categories: ['BAGS'],
+    keywords: ['balo', 'bag', 'tui', 'cap'],
+  },
+  {
+    type: 'glasses',
+    categories: ['ACCESSORIES'],
+    keywords: ['kinh', 'glasses'],
+  },
+];
+
+function inferItemType(item) {
+  const detected = normalizeText(item.detectedType || '');
+  const category = String(item.category || '').toUpperCase();
+  const keywords = new Set(itemKeywords(item));
+
+  for (const rule of ITEM_TYPE_RULES) {
+    if (detected && (detected === rule.type || rule.keywords.some((word) => detected.includes(word)))) {
+      return rule.type;
+    }
+  }
+
+  for (const rule of ITEM_TYPE_RULES) {
+    if (rule.keywords.some((word) => keywords.has(word))) {
+      return rule.type;
+    }
+  }
+
+  for (const rule of ITEM_TYPE_RULES) {
+    if (rule.categories.includes(category)) {
+      return rule.type;
+    }
+  }
+
+  return '';
+}
+
 function categoriesCompatible(source, candidate) {
   if (!source.category || !candidate.category) return true;
   if (source.category === 'OTHER' || candidate.category === 'OTHER') return true;
@@ -90,6 +159,13 @@ function detectedTypesCompatible(source, candidate) {
   const candidateType = normalizeText(candidate.detectedType || '');
   if (!sourceType || !candidateType || sourceType === 'unknown' || candidateType === 'unknown') return true;
   return sourceType === candidateType || sourceType.includes(candidateType) || candidateType.includes(sourceType);
+}
+
+function inferredTypesCompatible(source, candidate) {
+  const sourceType = inferItemType(source);
+  const candidateType = inferItemType(candidate);
+  if (!sourceType || !candidateType) return true;
+  return sourceType === candidateType;
 }
 
 /**
@@ -108,7 +184,7 @@ function normalizeLocation(loc) {
  * Không duplicate lại logic này ở chỗ khác (BUG FIX #9).
  */
 export function calculateMatchScore(source, candidate) {
-  if (!categoriesCompatible(source, candidate) || !detectedTypesCompatible(source, candidate)) {
+  if (!categoriesCompatible(source, candidate) || !detectedTypesCompatible(source, candidate) || !inferredTypesCompatible(source, candidate)) {
     return 0;
   }
 
@@ -119,9 +195,10 @@ export function calculateMatchScore(source, candidate) {
     && candidate.category
     && source.category === candidate.category
     && source.category !== 'OTHER';
+  const sameInferredType = inferItemType(source) && inferItemType(source) === inferItemType(candidate);
 
   if (sharedKeywords.length === 0) return 0;
-  if (!sameSpecificCategory && sharedKeywords.length < 2) return 0;
+  if (!sameSpecificCategory && !sameInferredType && sharedKeywords.length < 2) return 0;
 
   let score = 0;
   let weights = 0;
@@ -163,7 +240,15 @@ export function calculateMatchScore(source, candidate) {
     weights += 15;
   }
 
-  // 5. Location similarity (weight: 5)
+  // 5. Inferred item type match (weight: 20)
+  // Helps obvious pairs such as "chìa khóa" vs "chùm chìa khóa" without lowering
+  // the global threshold for unrelated categories.
+  if (sameInferredType) {
+    score += 20;
+    weights += 20;
+  }
+
+  // 6. Location similarity (weight: 5)
   const sourceLoc = normalizeLocation(source.location);
   const candidateLoc = normalizeLocation(candidate.location);
   if (sourceLoc && candidateLoc) {

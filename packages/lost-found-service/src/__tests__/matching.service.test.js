@@ -41,7 +41,7 @@ vi.mock('@iuh-exchange/common', () => ({
   },
 }));
 
-import { findMatches, autoMatchOnCreate } from '../services/matching.service.js';
+import { findMatches, autoMatchOnCreate, calculateMatchScore } from '../services/matching.service.js';
 import { LostFoundItem } from '../models/LostFound.js';
 
 describe('matching.service', () => {
@@ -146,6 +146,43 @@ describe('matching.service', () => {
       const matches = await findMatches('item-10', { minScore: 0.1 });
       expect(matches.length).toBeGreaterThan(0);
       expect(matches[0].item.type).toBe('LOST');
+    });
+
+    it('should match key posts even when wording and location are slightly different', async () => {
+      const lostItem = {
+        _id: 'lost-key',
+        type: 'LOST',
+        title: 'Mất chìa khóa',
+        description: 'Chìa có doraemon',
+        category: 'KEYS',
+        tags: [],
+        location: 'Hầm để xe tòa trung tâm',
+        status: 'OPEN',
+      };
+
+      const foundItem = {
+        _id: 'found-key',
+        type: 'FOUND',
+        title: 'Nhặt được chùm chìa khóa',
+        description: 'Mình nhặt được chùm chìa khóa trưa ngày 01/06/2026 ở tầng hầm tòa X',
+        category: 'KEYS',
+        tags: [],
+        location: 'Tầng hầm tòa X',
+        status: 'OPEN',
+      };
+
+      LostFoundItem.findById.mockResolvedValue(lostItem);
+      LostFoundItem.find.mockReturnValue({
+        sort: vi.fn().mockReturnThis(),
+        limit: vi.fn().mockResolvedValue([foundItem]),
+      });
+
+      const score = calculateMatchScore(lostItem, foundItem);
+      expect(score).toBeGreaterThanOrEqual(0.5);
+
+      const matches = await findMatches('lost-key', { minScore: 0.5 });
+      expect(matches).toHaveLength(1);
+      expect(matches[0].item._id).toBe('found-key');
     });
 
     it('should score higher for items with more similarity', async () => {
