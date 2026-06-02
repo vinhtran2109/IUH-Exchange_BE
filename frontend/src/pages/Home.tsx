@@ -253,7 +253,7 @@ const Home: React.FC = () => {
             </div>
           ) : visibleActivityProducts.length > 0 ? (
             <div className="grid gap-3 lg:grid-cols-[1.35fr_1fr_1fr]">
-              <AnimatePresence mode="wait">
+              <AnimatePresence>
                 {visibleActivityProducts.map((product, index) => (
                   <motion.div
                     key={`${product.id}-${index}-${activityIndex}`}

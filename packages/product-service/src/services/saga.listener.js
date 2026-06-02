@@ -27,8 +27,12 @@ async function invalidateProductCaches(productId) {
 }
 
 async function publishProductStatusChanged(product) {
-  await invalidateProductCaches(product._id.toString());
-  await publishProductEvent('product.updated', productStatusEvent(product));
+  await invalidateProductCaches(product._id.toString()).catch(e => logger.warn(`Cache invalidation failed: ${e.message}`));
+  try {
+    await publishProductEvent('product.updated', productStatusEvent(product));
+  } catch (e) {
+    logger.error(`Failed to publish product.updated: ${e.message}`);
+  }
 }
 
 /**
@@ -84,19 +88,25 @@ async function handleOrderCreated(payload) {
   const product = await Product.findById(productId);
   if (!product) {
     logger.warn(`[SAGA] Product not found: ${productId}`);
-    await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product not found' });
+    try {
+      await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product not found' });
+    } catch (e) { logger.error(`[SAGA] Failed to publish product.reserve.failed: ${e.message}`); }
     return;
   }
 
   if ((product.status === 'RESERVED' || product.status === 'PENDING') && product.reservedOrderId === orderId) {
     logger.info(`[SAGA] Product already reserved: ${productId}, skipping`);
-    await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: product.sellerId, buyerId });
+    try {
+      await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: product.sellerId, buyerId });
+    } catch (e) { logger.error(`[SAGA] Failed to publish product.reserved: ${e.message}`); }
     return;
   }
 
   if (product.status !== 'AVAILABLE') {
     logger.warn(`[SAGA] Product not available: ${productId}, status=${product.status}`);
-    await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: `Product not available (status=${product.status})` });
+    try {
+      await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: `Product not available (status=${product.status})` });
+    } catch (e) { logger.error(`[SAGA] Failed to publish product.reserve.failed: ${e.message}`); }
     return;
   }
 
@@ -113,13 +123,17 @@ async function handleOrderCreated(payload) {
   );
 
   if (!reserved) {
-    await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product was reserved by another order' });
+    try {
+      await publishProductEvent('product.reserve.failed', { id: orderId, orderId, productId, reason: 'Product was reserved by another order' });
+    } catch (e) { logger.error(`[SAGA] Failed to publish product.reserve.failed: ${e.message}`); }
     return;
   }
   logger.info(`[SAGA] Product reserved: ${productId}`);
-  await publishProductStatusChanged(reserved);
+  await publishProductStatusChanged(reserved).catch(e => logger.error(`[SAGA] publishProductStatusChanged failed: ${e.message}`));
 
-  await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: reserved.sellerId, buyerId });
+  try {
+    await publishProductEvent('product.reserved', { id: orderId, orderId, productId, sellerId: reserved.sellerId, buyerId });
+  } catch (e) { logger.error(`[SAGA] Failed to publish product.reserved: ${e.message}`); }
 }
 
 async function handleOrderCompleted(payload) {

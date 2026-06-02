@@ -368,14 +368,14 @@ app.use(errorHandler);
 // chat and notification STOMP destinations.
 // ────────────────────────────────────────────────────────
 
-const CHAT_SERVICE_URL = SERVICES.chat;
+const WS_GATEWAY_URL = process.env.WS_GATEWAY_URL || 'http://localhost:3007';
 
 // Unified SockJS proxy — handles BOTH HTTP-based transports (xhr-streaming,
 // xhr-polling, etc.) AND WebSocket upgrade in a single proxy instance.
 // Using ws: true lets http-proxy-middleware manage the upgrade lifecycle
 // properly instead of a fragile manual server.on('upgrade') handler.
 const sockjsProxy = createProxyMiddleware({
-  target: CHAT_SERVICE_URL,
+  target: WS_GATEWAY_URL,
   changeOrigin: true,
   ws: true,
   timeout: 30_000,

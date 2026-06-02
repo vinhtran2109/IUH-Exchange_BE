@@ -247,7 +247,7 @@ export async function findMatches(itemId, options = {}) {
  */
 export async function autoMatchOnCreate(item) {
   try {
-    const matches = await findMatches(item._id.toString(), { limit: 5, minScore: 0.6 });
+    const matches = await findMatches(item._id.toString(), { limit: 5, minScore: 0.5 });
     return matches;
   } catch (err) {
     logger.warn(`Auto-match failed for item ${item._id}: ${err.message}`);

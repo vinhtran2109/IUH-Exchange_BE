@@ -58,8 +58,12 @@ export function publishNotification(notification) {
 
 export function sendNotificationToUser(userId, notification) {
   const connIds = userSessions.get(userId);
-  if (!connIds || connIds.size === 0) return;
+  if (!connIds || connIds.size === 0) {
+    logger.debug(`sendNotificationToUser: user ${userId} not connected via WebSocket`);
+    return;
+  }
 
+  let delivered = 0;
   for (const connId of connIds) {
     const sessionData = sessions.get(connId);
     if (!sessionData) continue;
@@ -73,9 +77,15 @@ export function sendNotificationToUser(userId, notification) {
             'content-type': 'application/json',
             'message-id': `msg-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
           }, JSON.stringify(notification));
+          delivered++;
         }
       }
     }
+  }
+  if (delivered > 0) {
+    logger.info(`Notification delivered to user ${userId} on ${delivered} subscription(s)`);
+  } else {
+    logger.warn(`User ${userId} has ${connIds.size} WS connection(s) but no /user/queue/* subscriptions`);
   }
 }
 

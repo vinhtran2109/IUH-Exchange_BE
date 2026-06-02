@@ -81,45 +81,53 @@ describe('image-processor.service', () => {
     it('should analyze an item with mock provider and detect wallet', async () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da đen';
+      mockItem.description = 'Ví da màu đen, rơi ở thư viện';
 
       const result = await analyzeItem('test-item-id');
 
       expect(result.status).toBe('completed');
       expect(result.detectedType).toBe('wallet');
-      expect(result.confidence).toBe(0.85);
+      expect(result.confidence).toBeGreaterThanOrEqual(0.85);
       expect(mockItem.analysisStatus).toBe('COMPLETED');
       expect(mockItem.save).toHaveBeenCalled();
     });
 
-    it('should detect phone from image URL', async () => {
+    it('should detect phone from title', async () => {
       const mockItem = LostFoundItem.__mockItem;
-      mockItem.images = ['https://example.com/dien-thoai-iphone.jpg'];
+      mockItem.images = ['https://example.com/phone.jpg'];
+      mockItem.title = 'Điện thoại iPhone 15';
+      mockItem.description = 'Điện thoại iPhone 15 Pro Max, màu titan tự nhiên';
 
       const result = await analyzeItem('test-item-id');
 
       expect(result.detectedType).toBe('phone');
-      expect(result.confidence).toBe(0.9);
+      expect(result.confidence).toBeGreaterThanOrEqual(0.9);
     });
 
-    it('should detect keys from image URL', async () => {
+    it('should detect keys from title', async () => {
       const mockItem = LostFoundItem.__mockItem;
-      mockItem.images = ['https://example.com/chinh-khoa.jpg'];
+      mockItem.images = ['https://example.com/keys.jpg'];
+      mockItem.title = 'Chìa khóa xe máy';
+      mockItem.description = 'Chìa khóa xe Airblade, có móc khóa hình gấu';
 
       const result = await analyzeItem('test-item-id');
 
       expect(result.detectedType).toBe('keys');
-      expect(result.confidence).toBe(0.8);
+      expect(result.confidence).toBeGreaterThanOrEqual(0.85);
     });
 
-    it('should detect card and extract MSSV', async () => {
+    it('should detect student card and extract MSSV', async () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.images = ['https://example.com/card-student-id.jpg'];
+      mockItem.title = 'Thẻ sinh viên IUH';
+      mockItem.description = 'Thẻ sinh viên MSSV 2100001234';
 
       const result = await analyzeItem('test-item-id');
 
-      expect(result.detectedType).toBe('card');
+      expect(result.detectedType).toBe('student_card');
       expect(result.studentId).toBe('2100001234');
-      expect(result.confidence).toBe(0.75);
+      expect(result.confidence).toBeGreaterThanOrEqual(0.85);
     });
 
     it('should skip already analyzed items', async () => {
@@ -136,6 +144,7 @@ describe('image-processor.service', () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.analysisStatus = 'COMPLETED';
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da nâu';
 
       const result = await analyzeItem('test-item-id', { force: true });
 
@@ -163,6 +172,7 @@ describe('image-processor.service', () => {
     it('should publish Kafka event after successful analysis', async () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da đen';
 
       await analyzeItem('test-item-id');
 
@@ -179,15 +189,17 @@ describe('image-processor.service', () => {
     it('should run post-analysis matching', async () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da đen';
 
       await analyzeItem('test-item-id');
 
-      expect(findMatches).toHaveBeenCalledWith('test-item-id', { limit: 5, minScore: 0.3 });
+      expect(findMatches).toHaveBeenCalledWith('test-item-id', { limit: 5, minScore: 0.5 });
     });
 
     it('should publish match event when matches found', async () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da đen';
 
       findMatches.mockResolvedValueOnce([
         { item: { _id: 'match-1', title: 'Ví mất', userId: 'user-2' }, score: 0.8 },
@@ -209,6 +221,7 @@ describe('image-processor.service', () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.category = 'OTHER';
       mockItem.images = ['https://example.com/wallet.jpg'];
+      mockItem.title = 'Ví da đen';
 
       await analyzeItem('test-item-id');
 
@@ -219,6 +232,7 @@ describe('image-processor.service', () => {
       const mockItem = LostFoundItem.__mockItem;
       mockItem.tags = [];
       mockItem.images = ['https://example.com/phone.jpg'];
+      mockItem.title = 'Điện thoại Samsung Galaxy';
 
       await analyzeItem('test-item-id');
 

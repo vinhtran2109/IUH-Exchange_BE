@@ -505,13 +505,13 @@ describe('kafka-consumer.service', () => {
         detectedType: 'wallet',
         studentId: '21001234',
         confidence: 0.95,
-        type: 'LOST',
+        type: 'FOUND',
       });
 
       expect(Notification.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          recipientId: 'user-1',
-          title: 'Phân tích hoàn tất',
+          recipientId: 'student-owner-1',
+          title: expect.stringContaining('tìm thấy'),
         })
       );
     });

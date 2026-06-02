@@ -432,14 +432,22 @@ export class OrderService {
       logger.info(`[SAGA Step 1] Order created: orderId=${order._id}, productId=${order.productId}`);
 
       // Step 4: Publish OrderCreatedEvent to Kafka
-      await publishOrderCreated({
-        orderId: order._id.toString(),
-        productId: order.productId,
-        buyerId: order.buyerId,
-        sellerId: order.sellerId,
-        price: order.price,
-        offerId: order.offerId,
-      });
+      // Non-fatal: order is already saved; Kafka failure means notification won't fire
+      try {
+        await publishOrderCreated({
+          orderId: order._id.toString(),
+          productId: order.productId,
+          buyerId: order.buyerId,
+          sellerId: order.sellerId,
+          price: order.price,
+          offerId: order.offerId,
+        });
+      } catch (kafkaErr) {
+        logger.error(`[SAGA] CRITICAL: Order ${order._id} created but Kafka publish failed: ${kafkaErr.message}. Notification will NOT be sent.`);
+        // Mark order for manual retry
+        order._kafkaPublishFailed = true;
+        await order.save().catch(() => {});
+      }
 
       // Step 5: Update Redis with actual orderId for future lookups
       await redis.set(redisKey, order._id.toString(), 'EX', IDEMPOTENCY_TTL_SECONDS);
@@ -480,15 +488,19 @@ export class OrderService {
     await order.save();
     logger.info(`[SAGA Step 2] Order awaiting seller confirmation: orderId=${orderId}`);
 
-    await publishOrderEvent('order.updated', {
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      status: order.status,
-      paymentStatus: order.paymentStatus,
-      reason: 'Product reserved successfully',
-    });
+    try {
+      await publishOrderEvent('order.updated', {
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        reason: 'Product reserved successfully',
+      });
+    } catch (kafkaErr) {
+      logger.error(`[SAGA Step 2] Kafka publish failed for order.updated: ${kafkaErr.message}`);
+    }
   }
 
   /**
@@ -518,13 +530,17 @@ export class OrderService {
     logger.info(`[SAGA Rollback] Order cancelled: orderId=${orderId}, reason=${reason}`);
 
     // Publish cancellation event so other services can compensate
-    await publishOrderCancelled({
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      reason,
-    });
+    try {
+      await publishOrderCancelled({
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reason,
+      });
+    } catch (kafkaErr) {
+      logger.error(`[SAGA Rollback] Order ${orderId} cancelled but Kafka publish failed: ${kafkaErr.message}`);
+    }
   }
 
   /**
@@ -591,12 +607,16 @@ export class OrderService {
     logger.info(`[SELLER CONFIRM] Order completed: orderId=${orderId}, sellerId=${sellerId}`);
 
     // Publish OrderCompletedEvent for Karma Service to adjust points
-    await publishOrderCompleted({
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      productId: order.productId,
-    });
+    try {
+      await publishOrderCompleted({
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        productId: order.productId,
+      });
+    } catch (kafkaErr) {
+      logger.error(`[SELLER CONFIRM] Order ${orderId} completed but Kafka publish failed: ${kafkaErr.message}`);
+    }
 
     return order.toObject();
   }
@@ -634,13 +654,17 @@ export class OrderService {
     await order.save();
     logger.info(`[SELLER REJECT] Order cancelled: orderId=${orderId}, sellerId=${sellerId}, reason=${reason}`);
 
-    await publishOrderCancelled({
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      reason,
-    });
+    try {
+      await publishOrderCancelled({
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reason,
+      });
+    } catch (kafkaErr) {
+      logger.error(`[SELLER REJECT] Order ${orderId} rejected but Kafka publish failed: ${kafkaErr.message}`);
+    }
 
     return order.toObject();
   }
@@ -743,13 +767,17 @@ export class OrderService {
     await order.save();
     logger.info(`[BUYER CANCEL] Order cancelled: orderId=${orderId}, buyerId=${buyerId}, reason=${reason || 'N/A'}`);
 
-    await publishOrderCancelled({
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      reason: reason || 'Người mua hủy đơn hàng',
-    });
+    try {
+      await publishOrderCancelled({
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reason: reason || 'Người mua hủy đơn hàng',
+      });
+    } catch (kafkaErr) {
+      logger.error(`[BUYER CANCEL] Order ${orderId} cancelled but Kafka publish failed: ${kafkaErr.message}`);
+    }
 
     return order.toObject();
   }
@@ -778,21 +806,25 @@ export class OrderService {
     });
     await order.save();
 
-    await publishOrderCancelled({
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      reason: noShowReason,
-    });
+    try {
+      await publishOrderCancelled({
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reason: noShowReason,
+      });
+    } catch (e) { logger.error(`[NO_SHOW] Kafka publishOrderCancelled failed: ${e.message}`); }
 
-    await publishOrderEvent('order.no_show.reported', {
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      reportedBy: userId,
-      actorRole: role,
-    });
+    try {
+      await publishOrderEvent('order.no_show.reported', {
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        reportedBy: userId,
+        actorRole: role,
+      });
+    } catch (e) { logger.error(`[NO_SHOW] Kafka publishOrderEvent failed: ${e.message}`); }
 
     return order.toObject();
   }
@@ -890,14 +922,16 @@ export class OrderService {
     });
     await order.save();
 
-    await publishOrderDisputeOpened({
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      openedBy: userId,
-      reason,
-    });
+    try {
+      await publishOrderDisputeOpened({
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        openedBy: userId,
+        reason,
+      });
+    } catch (e) { logger.error(`[DISPUTE] Kafka publishOrderDisputeOpened failed: ${e.message}`); }
 
     return order.toObject();
   }
@@ -923,13 +957,15 @@ export class OrderService {
       note,
     });
     await order.save();
-    await publishOrderEvent('order.dispute.evidence_added', {
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      submittedBy: userId,
-      type,
-    });
+    try {
+      await publishOrderEvent('order.dispute.evidence_added', {
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        submittedBy: userId,
+        type,
+      });
+    } catch (e) { logger.error(`[DISPUTE] Kafka publishOrderEvent failed: ${e.message}`); }
     return order.toObject();
   }
 
@@ -958,14 +994,16 @@ export class OrderService {
     order.handoverTime = time;
     order.handoverStatus = 'PROPOSED';
     await order.save();
-    await publishOrderEvent('order.handover.proposed', {
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      proposedBy: userId,
-      location,
-      time,
-    });
+    try {
+      await publishOrderEvent('order.handover.proposed', {
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        proposedBy: userId,
+        location,
+        time,
+      });
+    } catch (e) { logger.error(`[HANDOVER] Kafka publish failed: ${e.message}`); }
     return order.toObject();
   }
 
@@ -995,14 +1033,16 @@ export class OrderService {
       order.handoverCodeExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
     }
     await order.save();
-    await publishOrderEvent('order.handover.responded', {
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      respondedBy: userId,
-      action,
-      handoverStatus: order.handoverStatus,
-    });
+    try {
+      await publishOrderEvent('order.handover.responded', {
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        respondedBy: userId,
+        action,
+        handoverStatus: order.handoverStatus,
+      });
+    } catch (e) { logger.error(`[HANDOVER] Kafka publish failed: ${e.message}`); }
     return order.toObject();
   }
 
@@ -1039,13 +1079,15 @@ export class OrderService {
       order.handoverStatus = role === 'BUYER' ? 'BUYER_CONFIRMED' : 'SELLER_CONFIRMED';
     }
     await order.save();
-    await publishOrderEvent('order.handover.confirmed', {
-      orderId: order._id.toString(),
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      confirmedBy: userId,
-      handoverStatus: order.handoverStatus,
-    });
+    try {
+      await publishOrderEvent('order.handover.confirmed', {
+        orderId: order._id.toString(),
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        confirmedBy: userId,
+        handoverStatus: order.handoverStatus,
+      });
+    } catch (e) { logger.error(`[HANDOVER] Kafka publish failed: ${e.message}`); }
     return order.toObject();
   }
 
@@ -1069,7 +1111,7 @@ export class OrderService {
     order.disputeResolvedBy = adminId;
     order.disputeResolvedAt = new Date();
     if (remedy === 'CANCEL_ORDER' && order.status !== 'CANCELLED') {
-      transitionOrderStatus(order, 'CANCELLED', {
+      appendStatusHistory(order, 'CANCELLED', {
         changedBy: adminId,
         reason: resolution || 'Admin hủy giao dịch sau tranh chấp',
         metadata: { category: 'DISPUTE' },
@@ -1106,27 +1148,31 @@ export class OrderService {
     });
     await order.save();
 
-    await publishOrderEvent('order.dispute.resolved', {
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      status: order.disputeStatus,
-      outcome: order.disputeOutcome,
-      remedy,
-      resolution,
-      sanctions: {
-        buyer: normalizedSanctions.buyerLabel,
-        seller: normalizedSanctions.sellerLabel,
-      },
-    });
+    try {
+      await publishOrderEvent('order.dispute.resolved', {
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        status: order.disputeStatus,
+        outcome: order.disputeOutcome,
+        remedy,
+        resolution,
+        sanctions: {
+          buyer: normalizedSanctions.buyerLabel,
+          seller: normalizedSanctions.sellerLabel,
+        },
+      });
+    } catch (e) { logger.error(`[DISPUTE] Kafka publishOrderEvent failed: ${e.message}`); }
 
     const karmaAdjustments = [
       ...disputeKarmaAdjustments(order, { status: order.disputeStatus, outcome: order.disputeOutcome, adminId, resolution }),
       ...disputeSanctionAdjustments(order, { adminId, resolution, sanctions: normalizedSanctions }),
     ];
     for (const adjustment of karmaAdjustments) {
-      await publishOrderEvent('karma.adjustment.requested', adjustment);
+      try {
+        await publishOrderEvent('karma.adjustment.requested', adjustment);
+      } catch (e) { logger.error(`[DISPUTE] Kafka karma.adjustment.requested failed: ${e.message}`); }
     }
 
     return order.toObject();
@@ -1155,15 +1201,17 @@ export class OrderService {
     order.paymentIssueTimeline.push({ action: 'OPENED', actorId: userId, actorRole: role, note: reason });
     await order.save();
 
-    await publishOrderEvent('order.payment_issue.opened', {
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      price: order.price,
-      openedBy: userId,
-      reason,
-    });
+    try {
+      await publishOrderEvent('order.payment_issue.opened', {
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        price: order.price,
+        openedBy: userId,
+        reason,
+      });
+    } catch (e) { logger.error(`[PAYMENT_ISSUE] Kafka publish failed: ${e.message}`); }
 
     return order.toObject();
   }
@@ -1218,15 +1266,17 @@ export class OrderService {
     });
     await order.save();
 
-    await publishOrderEvent('order.payment_issue.resolved', {
-      orderId: order._id.toString(),
-      productId: order.productId,
-      buyerId: order.buyerId,
-      sellerId: order.sellerId,
-      price: order.price,
-      action,
-      status: order.paymentIssueStatus,
-    });
+    try {
+      await publishOrderEvent('order.payment_issue.resolved', {
+        orderId: order._id.toString(),
+        productId: order.productId,
+        buyerId: order.buyerId,
+        sellerId: order.sellerId,
+        price: order.price,
+        action,
+        status: order.paymentIssueStatus,
+      });
+    } catch (e) { logger.error(`[PAYMENT_ISSUE] Kafka publish failed: ${e.message}`); }
 
     return order.toObject();
   }

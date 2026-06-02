@@ -69,12 +69,12 @@ describe('order saga.service', () => {
       });
     });
 
-    it('should not throw when Kafka is unavailable', async () => {
+    it('should throw when Kafka is unavailable', async () => {
       mockSend.mockRejectedValue(new Error('Kafka down'));
 
       await expect(
         publishOrderCreated({ orderId: 'order-1' })
-      ).resolves.not.toThrow();
+      ).rejects.toThrow('Kafka down');
     });
   });
 
