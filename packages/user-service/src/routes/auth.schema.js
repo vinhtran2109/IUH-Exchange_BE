@@ -1,15 +1,29 @@
 import { z } from 'zod';
 
-export const registerSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .email()
-    .regex(/@student\.iuh\.edu\.vn$/, 'Email phải có đuôi @student.iuh.edu.vn'),
-  password: z.string().min(6, 'Mật khẩu phải ít nhất 6 ký tự'),
-  name: z.string().min(1).max(100),
-  studentId: z.string().max(20).optional(),
-});
+export const registerSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .email()
+      .regex(/@student\.iuh\.edu\.vn$/, 'Email phải có đuôi @student.iuh.edu.vn'),
+    password: z.string().min(6, 'Mật khẩu phải ít nhất 6 ký tự'),
+    name: z.string().min(1).max(100),
+    studentId: z.string().max(20).optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.studentId) return true;
+      const emailPrefix = data.email.trim().split('@')[0];
+      const emailPrefix8 = emailPrefix.substring(0, 8).toLowerCase();
+      const studentIdNormalized = data.studentId.trim().toLowerCase();
+      return studentIdNormalized === emailPrefix8;
+    },
+    {
+      message: 'Mã sinh viên hoặc email không đúng',
+      path: ['studentId'],
+    }
+  );
 
 export const loginSchema = z.object({
   email: z.string().trim().email(),

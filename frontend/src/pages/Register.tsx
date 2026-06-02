@@ -21,6 +21,16 @@ const Register: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    const emailPrefix = formData.email.trim().split('@')[0];
+    const emailPrefix8 = emailPrefix.substring(0, 8).toLowerCase();
+    const studentIdNormalized = formData.studentId.trim().toLowerCase();
+
+    if (studentIdNormalized !== emailPrefix8) {
+      setError('Mã sinh viên hoặc email không đúng');
+      setLoading(false);
+      return;
+    }
     
     try {
       const response = await authService.register(formData);
@@ -120,8 +130,8 @@ const Register: React.FC = () => {
                 
                 <button 
                   type="submit"
-                  disabled={loading}
-                  className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50"
+                  disabled={loading || formData.password.length < 6}
+                  className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? 'Đang tạo...' : 'Tiếp theo'}
                 </button>

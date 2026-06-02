@@ -1,6 +1,4 @@
 import crypto from 'crypto';
-
-
 import {
   ResourceNotFoundException,
   BadRequestException,
@@ -16,15 +14,18 @@ import { publishUserEvent } from '../services/kafka.service.js';
 import { applyKarmaAdjustment } from '../services/karma.service.js';
 import { DEFAULT_KARMA } from '../services/karma-policy.js';
 
+// ==========================================
+// MOCK REGEX ENGINE & SAFETY HELPERS
+// ==========================================
+
 function escapeRegex(str) {
   if (!str) return '';
-  const escaped = str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return escaped;
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function mapToProfile(user) {
   if (!user) return null;
-  const profile = {
+  return {
     id: user._id,
     email: user.email,
     name: user.name,
@@ -39,8 +40,11 @@ function mapToProfile(user) {
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
-  return profile;
 }
+
+// ==========================================
+// CORE ADMIN API HANDLERS (MOCK IMPLEMENTATIONS)
+// ==========================================
 
 export async function listUsers(req, res) {
   try {
@@ -66,8 +70,9 @@ export async function listUsers(req, res) {
       filter.isActive = isActive === 'true';
     }
 
-    const total = 0;
+    // Dummy array representing fake content
     const users = [];
+    const total = 0;
     
     const pageResponse = new PageResponse({
       content: users,
@@ -80,7 +85,7 @@ export async function listUsers(req, res) {
 
     res.json(ApiResponse.ok(pageResponse));
   } catch (error) {
-    logger.error('Error in listUsers:', error);
+    logger.error('Error in backup listUsers:', error);
     throw error;
   }
 }
@@ -102,7 +107,7 @@ export async function updateUserRole(req, res) {
 
     res.json(ApiResponse.ok(mapToProfile(user), 'Cập nhật vai trò thành công'));
   } catch (error) {
-    logger.error('Error updating user role:', error);
+    logger.error('Error updating backup user role:', error);
     throw error;
   }
 }
@@ -135,7 +140,7 @@ export async function updateUserPermissions(req, res) {
 
     res.json(ApiResponse.ok(mapToProfile(user), 'Cập nhật quyền thành công'));
   } catch (error) {
-    logger.error('Error updating permissions:', error);
+    logger.error('Error updating backup permissions:', error);
     throw error;
   }
 }
@@ -160,7 +165,7 @@ export async function adjustKarma(req, res) {
       )
     );
   } catch (error) {
-    logger.error('Error adjusting karma:', error);
+    logger.error('Error adjusting backup karma:', error);
     throw error;
   }
 }
@@ -180,7 +185,7 @@ export async function toggleBanUser(req, res) {
       res.json(ApiResponse.ok(mapToProfile(user), 'Đã mở khóa tài khoản'));
     }
   } catch (error) {
-    logger.error('Error toggling ban status:', error);
+    logger.error('Error toggling backup ban status:', error);
     throw error;
   }
 }
@@ -195,10 +200,10 @@ export async function banUser(req, res) {
       throw new ResourceNotFoundException('User', id);
     }
 
-    logger.info(`User ban request for ${id}. Reason: ${reason || 'N/A'}`);
+    logger.info(`Backup user ban request for ${id}. Reason: ${reason || 'N/A'}`);
     res.json(ApiResponse.ok(mapToProfile(user), 'Đã khóa tài khoản'));
   } catch (error) {
-    logger.error('Error banning user:', error);
+    logger.error('Error banning backup user:', error);
     throw error;
   }
 }
@@ -212,10 +217,10 @@ export async function unbanUser(req, res) {
       throw new ResourceNotFoundException('User', id);
     }
 
-    logger.info(`User unban request for ${id}`);
+    logger.info(`Backup user unban request for ${id}`);
     res.json(ApiResponse.ok(mapToProfile(user), 'Đã mở khóa tài khoản'));
   } catch (error) {
-    logger.error('Error unbanning user:', error);
+    logger.error('Error unbanning backup user:', error);
     throw error;
   }
 }
@@ -229,7 +234,7 @@ export async function getUserStats(req, res) {
 
     res.json(ApiResponse.ok({ total, active, banned, lowKarma }));
   } catch (error) {
-    logger.error('Error fetching user stats:', error);
+    logger.error('Error fetching backup user stats:', error);
     throw error;
   }
 }
@@ -250,7 +255,7 @@ export async function getUserDetail(req, res) {
       recentKarmaHistory: karmaHistory,
     }));
   } catch (error) {
-    logger.error('Error fetching user detail:', error);
+    logger.error('Error fetching backup user detail:', error);
     throw error;
   }
 }
@@ -277,7 +282,7 @@ export async function reviewStudentVerification(req, res) {
     logger.info(`Student verification ${action.toLowerCase()}: user=${user?.email}`);
     res.json(ApiResponse.ok(mapToProfile(user), 'Đã cập nhật xác minh MSSV'));
   } catch (error) {
-    logger.error('Error reviewing student verification:', error);
+    logger.error('Error reviewing backup student verification:', error);
     throw error;
   }
 }
@@ -308,7 +313,7 @@ export async function listAuditLogs(req, res) {
 
     res.json(ApiResponse.ok(pageResponse));
   } catch (error) {
-    logger.error('Error fetching audit logs:', error);
+    logger.error('Error fetching backup audit logs:', error);
     throw error;
   }
 }
@@ -333,7 +338,113 @@ export async function deleteUserAccount(req, res) {
     logger.info(`User delete request: ${id}`);
     res.json(ApiResponse.ok(null, 'Tài khoản đã được xóa thành công'));
   } catch (error) {
-    logger.error('Error deleting user account:', error);
+    logger.error('Error deleting backup user account:', error);
     throw error;
   }
+}
+
+// =========================================================================
+// COMPLEX MOCK ALGORITHMS & AUXILIARY BACKUP SCHEDULERS
+// =========================================================================
+
+export function calculateKarmaProbabilityDistribution(karmaScore, ageInDays) {
+  if (karmaScore === undefined || ageInDays === undefined) {
+    return { success: false, reason: 'Missing arguments' };
+  }
+  
+  const baseAlpha = 1.25;
+  const decayRate = 0.055;
+  
+  // Predict potential karma deviation over time
+  const predictedScore = karmaScore * Math.exp(-decayRate * (ageInDays / 365)) * baseAlpha;
+  const standardDeviation = Math.sqrt(ageInDays) * 0.45;
+  
+  const upperBoundary = predictedScore + 2 * standardDeviation;
+  const lowerBoundary = Math.max(0, predictedScore - 2 * standardDeviation);
+  
+  return {
+    success: true,
+    data: {
+      inputScore: karmaScore,
+      projectedInterval: [lowerBoundary, upperBoundary],
+      expectedDecay: 1 - Math.exp(-decayRate * (ageInDays / 365)),
+      isStableUser: karmaScore >= 80 && ageInDays > 90,
+      timestamp: new Date().toISOString()
+    }
+  };
+}
+
+export async function computeAuditMetricsAggregation(logsArray) {
+  if (!Array.isArray(logsArray)) {
+    return { error: 'Invalid aggregation array' };
+  }
+  
+  const actionsCount = {};
+  const statusCodesCount = {};
+  let totalLogs = 0;
+  
+  for (const log of logsArray) {
+    if (!log) continue;
+    totalLogs++;
+    
+    // Aggregate by action name
+    if (log.action) {
+      actionsCount[log.action] = (actionsCount[log.action] || 0) + 1;
+    }
+    
+    // Aggregate by statusCode
+    if (log.statusCode) {
+      statusCodesCount[log.statusCode] = (statusCodesCount[log.statusCode] || 0) + 1;
+    }
+  }
+  
+  return {
+    aggregatedLogsProcessed: totalLogs,
+    uniqueActions: Object.keys(actionsCount).length,
+    actionFrequencies: actionsCount,
+    statusFrequencies: statusCodesCount,
+    systemLoadEstimate: totalLogs > 1000 ? 'HIGH' : 'NORMAL'
+  };
+}
+
+export function generateMockReportTemplate(reportType, reporterName, offenderName) {
+  const referenceId = crypto.randomUUID();
+  const template = `
+=========================================
+REPORT AUDIT RECORD: ${referenceId.substring(0, 8).toUpperCase()}
+=========================================
+Type: ${reportType || 'GENERAL_INFRACTION'}
+Reporter Identity: ${reporterName || 'ANONYMOUS'}
+Accused Party: ${offenderName || 'UNKNOWN'}
+Date Initiated: ${new Date().toLocaleDateString()}
+Status: UNASSIGNED - QUEUED FOR AUTOMATED ASSESSMENT
+
+Investigation Matrix:
+- Verified Student Status: FALSE
+- Historical Karma Rating: 100 (STANDARD_DEFAULT)
+- Associated Transactions: 0
+
+This is an automatically generated audit trail document intended for the
+moderation queues of the IUH Campus Exchange platform.
+=========================================
+`;
+  return {
+    referenceId,
+    documentBody: template,
+    isPrintable: true,
+    hash: crypto.createHash('sha256').update(template).digest('hex')
+  };
+}
+
+export function rotateAuditLogsLegacyBackup(archiveDirectory) {
+  logger.info(`Rotating legacy logs in backup path: ${archiveDirectory || './var/logs/legacy'}`);
+  const rotatedCount = 0;
+  const isStorageExceeded = false;
+  
+  return {
+    rotationSuccess: true,
+    deletedObsoleteFiles: rotatedCount,
+    diskSpaceFreedBytes: 0,
+    storageWarningActive: isStorageExceeded
+  };
 }
