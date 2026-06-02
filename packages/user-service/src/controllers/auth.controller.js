@@ -43,13 +43,29 @@ function getRefreshTokenCookieOptions() {
   };
 }
 
+function getStudentIdFromEmail(email = '') {
+  const match = String(email).trim().toLowerCase().match(/^(\d{6,12})\.[^@]+@student\.iuh\.edu\.vn$/);
+  return match?.[1] || '';
+}
+
 /**
  * Register new user
  */
 export async function register(req, res) {
   const { email, password, name, studentId } = req.body;
+  const normalizedEmail = String(email || '').trim().toLowerCase();
+  const normalizedStudentId = String(studentId || '').trim();
+  const emailStudentId = getStudentIdFromEmail(normalizedEmail);
 
-  const existing = await User.findOne({ email });
+  if (!emailStudentId) {
+    throw new BadRequestException('Email sinh viên phải có dạng MSSV.ten@student.iuh.edu.vn');
+  }
+
+  if (normalizedStudentId !== emailStudentId) {
+    throw new BadRequestException(`MSSV phải trùng với phần đầu email sinh viên (${emailStudentId})`);
+  }
+
+  const existing = await User.findOne({ email: normalizedEmail });
   if (existing) {
     throw new BadRequestException('Email đã được đăng ký');
   }
@@ -58,10 +74,10 @@ export async function register(req, res) {
   const otp = crypto.randomInt(100000, 999999).toString();
 
   const user = await User.create({
-    email,
+    email: normalizedEmail,
     passwordHash,
     name,
-    studentId: studentId || '',
+    studentId: normalizedStudentId,
     otp,
     otpExpiry: new Date(Date.now() + 10 * 60 * 1000),
     otpAttemptCount: 0,
@@ -69,8 +85,8 @@ export async function register(req, res) {
   });
 
   // Bug #8 fix: Don't log OTP plaintext to console/logs
-  logger.debug(`OTP sent to: ${email}`);
-  await sendOtpEmail(email, otp, name);
+  logger.debug(`OTP sent to: ${normalizedEmail}`);
+  await sendOtpEmail(normalizedEmail, otp, name);
 
   res.status(201).json(
     ApiResponse.created({ email: user.email, name: user.name }, 'Đăng ký thành công. Vui lòng kiểm tra email để xác nhận OTP.')

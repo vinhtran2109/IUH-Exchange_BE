@@ -85,15 +85,15 @@ describe('auth.controller', () => {
       User.findOne.mockResolvedValue(null); // No existing user
       User.create.mockResolvedValue({
         ...mockUserInstance,
-        email: 'newuser@student.iuh.edu.vn',
+        email: '22661221.vinh@student.iuh.edu.vn',
         name: 'New User',
       });
 
       const { req, res } = mockReqRes({
-        email: 'newuser@student.iuh.edu.vn',
+        email: '22661221.vinh@student.iuh.edu.vn',
         password: 'Password123!',
         name: 'New User',
-        studentId: 'DH999999',
+        studentId: '22661221',
       });
 
       await auth.register(req, res);
@@ -108,12 +108,26 @@ describe('auth.controller', () => {
       User.findOne.mockResolvedValue(mockUserInstance);
 
       const { req, res } = mockReqRes({
-        email: 'existing@student.iuh.edu.vn',
+        email: '22661221.vinh@student.iuh.edu.vn',
         password: 'Password123!',
         name: 'Test',
+        studentId: '22661221',
       });
 
       await expect(auth.register(req, res)).rejects.toThrow('Email đã được đăng ký');
+    });
+
+    it('should reject studentId that does not match student email prefix', async () => {
+      const { req, res } = mockReqRes({
+        email: '22661221.vinh@student.iuh.edu.vn',
+        password: 'Password123!',
+        name: 'Test',
+        studentId: '22660000',
+      });
+
+      await expect(auth.register(req, res)).rejects.toThrow('MSSV');
+      expect(User.findOne).not.toHaveBeenCalled();
+      expect(User.create).not.toHaveBeenCalled();
     });
   });
 

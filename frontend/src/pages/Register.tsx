@@ -17,10 +17,28 @@ const Register: React.FC = () => {
   const { success: toastSuccess } = useToast();
   const navigate = useNavigate();
 
+  const getStudentIdFromEmail = (email: string) => {
+    const match = email.trim().toLowerCase().match(/^(\d{6,12})\.[^@]+@student\.iuh\.edu\.vn$/);
+    return match?.[1] || '';
+  };
+
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    const emailStudentId = getStudentIdFromEmail(formData.email);
+    if (!emailStudentId) {
+      setError('Email sinh viên phải có dạng MSSV.ten@student.iuh.edu.vn');
+      setLoading(false);
+      return;
+    }
+
+    if (formData.studentId.trim() !== emailStudentId) {
+      setError(`MSSV phải trùng với phần đầu email (${emailStudentId})`);
+      setLoading(false);
+      return;
+    }
     
     try {
       const response = await authService.register(formData);
@@ -73,7 +91,7 @@ const Register: React.FC = () => {
                   <input 
                     type="text" 
                     required
-                    placeholder="2109..."
+                    placeholder="22661221"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
                     value={formData.studentId}
                     onChange={(e) => setFormData({...formData, studentId: e.target.value})}
@@ -97,7 +115,7 @@ const Register: React.FC = () => {
                   <input 
                     type="email" 
                     required
-                    placeholder="user@student.iuh.edu.vn"
+                    placeholder="22661221.vinh@student.iuh.edu.vn"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
