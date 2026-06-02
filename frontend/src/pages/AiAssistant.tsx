@@ -62,14 +62,14 @@ const detectLostFoundType = (text: string): ItemType | undefined => {
 };
 
 const extractLocation = (text: string) => {
+  const normalized = normalizeText(text);
   const patterns = [
-    /\b(?:ở|tai|tại|khu|gan|gần|quanh|loanh quanh|tầng|tang)\s+(.{2,120})/i,
-    /\b(?:nha|nhà)\s+[a-z0-9]+.{0,80}/i,
-    /\b(?:thu vien|thư viện|ham|hầm|san|sân|canteen|bai xe|bãi xe).{0,80}/i,
+    /\b(?:o|tai|khu|gan|quanh|loanh quanh|tang|nha)\s+(.{1,120})/i,
+    /\b(?:can tin|canteen|thu vien|ham|san|bai xe|cong|sanh|phong|toa|lop)\b.{0,80}/i,
   ];
 
   for (const pattern of patterns) {
-    const match = text.match(pattern);
+    const match = normalized.match(pattern);
     if (match?.[1]) return match[1].trim();
     if (match?.[0]) return match[0].trim();
   }
