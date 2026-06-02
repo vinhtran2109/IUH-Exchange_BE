@@ -1,0 +1,298 @@
+@startuml
+title IUH Exchange - Class Diagram
+
+left to right direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam class {
+  BackgroundColor #FFFFFF
+  BorderColor #1E40AF
+  ArrowColor #334155
+  FontColor #0F172A
+}
+
+class User {
+  +String id
+  +String email
+  +String passwordHash
+  +String name
+  +String studentId
+  +String avatarUrl
+  +Boolean isVerified
+  +Boolean isActive
+  +Number karmaPoint
+  +String role
+  +String[] permissions
+  +Object studentVerification
+  +Object bankInfo
+  +Boolean adminTwoFactorEnabled
+}
+
+class Product {
+  +String id
+  +String sellerId
+  +String title
+  +String description
+  +Number price
+  +String listingType
+  +String tradeWanted
+  +Boolean allowOffers
+  +String[] imageUrls
+  +String category
+  +String location
+  +String condition
+  +String status
+  +Object aiModeration
+}
+
+class Offer {
+  +String id
+  +String productId
+  +String buyerId
+  +String sellerId
+  +String type
+  +Number amount
+  +String tradeItemTitle
+  +String message
+  +String status
+  +Date expiresAt
+}
+
+class Order {
+  +String id
+  +String buyerId
+  +String sellerId
+  +String productId
+  +String offerId
+  +Number price
+  +String listingType
+  +String status
+  +String paymentStatus
+  +String paymentMethod
+  +String handoverStatus
+  +String disputeStatus
+  +String disputeReason
+  +String disputeResolution
+  +String disputeOutcome
+  +String disputeRemedy
+  +Object disputeSanctions
+  +Object[] statusHistory
+  +Object[] transactions
+}
+
+class DisputeEvidence {
+  +String id
+  +String submittedBy
+  +String type
+  +String url
+  +String note
+  +Date createdAt
+}
+
+class DisputeTimeline {
+  +String id
+  +String action
+  +String actorId
+  +String actorRole
+  +String note
+  +Object metadata
+  +Date createdAt
+}
+
+class Review {
+  +String id
+  +String productId
+  +String orderId
+  +String buyerId
+  +String sellerId
+  +Number rating
+  +String comment
+}
+
+class Wishlist {
+  +String id
+  +String userId
+  +String productId
+}
+
+class ProductView {
+  +String id
+  +String userId
+  +String productId
+  +String sellerId
+  +Date viewedAt
+}
+
+class SellerFollow {
+  +String id
+  +String followerId
+  +String sellerId
+}
+
+class ChatMessage {
+  +String id
+  +String senderId
+  +String receiverId
+  +String conversationId
+  +String content
+  +String messageType
+  +String fileUrl
+  +String fileName
+  +Object productContext
+  +Boolean isRead
+  +Boolean reported
+  +String moderationStatus
+  +Object[] reports
+}
+
+class LostFoundItem {
+  +String id
+  +String userId
+  +String type
+  +String title
+  +String description
+  +String[] images
+  +String location
+  +String contactInfo
+  +String category
+  +String[] tags
+  +String verificationQuestion
+  +String status
+  +String analysisStatus
+  +String detectedType
+  +Number analysisConfidence
+  +Object extracted
+}
+
+class Claim {
+  +String id
+  +String claimantId
+  +String answer
+  +String[] evidenceUrls
+  +String status
+  +String ownerNote
+  +Date reviewedAt
+}
+
+class Report {
+  +String id
+  +String reporterId
+  +String targetType
+  +String targetId
+  +String reason
+  +String status
+  +String adminNote
+}
+
+class Notification {
+  +String id
+  +String recipientId
+  +String title
+  +String message
+  +String type
+  +String targetId
+  +String link
+  +Boolean isRead
+}
+
+class NotificationPreference {
+  +String id
+  +String userId
+  +Object email
+  +Object push
+  +Object inApp
+}
+
+class FcmToken {
+  +String id
+  +String userId
+  +String token
+  +String deviceType
+  +String deviceName
+  +Boolean isActive
+}
+
+class KarmaHistory {
+  +String id
+  +String userId
+  +String type
+  +Number points
+  +String reason
+  +String relatedId
+  +Object metadata
+}
+
+class ConsentLog {
+  +String id
+  +String userId
+  +String itemId
+  +String consentType
+  +Boolean granted
+}
+
+class AuditLog {
+  +String id
+  +String userId
+  +String action
+  +String resource
+  +String resourceId
+  +String method
+  +String path
+  +Number statusCode
+}
+
+class DlqEvent {
+  +String id
+  +String topic
+  +Object payload
+  +String error
+  +Number retryCount
+  +String status
+}
+
+User "1" --> "0..*" Product : sells
+User "1" --> "0..*" Order : buyer
+User "1" --> "0..*" Order : seller
+Product "1" --> "0..*" Offer : receives
+User "1" --> "0..*" Offer : makes
+Offer "0..1" --> "0..1" Order : accepted
+Product "1" --> "0..*" Order : ordered
+
+Order "1" *-- "0..*" DisputeEvidence : evidence
+Order "1" *-- "0..*" DisputeTimeline : timeline
+Order "1" --> "0..1" Review : review
+Product "1" --> "0..*" Review : has
+User "1" --> "0..*" Review : writes
+User "1" --> "0..*" Review : receives
+
+User "1" --> "0..*" Wishlist : saves
+Product "1" --> "0..*" Wishlist : savedBy
+User "1" --> "0..*" ProductView : views
+Product "1" --> "0..*" ProductView : viewed
+User "1" --> "0..*" SellerFollow : follows
+User "1" --> "0..*" SellerFollow : followedSeller
+
+User "1" --> "0..*" ChatMessage : sends
+User "1" --> "0..*" ChatMessage : receives
+Product "0..1" --> "0..*" ChatMessage : context
+
+User "1" --> "0..*" LostFoundItem : posts
+LostFoundItem "1" *-- "0..*" Claim : claims
+User "1" --> "0..*" Claim : submits
+LostFoundItem "1" --> "0..*" ConsentLog : consent
+User "1" --> "0..*" ConsentLog : grants
+
+User "1" --> "0..*" Report : reports
+Report "0..*" --> "0..1" User : targetUser
+Report "0..*" --> "0..1" Product : targetProduct
+Report "0..*" --> "0..1" LostFoundItem : targetLostFound
+
+User "1" --> "0..*" Notification : receives
+User "1" --> "0..1" NotificationPreference : configures
+User "1" --> "0..*" FcmToken : devices
+User "1" --> "0..*" KarmaHistory : karmaEvents
+User "1" --> "0..*" AuditLog : performs
+DlqEvent ..> Notification : failedEvent
+
+@enduml

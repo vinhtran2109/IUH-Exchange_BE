@@ -51,6 +51,11 @@ export const authService = {
     return response.data;
   },
 
+  checkEmail: async (email: string) => {
+    const response = await api.post("/auth/check-email", { email });
+    return response.data;
+  },
+
   verifyOtp: async (email: string, otp: string) => {
     const response = await api.post("/auth/verify-otp", { email, otp });
     return response.data;

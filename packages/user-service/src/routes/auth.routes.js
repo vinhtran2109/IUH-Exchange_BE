@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { validate, authenticate } from '@iuh-exchange/common';
 import {
   registerSchema,
+  checkEmailSchema,
   loginSchema,
   verifyOtpSchema,
   resendOtpSchema,
@@ -18,6 +19,7 @@ const router = Router();
 const asyncHandler = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 router.post('/register', validate(registerSchema), asyncHandler(authCtrl.register));
+router.post('/check-email', validate(checkEmailSchema), asyncHandler(authCtrl.checkEmail));
 router.post('/verify-otp', validate(verifyOtpSchema), asyncHandler(authCtrl.verifyOtp));
 router.post('/resend-otp', validate(resendOtpSchema), asyncHandler(authCtrl.resendOtp));
 router.post('/login', validate(loginSchema), asyncHandler(authCtrl.login));

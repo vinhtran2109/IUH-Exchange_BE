@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, Mail } from 'lucide-react';
 import { authService } from '../services/authService';
 import { useToast } from '../components/Toast';
 
 const Register: React.FC = () => {
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState<'email' | 'details' | 'otp'>('email');
   const [formData, setFormData] = useState({
     email: '',
     password: '',
@@ -17,9 +18,42 @@ const Register: React.FC = () => {
   const { success: toastSuccess } = useToast();
   const navigate = useNavigate();
 
+  const normalizedEmail = useMemo(() => formData.email.trim().toLowerCase(), [formData.email]);
+
   const getStudentIdFromEmail = (email: string) => {
     const match = email.trim().toLowerCase().match(/^(\d{6,12})\.[^@]+@student\.iuh\.edu\.vn$/);
     return match?.[1] || '';
+  };
+
+  const handleCheckEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    const emailStudentId = getStudentIdFromEmail(normalizedEmail);
+    if (!emailStudentId) {
+      setError('Email sinh viên phải có dạng MSSV.ten@student.iuh.edu.vn');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const response = await authService.checkEmail(normalizedEmail);
+      if (response.success) {
+        setFormData((current) => ({
+          ...current,
+          email: response.data?.email || normalizedEmail,
+          studentId: response.data?.studentId || emailStudentId,
+        }));
+        setStep('details');
+      } else {
+        setError(response.message || 'Email này không thể sử dụng');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.message || 'Không kiểm tra được email');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -39,11 +73,16 @@ const Register: React.FC = () => {
       setLoading(false);
       return;
     }
-    
+
     try {
-      const response = await authService.register(formData);
+      const response = await authService.register({
+        ...formData,
+        email: normalizedEmail,
+        studentId: formData.studentId.trim(),
+        name: formData.name.trim(),
+      });
       if (response.success) {
-        setStep(1);
+        setStep('otp');
       } else {
         setError(response.message || 'Đăng ký thất bại');
       }
@@ -58,7 +97,7 @@ const Register: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
     try {
       const response = await authService.verifyOtp(formData.email, otp);
       if (response.success) {
@@ -78,65 +117,115 @@ const Register: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-slate-50 py-12 px-4">
       <div className="max-w-sm w-full">
         <div className="bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
-          {step === 0 ? (
+          {step === 'email' && (
             <>
               <div className="text-center mb-6">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
+                  <Mail size={22} />
+                </div>
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Đăng ký</h1>
-                <p className="text-slate-500 text-sm">Tạo tài khoản sinh viên IUH</p>
+                <p className="text-slate-500 text-sm">Nhập email sinh viên IUH để bắt đầu</p>
               </div>
-              
+
+              <form onSubmit={handleCheckEmail} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Email sinh viên</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="22550001.ten@student.iuh.edu.vn"
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  />
+                  <p className="mt-2 text-[11px] leading-4 text-slate-500">
+                    Hệ thống sẽ kiểm tra email chưa được sử dụng và tự lấy MSSV từ phần đầu email.
+                  </p>
+                </div>
+
+                {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50"
+                >
+                  {loading ? 'Đang kiểm tra...' : 'Kiểm tra email'}
+                </button>
+              </form>
+            </>
+          )}
+
+          {step === 'details' && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  setStep('email');
+                }}
+                className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-900"
+              >
+                <ArrowLeft size={14} />
+                Đổi email
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700">
+                  <CheckCircle2 size={22} />
+                </div>
+                <h1 className="text-2xl font-bold text-slate-900 mb-1">Thông tin tài khoản</h1>
+                <p className="text-slate-500 text-sm">Email hợp lệ, hãy hoàn tất hồ sơ</p>
+              </div>
+
               <form onSubmit={handleRegister} className="space-y-3.5">
                 <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Email sinh viên</label>
+                  <input
+                    type="email"
+                    readOnly
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 focus:outline-none text-sm"
+                    value={formData.email}
+                  />
+                </div>
+
+                <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Mã số sinh viên</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="22661221"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
+                  <input
+                    type="text"
+                    readOnly
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 focus:outline-none text-sm"
                     value={formData.studentId}
-                    onChange={(e) => setFormData({...formData, studentId: e.target.value})}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Họ và tên</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     required
-                    placeholder="Nguyễn Văn A"
+                    placeholder="Họ tên trên thẻ sinh viên"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
                     value={formData.name}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Email sinh viên</label>
-                  <input 
-                    type="email" 
-                    required
-                    placeholder="22661221.vinh@student.iuh.edu.vn"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
-                    value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Mật khẩu</label>
-                  <input 
-                    type="password" 
+                  <input
+                    type="password"
                     required
-                    placeholder="••••••••"
+                    placeholder="Tối thiểu 6 ký tự"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all text-sm"
                     value={formData.password}
-                    onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   />
                 </div>
 
                 {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
-                
-                <button 
+
+                <button
                   type="submit"
                   disabled={loading}
                   className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50"
@@ -145,27 +234,29 @@ const Register: React.FC = () => {
                 </button>
               </form>
             </>
-          ) : (
+          )}
+
+          {step === 'otp' && (
             <>
               <div className="text-center mb-6">
                 <h1 className="text-2xl font-bold text-slate-900 mb-1">Xác thực</h1>
                 <p className="text-slate-500 text-sm">Nhập mã OTP đã gửi tới email của bạn</p>
               </div>
-              
+
               <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   maxLength={6}
                   required
-                  placeholder="• • • • • •"
+                  placeholder="••••••"
                   className="w-full px-5 py-4 text-center text-2xl tracking-[0.8rem] rounded-lg border border-slate-200 focus:border-slate-400 focus:outline-none transition-all"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
                 />
 
                 {error && <p className="text-red-500 text-xs font-medium">{error}</p>}
-                
-                <button 
+
+                <button
                   type="submit"
                   disabled={loading}
                   className="w-full py-2.5 bg-slate-900 text-white rounded-lg font-medium text-sm hover:bg-slate-800 active:scale-[0.99] transition-all disabled:opacity-50"

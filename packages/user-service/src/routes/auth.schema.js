@@ -11,6 +11,14 @@ export const registerSchema = z.object({
   studentId: z.string().max(20).optional(),
 });
 
+export const checkEmailSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .email()
+    .regex(/^\d{6,12}\.[^@]+@student\.iuh\.edu\.vn$/, 'Email sinh vien phai co dang MSSV.ten@student.iuh.edu.vn'),
+});
+
 export const loginSchema = z.object({
   email: z.string().trim().email(),
   password: z.string().min(1),

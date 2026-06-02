@@ -49,6 +49,25 @@ function getStudentIdFromEmail(email = '') {
 }
 
 /**
+ * Check whether a student email can be used before showing the full register form.
+ */
+export async function checkEmail(req, res) {
+  const normalizedEmail = String(req.body.email || '').trim().toLowerCase();
+  const studentId = getStudentIdFromEmail(normalizedEmail);
+
+  if (!studentId) {
+    throw new BadRequestException('Email sinh vien phai co dang MSSV.ten@student.iuh.edu.vn');
+  }
+
+  const existing = await User.findOne({ email: normalizedEmail }).select('_id isVerified');
+  if (existing) {
+    throw new BadRequestException('Email nay da duoc su dung');
+  }
+
+  res.json(ApiResponse.ok({ email: normalizedEmail, studentId }, 'Email co the su dung'));
+}
+
+/**
  * Register new user
  */
 export async function register(req, res) {
