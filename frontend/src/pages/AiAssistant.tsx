@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
-  ImagePlus,
   Loader2,
-  MapPin,
+  Paperclip,
   Send,
   Sparkles,
   Trash2,
-  UploadCloud,
   UserRound,
+  X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../services/chatService';
@@ -19,14 +18,24 @@ type AiMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  imageUrl?: string;
+  actionUrl?: string;
+  actionLabel?: string;
+};
+
+type LostFoundDraft = {
+  type?: ItemType;
+  text?: string;
+  image?: File | null;
+  imagePreview?: string;
 };
 
 const MAX_IMAGE_SIZE_BYTES = 10 * 1024 * 1024;
 
 const suggestions = [
   'Viết mô tả bán laptop cũ cho sinh viên IUH',
-  'Làm sao nhận biết một tin nhắn lừa đảo?',
-  'Tôi nhặt được thẻ sinh viên thì nên đăng như thế nào?',
+  'Tìm giúp mình bài đăng mất ví gần nhà H',
+  'Mình nhặt được thẻ sinh viên ở thư viện',
   'Gợi ý giá bán giáo trình Java cũ',
 ];
 
@@ -34,9 +43,51 @@ const initialMessages: AiMessage[] = [
   {
     id: 'welcome',
     role: 'assistant',
-    content: 'Chào bạn, mình là trợ lý IUH Exchange. Mình có thể giúp viết mô tả đăng bán, tư vấn giá, tìm sản phẩm, kiểm tra đơn hàng hoặc tạo nhanh tin đồ thất lạc từ ảnh.',
+    content:
+      'Chào bạn, mình là trợ lý IUH Exchange. Bạn có thể nhắn như bình thường, hoặc đính kèm ảnh rồi gõ “Mất ví ở nhà H” / “Nhặt được chìa khóa tầng hầm X”, mình sẽ tạo tin đồ thất lạc ngay trong chat.',
   },
 ];
+
+const normalizeText = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+const detectLostFoundType = (text: string): ItemType | undefined => {
+  const normalized = normalizeText(text);
+  if (/\b(nhat|tim thay|thay duoc|lượm|luom)\b/.test(normalized)) return ItemType.FOUND;
+  if (/\b(mat|roi|that lac|that lac|bi roi)\b/.test(normalized)) return ItemType.LOST;
+  return undefined;
+};
+
+const extractLocation = (text: string) => {
+  const patterns = [
+    /\b(?:ở|tai|tại|khu|gan|gần|quanh|loanh quanh|tầng|tang)\s+(.{2,120})/i,
+    /\b(?:nha|nhà)\s+[a-z0-9]+.{0,80}/i,
+    /\b(?:thu vien|thư viện|ham|hầm|san|sân|canteen|bai xe|bãi xe).{0,80}/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1].trim();
+    if (match?.[0]) return match[0].trim();
+  }
+
+  return '';
+};
+
+const cleanTitle = (text: string, type?: ItemType) => {
+  let title = text
+    .replace(/\b(tôi|minh|mình|em|mới|vừa|có|muốn|đăng|tin|bài)\b/gi, ' ')
+    .replace(/\b(mất|rơi|thất lạc|nhặt được|tìm thấy|thấy được|lượm được)\b/gi, ' ')
+    .replace(/\b(ở|tại|gần|quanh|loanh quanh|khu|tầng|nhà)\b.+$/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!title) title = type === ItemType.FOUND ? 'Đồ nhặt được' : 'Đồ bị mất';
+  return title.slice(0, 120);
+};
 
 const AiAssistant: React.FC = () => {
   const navigate = useNavigate();
@@ -44,103 +95,72 @@ const AiAssistant: React.FC = () => {
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState('');
-  const [autoType, setAutoType] = useState<ItemType>(ItemType.LOST);
-  const [autoTitle, setAutoTitle] = useState('');
-  const [autoLocation, setAutoLocation] = useState('');
-  const [autoContact, setAutoContact] = useState('');
-  const [autoImage, setAutoImage] = useState<File | null>(null);
-  const [autoPreview, setAutoPreview] = useState('');
-  const [autoConsent, setAutoConsent] = useState(false);
-  const [isCreatingPost, setIsCreatingPost] = useState(false);
-  const [autoPostError, setAutoPostError] = useState('');
-  const [autoPostSuccess, setAutoPostSuccess] = useState('');
+  const [attachedImage, setAttachedImage] = useState<File | null>(null);
+  const [attachedPreview, setAttachedPreview] = useState('');
+  const [selectedType, setSelectedType] = useState<ItemType | undefined>();
+  const [draft, setDraft] = useState<LostFoundDraft | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const canSend = useMemo(() => input.trim().length > 0 && !isSending, [input, isSending]);
-  const canCreateAutoPost = useMemo(
-    () => autoTitle.trim().length > 0 && autoLocation.trim().length > 0 && !isCreatingPost && (!autoImage || autoConsent),
-    [autoTitle, autoLocation, isCreatingPost, autoImage, autoConsent],
+  const canSend = useMemo(
+    () => (input.trim().length > 0 || attachedImage || draft) && !isSending,
+    [input, attachedImage, draft, isSending],
   );
 
   useEffect(() => {
-    return () => {
-      if (autoPreview) URL.revokeObjectURL(autoPreview);
-    };
-  }, [autoPreview]);
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isSending]);
 
-  const addAssistantMessage = (content: string) => {
+  useEffect(() => {
+    return () => {
+      if (attachedPreview) URL.revokeObjectURL(attachedPreview);
+      if (draft?.imagePreview) URL.revokeObjectURL(draft.imagePreview);
+    };
+  }, [attachedPreview, draft?.imagePreview]);
+
+  const addMessage = (message: Omit<AiMessage, 'id'>) => {
     setMessages((prev) => [
       ...prev,
       {
-        id: `assistant-${Date.now()}`,
-        role: 'assistant',
-        content,
+        id: `${message.role}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        ...message,
       },
     ]);
   };
 
-  const sendMessage = async (text = input) => {
-    const trimmed = text.trim();
-    if (!trimmed || isSending) return;
-
-    const userMessage: AiMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: trimmed,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setError('');
-    setIsSending(true);
-
-    try {
-      const response = await chatService.askAiAssistant(trimmed);
-      addAssistantMessage(response.data.answer);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'AI Assistant chưa phản hồi được. Vui lòng thử lại.');
-      addAssistantMessage('Mình chưa trả lời được lúc này. Bạn thử gửi lại sau một chút nhé.');
-    } finally {
-      setIsSending(false);
-      requestAnimationFrame(() => textareaRef.current?.focus());
-    }
+  const clearAttachment = () => {
+    if (attachedPreview) URL.revokeObjectURL(attachedPreview);
+    setAttachedImage(null);
+    setAttachedPreview('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const clearAutoImage = () => {
-    if (autoPreview) URL.revokeObjectURL(autoPreview);
-    setAutoImage(null);
-    setAutoPreview('');
-    setAutoConsent(false);
-    if (imageInputRef.current) imageInputRef.current.value = '';
-  };
-
-  const handleAutoImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    setAutoPostError('');
+    setError('');
 
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setAutoPostError('Vui lòng chọn tệp ảnh hợp lệ.');
-      event.target.value = '';
-      return;
-    }
-    if (file.size > MAX_IMAGE_SIZE_BYTES) {
-      setAutoPostError('Ảnh quá lớn. Vui lòng chọn ảnh tối đa 10MB.');
+      setError('Vui lòng chọn tệp ảnh hợp lệ.');
       event.target.value = '';
       return;
     }
 
-    if (autoPreview) URL.revokeObjectURL(autoPreview);
-    setAutoImage(file);
-    setAutoPreview(URL.createObjectURL(file));
-    setAutoConsent(true);
+    if (file.size > MAX_IMAGE_SIZE_BYTES) {
+      setError('Ảnh quá lớn. Vui lòng chọn ảnh tối đa 10MB.');
+      event.target.value = '';
+      return;
+    }
+
+    clearAttachment();
+    setAttachedImage(file);
+    setAttachedPreview(URL.createObjectURL(file));
   };
 
-  const uploadAutoImage = async () => {
-    if (!autoImage) return [];
-    const { data: uploadData } = await lostFoundService.getUploadUrl(autoImage.name, autoImage.type);
-    const { presignedUrl, publicUrl } = uploadData || {};
+  const uploadImage = async (image: File) => {
+    const { data } = await lostFoundService.getUploadUrl(image.name, image.type);
+    const { presignedUrl, publicUrl } = data || {};
 
     if (!presignedUrl || !publicUrl) {
       throw new Error('Không nhận được upload URL hợp lệ từ server.');
@@ -148,288 +168,323 @@ const AiAssistant: React.FC = () => {
 
     const uploadResponse = await fetch(presignedUrl, {
       method: 'PUT',
-      body: autoImage,
-      headers: { 'Content-Type': autoImage.type },
+      body: image,
+      headers: { 'Content-Type': image.type },
     });
 
     if (!uploadResponse.ok) {
       throw new Error('Upload ảnh thất bại. Vui lòng thử lại.');
     }
 
-    return [publicUrl];
+    return publicUrl as string;
   };
 
-  const createAutoPost = async () => {
-    if (!canCreateAutoPost) return;
+  const createLostFoundFromChat = async (text: string, type: ItemType, image?: File | null, preview?: string) => {
+    const location = extractLocation(text);
+    if (!location) {
+      setDraft({ type, text, image, imagePreview: preview });
+      addMessage({
+        role: 'assistant',
+        content: 'Mình cần thêm vị trí để tạo tin. Bạn nhắn tiếp kiểu: “ở nhà H”, “tầng hầm tòa X”, hoặc “gần thư viện”.',
+      });
+      return true;
+    }
 
-    setIsCreatingPost(true);
-    setAutoPostError('');
-    setAutoPostSuccess('');
+    const title = cleanTitle(text, type);
+    const imageUrls = image ? [await uploadImage(image)] : [];
+    const response = await lostFoundService.createAiAutoPost({
+      type,
+      title,
+      location,
+      imageUrls,
+      contactInfo: '',
+      consentImageAnalysis: imageUrls.length > 0,
+      consentMssvExtraction: imageUrls.length > 0,
+    });
+
+    const created = response?.data;
+    const id = created?.id || created?._id;
+    const createdTitle = created?.title || title;
+    const actionUrl = id ? `/lost-found/${id}` : undefined;
+
+    addMessage({
+      role: 'assistant',
+      content: `Mình đã tạo tin ${type === ItemType.FOUND ? 'nhặt được' : 'mất đồ'}: “${createdTitle}”. Bạn mở chi tiết để kiểm tra lại trước khi chia sẻ nhé.`,
+      actionUrl,
+      actionLabel: 'Mở tin vừa tạo',
+    });
+
+    setDraft(null);
+    if (preview && preview === attachedPreview) clearAttachment();
+    if (id) window.setTimeout(() => navigate(`/lost-found/${id}`), 900);
+    return true;
+  };
+
+  const handleDraftReply = async (reply: string) => {
+    if (!draft) return false;
+    const mergedText = `${draft.text || ''} ${reply}`.trim();
+    const type = draft.type || selectedType || detectLostFoundType(mergedText);
+
+    if (!type) {
+      addMessage({
+        role: 'assistant',
+        content: 'Tin này là “mất đồ” hay “nhặt được”? Bạn chọn nút bên dưới hoặc nhắn rõ giúp mình nhé.',
+      });
+      return true;
+    }
+
+    return createLostFoundFromChat(mergedText, type, draft.image, draft.imagePreview);
+  };
+
+  const sendMessage = async (text = input) => {
+    const trimmed = text.trim();
+    if ((!trimmed && !attachedImage && !draft) || isSending) return;
+
+    const imageForMessage = attachedPreview;
+    const imageFile = attachedImage;
+    const type = selectedType || detectLostFoundType(trimmed);
+
+    addMessage({
+      role: 'user',
+      content: trimmed || 'Đã gửi một hình ảnh.',
+      imageUrl: imageForMessage,
+    });
+
+    setInput('');
+    setError('');
+    setIsSending(true);
 
     try {
-      const imageUrls = await uploadAutoImage();
-      const response = await lostFoundService.createAiAutoPost({
-        type: autoType,
-        title: autoTitle.trim(),
-        location: autoLocation.trim(),
-        contactInfo: autoContact.trim(),
-        imageUrls,
-        consentImageAnalysis: imageUrls.length > 0,
-        consentMssvExtraction: imageUrls.length > 0,
-      });
-
-      const created = response?.data;
-      const id = created?.id || created?._id;
-      const title = created?.title || autoTitle.trim();
-      setAutoPostSuccess(`Đã tạo tin "${title}".`);
-      addAssistantMessage(`Mình đã tạo tin ${autoType === ItemType.FOUND ? 'nhặt được' : 'mất đồ'} "${title}". Bạn có thể mở chi tiết để kiểm tra lại nội dung trước khi chia sẻ.`);
-
-      setAutoTitle('');
-      setAutoLocation('');
-      setAutoContact('');
-      clearAutoImage();
-
-      if (id) {
-        window.setTimeout(() => navigate(`/lost-found/${id}`), 700);
+      if (draft) {
+        await handleDraftReply(trimmed);
+      } else if (imageFile || selectedType || type) {
+        const resolvedType = type || selectedType;
+        if (!resolvedType) {
+          setDraft({ text: trimmed, image: imageFile, imagePreview: imageForMessage });
+          addMessage({
+            role: 'assistant',
+            content: 'Bạn muốn tạo tin “mất đồ” hay “nhặt được”? Chọn một nút phía dưới rồi gửi lại thông tin nhé.',
+          });
+        } else {
+          await createLostFoundFromChat(trimmed, resolvedType, imageFile, imageForMessage);
+        }
+      } else {
+        const response = await chatService.askAiAssistant(trimmed);
+        addMessage({ role: 'assistant', content: response.data.answer });
       }
+
+      clearAttachment();
+      setSelectedType(undefined);
     } catch (err: any) {
-      setAutoPostError(err?.response?.data?.message || err?.message || 'Không thể tạo tin tự động. Vui lòng thử lại.');
+      const message = err?.response?.data?.message || err?.message || 'AI Assistant chưa phản hồi được. Vui lòng thử lại.';
+      setError(message);
+      addMessage({ role: 'assistant', content: message });
     } finally {
-      setIsCreatingPost(false);
+      setIsSending(false);
+      requestAnimationFrame(() => textareaRef.current?.focus());
     }
   };
 
+  const sendSuggestion = (suggestion: string) => {
+    setInput(suggestion);
+    requestAnimationFrame(() => sendMessage(suggestion));
+  };
+
   return (
-    <div className="mx-auto max-w-6xl">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-            <Sparkles size={14} />
-            AI Assistant
-          </div>
-          <h1 className="text-3xl font-black text-slate-900">Trợ lý IUH Exchange</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-            Hỏi nhanh về đăng bán, định giá, giao dịch an toàn và tạo tin đồ thất lạc từ hình ảnh.
-          </p>
+    <div className="mx-auto max-w-5xl">
+      <div className="mb-6">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
+          <Sparkles size={14} />
+          AI Assistant
         </div>
+        <h1 className="text-3xl font-black text-slate-900">Trợ lý IUH Exchange</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+          Nhắn tin, tìm sản phẩm, hỏi đơn hàng hoặc gửi ảnh để tạo tin mất đồ / nhặt được ngay trong cuộc trò chuyện.
+        </p>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1fr_360px]">
-        <section className="flex min-h-[620px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+      <section className="flex min-h-[680px] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-white">
               <Bot size={20} />
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900">IUH Assistant</h2>
-              <p className="text-xs text-slate-500">Phản hồi bằng Gemini và dữ liệu IUH Exchange</p>
+              <p className="text-xs text-slate-500">Chat với AI, có thể gửi kèm ảnh đồ thất lạc</p>
             </div>
           </div>
-
-          <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 px-5 py-5">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                {message.role === 'assistant' && (
-                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
-                    <Bot size={16} />
-                  </div>
-                )}
-                <div
-                  className={`max-w-[78%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
-                    message.role === 'user'
-                      ? 'bg-indigo-600 text-white'
-                      : 'border border-slate-200 bg-white text-slate-700'
-                  }`}
-                >
-                  {message.content}
-                </div>
-                {message.role === 'user' && (
-                  <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
-                    <UserRound size={16} />
-                  </div>
-                )}
-              </div>
-            ))}
-            {isSending && (
-              <div className="flex items-center gap-3 text-sm text-slate-500">
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
-                  <Loader2 size={16} className="animate-spin" />
-                </div>
-                Đang suy nghĩ...
-              </div>
-            )}
-          </div>
-
-          <div className="border-t border-slate-100 bg-white p-4">
-            {error && <div className="mb-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-            <div className="flex gap-3">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                rows={2}
-                maxLength={2000}
-                placeholder="Nhập câu hỏi cho AI..."
-                className="min-h-[52px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
-              />
+          <div className="hidden gap-2 sm:flex">
+            {[ItemType.LOST, ItemType.FOUND].map((type) => (
               <button
-                onClick={() => sendMessage()}
-                disabled={!canSend}
-                className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                title="Gửi"
+                key={type}
+                type="button"
+                onClick={() => setSelectedType((current) => (current === type ? undefined : type))}
+                className={`rounded-full px-3 py-1.5 text-xs font-black transition ${
+                  selectedType === type
+                    ? type === ItemType.LOST
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                {isSending ? <Loader2 size={19} className="animate-spin" /> : <Send size={19} />}
+                {type === ItemType.LOST ? 'Mất đồ' : 'Nhặt được'}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto bg-slate-50 px-5 py-5">
+          {messages.map((message) => (
+            <div key={message.id} className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {message.role === 'assistant' && (
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+                  <Bot size={16} />
+                </div>
+              )}
+              <div
+                className={`max-w-[82%] overflow-hidden rounded-2xl text-sm leading-6 shadow-sm ${
+                  message.role === 'user'
+                    ? 'bg-indigo-600 text-white'
+                    : 'border border-slate-200 bg-white text-slate-700'
+                }`}
+              >
+                {message.imageUrl && (
+                  <img src={message.imageUrl} alt="Ảnh đã gửi" className="max-h-72 w-full object-cover" />
+                )}
+                <div className="whitespace-pre-wrap px-4 py-3">{message.content}</div>
+                {message.actionUrl && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(message.actionUrl!)}
+                    className="mx-4 mb-4 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-800"
+                  >
+                    <CheckCircle2 size={14} />
+                    {message.actionLabel || 'Mở chi tiết'}
+                  </button>
+                )}
+              </div>
+              {message.role === 'user' && (
+                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600">
+                  <UserRound size={16} />
+                </div>
+              )}
+            </div>
+          ))}
+
+          {isSending && (
+            <div className="flex items-center gap-3 text-sm text-slate-500">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-indigo-700">
+                <Loader2 size={16} className="animate-spin" />
+              </div>
+              Đang xử lý...
+            </div>
+          )}
+          <div ref={scrollRef} />
+        </div>
+
+        <div className="border-t border-slate-100 bg-white p-4">
+          {error && (
+            <div className="mb-3 flex items-start justify-between gap-3 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-600">
+              <span>{error}</span>
+              <button type="button" onClick={() => setError('')} className="text-red-500 hover:text-red-700">
+                <X size={15} />
               </button>
             </div>
+          )}
+
+          <div className="mb-3 flex flex-wrap gap-2 sm:hidden">
+            {[ItemType.LOST, ItemType.FOUND].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSelectedType((current) => (current === type ? undefined : type))}
+                className={`rounded-full px-3 py-1.5 text-xs font-black transition ${
+                  selectedType === type
+                    ? type === ItemType.LOST
+                      ? 'bg-rose-600 text-white'
+                      : 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {type === ItemType.LOST ? 'Mất đồ' : 'Nhặt được'}
+              </button>
+            ))}
           </div>
-        </section>
 
-        <aside className="space-y-4">
-          <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700">
-                <ImagePlus size={20} />
+          {attachedPreview && (
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              <img src={attachedPreview} alt="Ảnh đính kèm" className="h-16 w-16 rounded-lg object-cover" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold text-slate-800">{attachedImage?.name}</p>
+                <p className="text-xs text-slate-500">Ảnh sẽ được gửi cùng tin nhắn này.</p>
               </div>
-              <div>
-                <h2 className="text-sm font-black text-slate-900">Tạo tin mất / nhặt đồ bằng AI</h2>
-                <p className="mt-1 text-xs leading-5 text-slate-500">
-                  Thêm ảnh, vị trí và vài chữ mô tả. AI sẽ viết nội dung đăng phù hợp.
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-              {[ItemType.LOST, ItemType.FOUND].map((type) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setAutoType(type)}
-                  className={`rounded-lg px-3 py-2 text-xs font-black transition ${
-                    autoType === type
-                      ? type === ItemType.LOST
-                        ? 'bg-rose-600 text-white shadow-sm'
-                        : 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:bg-white'
-                  }`}
-                >
-                  {type === ItemType.LOST ? 'Mất đồ' : 'Nhặt được'}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-4 space-y-3">
-              <input
-                value={autoTitle}
-                onChange={(event) => setAutoTitle(event.target.value)}
-                maxLength={200}
-                placeholder="Ví dụ: mất ví da màu đen"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
-              />
-              <div className="relative">
-                <MapPin size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  value={autoLocation}
-                  onChange={(event) => setAutoLocation(event.target.value)}
-                  maxLength={300}
-                  placeholder="Vị trí: thư viện, nhà H..."
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 pl-9 pr-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
-                />
-              </div>
-              <input
-                value={autoContact}
-                onChange={(event) => setAutoContact(event.target.value)}
-                maxLength={200}
-                placeholder="Thông tin liên hệ nếu muốn"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm outline-none transition focus:border-emerald-300 focus:bg-white"
-              />
-
-              <input
-                ref={imageInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleAutoImageChange}
-              />
-
-              {autoPreview ? (
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                  <div className="relative aspect-[4/3] bg-slate-100">
-                    <img src={autoPreview} alt="Ảnh đồ thất lạc" className="h-full w-full object-cover" />
-                    <button
-                      type="button"
-                      onClick={clearAutoImage}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow-sm hover:bg-rose-50"
-                      title="Bỏ ảnh"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                  <label className="flex cursor-pointer items-start gap-2 px-3 py-3 text-xs leading-5 text-slate-600">
-                    <input
-                      type="checkbox"
-                      checked={autoConsent}
-                      onChange={(event) => setAutoConsent(event.target.checked)}
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"
-                    />
-                    <span>Đồng ý cho hệ thống phân tích ảnh để gợi ý nội dung và tìm kết quả khớp.</span>
-                  </label>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => imageInputRef.current?.click()}
-                  className="flex w-full flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center transition hover:border-emerald-300 hover:bg-emerald-50"
-                >
-                  <UploadCloud size={24} className="text-emerald-600" />
-                  <span className="mt-2 text-sm font-bold text-slate-800">Thêm ảnh đồ vật</span>
-                  <span className="mt-1 text-xs text-slate-500">PNG, JPG, WEBP tối đa 10MB</span>
-                </button>
-              )}
-
-              {autoPostError && <div className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">{autoPostError}</div>}
-              {autoPostSuccess && (
-                <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
-                  <CheckCircle2 size={15} />
-                  {autoPostSuccess}
-                </div>
-              )}
-
               <button
                 type="button"
-                onClick={createAutoPost}
-                disabled={!canCreateAutoPost}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+                onClick={clearAttachment}
+                className="rounded-lg p-2 text-rose-500 transition hover:bg-rose-50"
+                title="Bỏ ảnh"
               >
-                {isCreatingPost ? <Loader2 size={17} className="animate-spin" /> : <Sparkles size={17} />}
-                Tạo tin bằng AI
+                <Trash2 size={17} />
               </button>
             </div>
-          </section>
+          )}
 
-          <section className="space-y-3">
-            <h2 className="text-sm font-bold text-slate-800">Gợi ý nhanh</h2>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSending}
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+              title="Đính kèm ảnh"
+            >
+              <Paperclip size={19} />
+            </button>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  sendMessage();
+                }
+              }}
+              rows={2}
+              maxLength={2000}
+              placeholder={
+                attachedImage
+                  ? 'Ví dụ: Mất ví ở nhà H, hoặc Nhặt được chìa khóa tầng hầm X...'
+                  : 'Nhắn cho AI, tìm sản phẩm, hỏi đơn hàng hoặc gửi ảnh đồ thất lạc...'
+              }
+              className="min-h-[52px] flex-1 resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none transition focus:border-indigo-300 focus:bg-white"
+            />
+            <button
+              onClick={() => sendMessage()}
+              disabled={!canSend}
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              title="Gửi"
+            >
+              {isSending ? <Loader2 size={19} className="animate-spin" /> : <Send size={19} />}
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {suggestions.map((suggestion) => (
               <button
                 key={suggestion}
-                onClick={() => sendMessage(suggestion)}
+                onClick={() => sendSuggestion(suggestion)}
                 disabled={isSending}
-                className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm leading-5 text-slate-600 shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-left text-xs leading-5 text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {suggestion}
               </button>
             ))}
-          </section>
-        </aside>
-      </div>
+          </div>
+        </div>
+      </section>
     </div>
   );
 };
