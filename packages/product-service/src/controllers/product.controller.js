@@ -278,7 +278,8 @@ export async function getProductById(req, res) {
   if (!product) throw new ResourceNotFoundException('Product', req.params.id);
   if (!canViewProduct(product, req)) throw new ResourceNotFoundException('Product', req.params.id);
 
-  const response = ApiResponse.ok(toResponse(product), 'Success');
+  const responseData = await enrichProductModerationSummary(product);
+  const response = ApiResponse.ok(responseData, 'Success');
   if (product.status === 'AVAILABLE') {
     await cache.set(cacheKey, response, 300); // Cache 5 minutes
   }

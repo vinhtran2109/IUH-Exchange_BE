@@ -678,15 +678,16 @@ const eventHandlers = {
     if (!reliableMatches.length) return;
 
     const matchCount = reliableMatches.length;
-    const bestScore = Math.round((reliableMatches[0]?.score || 0) * 100);
+    const bestMatch = reliableMatches[0];
+    const bestScore = Math.round((bestMatch?.score || 0) * 100);
 
     await sendNotification({
       recipientId: userId,
       title: 'Tìm thấy vật phẩm phù hợp!',
       message: `Có ${matchCount} vật phẩm có thể khớp với "${title}" (độ phù hợp cao nhất: ${bestScore}%). Kiểm tra ngay!`,
       type: 'SYSTEM',
-      targetId: itemId,
-      link: `/lost-found/${itemId}`,
+      targetId: bestMatch.itemId,
+      link: `/lost-found/${bestMatch.itemId}`,
     });
 
     const oppositeType = type === 'LOST' ? 'FOUND' : 'LOST';
@@ -698,8 +699,8 @@ const eventHandlers = {
           title: 'Có vật phẩm khớp với bài đăng của bạn!',
           message: `"${title}" có thể là vật phẩm ${oppositeType === 'LOST' ? 'bị mất' : 'nhặt được'} liên quan đến bài "${match.title}" của bạn (${matchScore}% phù hợp).`,
           type: 'SYSTEM',
-          targetId: match.itemId,
-          link: `/lost-found/${match.itemId}`,
+          targetId: itemId,
+          link: `/lost-found/${itemId}`,
         });
       }
     }

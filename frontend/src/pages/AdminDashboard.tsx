@@ -218,6 +218,12 @@ const shortId = (value?: string) => {
   return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : value;
 };
 
+const sellerDisplayName = (product: any) =>
+  product?.sellerName || product?.seller?.name || product?.sellerEmail || (product?.sellerId ? `Người bán ${shortId(product.sellerId)}` : 'Chưa có tên');
+
+const sellerMeta = (product: any) =>
+  product?.sellerStudentId || product?.seller?.studentId || product?.sellerEmail || product?.seller?.email || shortId(product?.sellerId);
+
 const readableOrderCode = (value?: string) => {
   if (!value) return 'ĐH-00000';
   const tail = value.replace(/[^a-fA-F0-9]/g, '').slice(-5).toUpperCase();
@@ -753,7 +759,7 @@ const AdminDashboard: React.FC = () => {
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
                     <span className="font-bold text-slate-700">{currency(product.price)}</span>
                     <span className="h-1 w-1 rounded-full bg-slate-300" />
-                    <span className="font-mono text-xs">{product.sellerId}</span>
+                    <span className="truncate text-xs font-semibold text-slate-600">{sellerDisplayName(product)}</span>
                   </div>
                 </div>
                 <button onClick={() => openProductDetail(getEntityId(product))} className={iconButtonClass} title="Xem chi tiết">
@@ -1200,7 +1206,10 @@ const AdminDashboard: React.FC = () => {
           <tbody>
             {products.map((product) => (
               <tr key={getEntityId(product)} className="border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                <td className="p-4 text-sm text-slate-600 truncate max-w-[160px]">{product.sellerId}</td>
+                <td className="p-4 max-w-[220px]">
+                  <div className="truncate text-sm font-bold text-slate-800">{sellerDisplayName(product)}</div>
+                  <div className="mt-1 truncate text-xs font-semibold text-slate-400">{sellerMeta(product)}</div>
+                </td>
                 <td className="p-4">
                   <div className="font-bold text-slate-800">{product.title}</div>
                   <div className="text-xs text-slate-400 mt-1 line-clamp-1 max-w-[260px]">{product.description}</div>
@@ -2379,7 +2388,8 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="p-3 bg-slate-50 rounded-2xl">
                       <div className="text-xs text-slate-400 font-bold uppercase">Người bán</div>
-                      <div className="text-sm font-bold text-slate-800 mt-1 break-all">{productDetail.sellerId}</div>
+                      <div className="text-sm font-bold text-slate-800 mt-1">{sellerDisplayName(productDetail)}</div>
+                      <div className="mt-1 text-xs font-semibold text-slate-500 break-all">{sellerMeta(productDetail)}</div>
                     </div>
                   </div>
                 </div>
