@@ -2,7 +2,7 @@ import axios from "axios";
 
 const inferredBaseUrl =
   typeof window !== "undefined"
-    ? `${window.location.protocol}//${window.location.hostname}:8080/api/v1`
+    ? `${window.location.origin}/api/v1`
     : "http://localhost:8080/api/v1";
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || inferredBaseUrl;
@@ -43,8 +43,16 @@ function cleanOldMutations(): void {
 }
 
 api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("accessToken");
+  async (config) => {
+    let token = localStorage.getItem("accessToken");
+    const requestUrl = String(config.url || "");
+    if (token && !requestUrl.includes("/auth/refresh-token") && isJwtExpiringSoon(token)) {
+      try {
+        token = await refreshAccessToken();
+      } catch {
+        // Let the response interceptor handle the final auth decision.
+      }
+    }
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -93,6 +101,25 @@ let refreshPromise: Promise<string> | null = null;
 let lastRefreshFailure: { at: number; error: any } | null = null;
 
 const REFRESH_RETRY_COOLDOWN_MS = 5000;
+const TOKEN_REFRESH_SKEW_MS = 60000;
+
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload || typeof window === "undefined") return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), "=");
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function isJwtExpiringSoon(token: string) {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false;
+  return payload.exp * 1000 <= Date.now() + TOKEN_REFRESH_SKEW_MS;
+}
 
 function shouldLogoutAfterRefreshFailure(error: any) {
   return [400, 401, 403].includes(error?.response?.status);

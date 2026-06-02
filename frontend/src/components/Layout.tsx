@@ -95,7 +95,7 @@ const Layout: React.FC = () => {
       }
     });
 
-    const interval = setInterval(fetchNotifs, 15000);
+    const interval = setInterval(fetchNotifs, 60000);
     return () => {
       clearInterval(interval);
       removeNotifListener();

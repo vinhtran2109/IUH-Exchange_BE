@@ -86,6 +86,8 @@ const formatDate = (value?: string) => {
 };
 
 const currency = (value?: number) => `${Number(value || 0).toLocaleString('vi-VN')}đ`;
+const ADMIN_LIST_PAGE_SIZE = 50;
+const ADMIN_ORDER_PAGE_SIZE = 30;
 
 const getEntityId = (value: any) => value?.id || value?._id || '';
 
@@ -324,8 +326,8 @@ const AdminDashboard: React.FC = () => {
         const [uStats, pStats, reportRes, lostFoundRes] = await Promise.all([
           adminService.getUserStats(),
           adminService.getProductStats(),
-          adminService.getReports('ALL', 1, 100),
-          adminService.getAdminLostFoundItems('ALL', 'ALL', 1, 100),
+          adminService.getReports('ALL', 1, ADMIN_LIST_PAGE_SIZE),
+          adminService.getAdminLostFoundItems('ALL', 'ALL', 1, ADMIN_LIST_PAGE_SIZE),
         ]);
         setStats({ user: uStats.data, product: pStats.data });
         setReports(reportRes.data?.content || []);
@@ -334,31 +336,31 @@ const AdminDashboard: React.FC = () => {
       }
 
       if (activeTab === 'users') {
-        const res = await adminService.getAllUsers(1, 100);
+        const res = await adminService.getAllUsers(1, ADMIN_LIST_PAGE_SIZE);
         if (res.success) setUsers(res.data.content || []);
         return;
       }
 
       if (activeTab === 'products') {
-        const res = await adminService.getAdminProducts(productFilter, 1, 100);
+        const res = await adminService.getAdminProducts(productFilter, 1, ADMIN_LIST_PAGE_SIZE);
         if (res.success) setProducts(res.data.content || []);
         return;
       }
 
       if (activeTab === 'orders') {
-        const res = await adminService.getAdminOrders(1, 100);
+        const res = await adminService.getAdminOrders(1, ADMIN_ORDER_PAGE_SIZE);
         if (res.success) setAdminOrders(res.data?.content || []);
         return;
       }
 
       if (activeTab === 'reports') {
-        const reportRes = await adminService.getReports(reportFilter, 1, 100, reportTargetType);
+        const reportRes = await adminService.getReports(reportFilter, 1, ADMIN_LIST_PAGE_SIZE, reportTargetType);
         setReports(reportRes.data?.content || []);
         return;
       }
 
       if (activeTab === 'lostFound') {
-        const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, 100);
+        const lostFoundRes = await adminService.getAdminLostFoundItems(lostFoundTypeFilter, 'ALL', 1, ADMIN_LIST_PAGE_SIZE);
         setLostFoundItems(lostFoundRes.data?.content || []);
         // Fetch heatmap data
         if (!heatmapData) {
@@ -373,7 +375,7 @@ const AdminDashboard: React.FC = () => {
       }
 
       if (activeTab === 'audit') {
-        const res = await adminService.getAuditLogs(1, 100);
+        const res = await adminService.getAuditLogs(1, ADMIN_LIST_PAGE_SIZE);
         if (res.success) setAuditLogs(res.data?.content || []);
         return;
       }

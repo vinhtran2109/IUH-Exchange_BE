@@ -40,7 +40,7 @@ let pendingFrames: PendingFrame[] = [];
 
 const inferredSocketUrl =
   typeof window !== 'undefined'
-    ? `http://${window.location.hostname}:8080/ws`
+    ? `${window.location.origin}/ws`
     : 'http://localhost:8080/ws';
 
 const socketUrl = import.meta.env.VITE_WS_URL || inferredSocketUrl;
