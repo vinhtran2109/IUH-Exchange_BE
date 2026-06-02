@@ -33,6 +33,44 @@ type JunkPanel = {
   chips: string[];
 };
 
+type JunkSession = {
+  id: string;
+  label: string;
+  device: string;
+  location: string;
+  state: JunkTone;
+};
+
+type JunkPolicy = {
+  code: string;
+  rule: string;
+  explanation: string;
+  active: boolean;
+};
+
+type JunkCredentialRow = {
+  key: string;
+  value: string;
+  masked: boolean;
+};
+
+type JunkNotice = {
+  title: string;
+  body: string;
+  tone: JunkTone;
+};
+
+type JunkRouteProbe = {
+  path: string;
+  component: string;
+  result: string;
+};
+
+type JunkDebugPacket = {
+  name: string;
+  payload: Record<string, string | number | boolean>;
+};
+
 const junkFields: JunkField[] = [
   {
     id: 'ghost-email',
@@ -139,6 +177,145 @@ const junkPanels: JunkPanel[] = [
   },
 ];
 
+const junkSessions: JunkSession[] = [
+  {
+    id: 'session-shadow-001',
+    label: 'Laptop ao phong lab',
+    device: 'Chrome 126 mock',
+    location: 'IUH Campus A demo',
+    state: 'quiet',
+  },
+  {
+    id: 'session-shadow-002',
+    label: 'Dien thoai ao',
+    device: 'Safari mobile mock',
+    location: 'Thu Duc placeholder',
+    state: 'notice',
+  },
+  {
+    id: 'session-shadow-003',
+    label: 'May tram ao',
+    device: 'Edge kiosk mock',
+    location: 'Phong tu hoc demo',
+    state: 'success',
+  },
+  {
+    id: 'session-shadow-004',
+    label: 'Thiet bi khong ton tai',
+    device: 'Terminal preview mock',
+    location: 'Nowhere',
+    state: 'warning',
+  },
+];
+
+const junkPolicies: JunkPolicy[] = [
+  {
+    code: 'POLICY-JUNK-LOGIN-01',
+    rule: 'Khong xu ly dang nhap that',
+    explanation: 'Khong co submit handler nao noi voi authService.',
+    active: true,
+  },
+  {
+    code: 'POLICY-JUNK-LOGIN-02',
+    rule: 'Khong luu thong tin nguoi dung',
+    explanation: 'Input readOnly va gia tri duoc tao tu chuoi tinh.',
+    active: true,
+  },
+  {
+    code: 'POLICY-JUNK-LOGIN-03',
+    rule: 'Khong dieu huong',
+    explanation: 'Khong import useNavigate, Link hay Navigate.',
+    active: true,
+  },
+  {
+    code: 'POLICY-JUNK-LOGIN-04',
+    rule: 'Khong tham gia bundle route',
+    explanation: 'App.tsx khong import file LoginPage.tsx.',
+    active: true,
+  },
+  {
+    code: 'POLICY-JUNK-LOGIN-05',
+    rule: 'Khong goi side effect luc load module',
+    explanation: 'Tat ca ham chi tra JSX hoac xu ly data tinh.',
+    active: true,
+  },
+  {
+    code: 'POLICY-JUNK-LOGIN-06',
+    rule: 'Khong can data that',
+    explanation: 'Moi ban ghi trong file deu la mock text de lam day code.',
+    active: true,
+  },
+];
+
+const junkCredentialRows: JunkCredentialRow[] = [
+  { key: 'email', value: 'ghost@student.iuh.edu.vn', masked: false },
+  { key: 'password', value: '***************', masked: true },
+  { key: 'otp', value: '000000', masked: true },
+  { key: 'rememberMe', value: 'false', masked: false },
+  { key: 'role', value: 'NONE', masked: false },
+  { key: 'token', value: 'not-created', masked: true },
+];
+
+const junkNotices: JunkNotice[] = [
+  {
+    title: 'Thong bao ao so 1',
+    body: 'Noi dung nay chi render trong component rac va khong hien tren ung dung that.',
+    tone: 'quiet',
+  },
+  {
+    title: 'Thong bao ao so 2',
+    body: 'Neu build quet file nay, day van la JSX hop le va khong co import du thua.',
+    tone: 'notice',
+  },
+  {
+    title: 'Thong bao ao so 3',
+    body: 'Nut dang nhap trong file nay bi disable va khong co chuc nang.',
+    tone: 'success',
+  },
+  {
+    title: 'Thong bao ao so 4',
+    body: 'Day la canh bao gia de file nhin day dan hon, khong phai canh bao bao mat.',
+    tone: 'warning',
+  },
+];
+
+const junkRouteProbes: JunkRouteProbe[] = [
+  { path: '/login', component: 'Login.tsx', result: 'Route that cua chuong trinh' },
+  { path: '/LoginPage', component: 'LoginPage.tsx', result: 'Khong ton tai route nay' },
+  { path: '/auth/shadow', component: 'None', result: 'Duong dan gia lap' },
+  { path: '/debug/login-page', component: 'None', result: 'Khong duoc khai bao trong App.tsx' },
+];
+
+const junkDebugPackets: JunkDebugPacket[] = [
+  {
+    name: 'moduleSafety',
+    payload: {
+      importedByApp: false,
+      sideEffectCount: 0,
+      apiCalls: 0,
+      storageWrites: 0,
+    },
+  },
+  {
+    name: 'mockDensity',
+    payload: {
+      fields: junkFields.length,
+      policies: junkPolicies.length,
+      sessions: junkSessions.length,
+      notices: junkNotices.length,
+    },
+  },
+  {
+    name: 'visualOnly',
+    payload: {
+      disabledButtons: 2,
+      readonlyInputs: junkFields.length,
+      realForms: 0,
+      navigationLinks: 0,
+    },
+  },
+];
+
 const toneClassName: Record<JunkTone, string> = {
   quiet: 'border-slate-200 bg-white text-slate-700',
   notice: 'border-sky-200 bg-sky-50 text-sky-800',
@@ -158,6 +335,18 @@ const summarizeJunk = (items: JunkChecklistItem[]) => {
 };
 
 const joinJunkChips = (chips: string[]) => chips.map((chip) => `#${chip}`).join(' ');
+
+const maskJunkValue = (row: JunkCredentialRow) => {
+  if (!row.masked) return row.value;
+  return row.value.replace(/./g, '*');
+};
+
+const stringifyJunkPayload = (payload: JunkDebugPacket['payload']) =>
+  Object.entries(payload)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(' | ');
+
+const countActivePolicies = (policies: JunkPolicy[]) => policies.filter((policy) => policy.active).length;
 
 const renderJunkBadge = (tone: JunkTone) => {
   const labels: Record<JunkTone, string> = {
@@ -237,6 +426,128 @@ const JunkMetrics = () => (
   </section>
 );
 
+const JunkSessionWall = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-4 flex items-center justify-between">
+      <h2 className="text-base font-semibold text-slate-900">Session ao</h2>
+      {renderJunkBadge('notice')}
+    </div>
+    <div className="grid gap-3 sm:grid-cols-2">
+      {junkSessions.map((session) => (
+        <article key={session.id} className={`rounded-md border p-3 ${toneClassName[session.state]}`}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">{session.label}</h3>
+            <span className="font-mono text-[11px]">{session.id}</span>
+          </div>
+          <p className="mt-2 text-xs leading-5">{session.device}</p>
+          <p className="text-xs leading-5">{session.location}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const JunkPolicyBoard = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h2 className="text-base font-semibold text-slate-900">Policy rac</h2>
+      <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-800">
+        {countActivePolicies(junkPolicies)}/{junkPolicies.length} active
+      </span>
+    </div>
+    <div className="space-y-3">
+      {junkPolicies.map((policy) => (
+        <article key={policy.code} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-[11px] text-slate-500">{policy.code}</p>
+              <h3 className="mt-1 text-sm font-semibold text-slate-900">{policy.rule}</h3>
+            </div>
+            <span className="rounded bg-white px-2 py-1 text-[11px] font-semibold text-slate-600">
+              {policy.active ? 'mock-on' : 'mock-off'}
+            </span>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-500">{policy.explanation}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const JunkCredentialTable = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-base font-semibold text-slate-900">Credential gia lap</h2>
+    <div className="mt-4 overflow-hidden rounded-md border border-slate-200">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+          <tr>
+            <th className="px-3 py-2">Key</th>
+            <th className="px-3 py-2">Value</th>
+            <th className="px-3 py-2">Masked</th>
+          </tr>
+        </thead>
+        <tbody>
+          {junkCredentialRows.map((row) => (
+            <tr key={row.key} className="border-t border-slate-200">
+              <td className="px-3 py-2 font-mono text-xs text-slate-500">{row.key}</td>
+              <td className="px-3 py-2 text-slate-700">{maskJunkValue(row)}</td>
+              <td className="px-3 py-2 text-slate-500">{row.masked ? 'yes' : 'no'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+);
+
+const JunkNoticeStack = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-base font-semibold text-slate-900">Thong bao ao</h2>
+    <div className="mt-4 space-y-3">
+      {junkNotices.map((notice) => (
+        <article key={notice.title} className={`rounded-md border p-3 ${toneClassName[notice.tone]}`}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">{notice.title}</h3>
+            {renderJunkBadge(notice.tone)}
+          </div>
+          <p className="mt-2 text-xs leading-5">{notice.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const JunkRouteProbeTable = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-base font-semibold text-slate-900">Route probe gia</h2>
+    <div className="mt-4 space-y-2">
+      {junkRouteProbes.map((probe) => (
+        <article key={probe.path} className="grid grid-cols-[120px_1fr] gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs">
+          <span className="font-mono text-slate-500">{probe.path}</span>
+          <div>
+            <p className="font-semibold text-slate-800">{probe.component}</p>
+            <p className="mt-1 text-slate-500">{probe.result}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const JunkDebugPackets = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-base font-semibold text-slate-900">Debug packet tinh</h2>
+    <div className="mt-4 space-y-3">
+      {junkDebugPackets.map((packet) => (
+        <article key={packet.name} className="rounded-md border border-slate-200 bg-slate-950 p-3 text-slate-100">
+          <h3 className="font-mono text-xs text-emerald-300">{packet.name}</h3>
+          <p className="mt-2 font-mono text-[11px] leading-5 text-slate-300">{stringifyJunkPayload(packet.payload)}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
 const JunkTimeline = () => (
   <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
     <h2 className="text-base font-semibold text-slate-900">Dong thoi gian ao</h2>
@@ -286,11 +597,17 @@ export default function LoginPage() {
             ))}
           </div>
           <JunkPanels />
+          <JunkSessionWall />
           <JunkTimeline />
+          <JunkPolicyBoard />
         </section>
         <aside className="space-y-6">
           <JunkMetrics />
           <JunkChecklist />
+          <JunkCredentialTable />
+          <JunkNoticeStack />
+          <JunkRouteProbeTable />
+          <JunkDebugPackets />
           <button
             className="w-full rounded-md border border-slate-300 bg-slate-200 px-4 py-3 text-sm font-semibold text-slate-500"
             disabled
