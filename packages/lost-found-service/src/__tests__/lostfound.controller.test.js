@@ -49,6 +49,23 @@ vi.mock('../services/kafka.service.js', () => ({
   publishLostFoundEvent: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('../services/image-processor.service.js', () => ({
+  queueAnalysis: vi.fn(),
+}));
+
+vi.mock('../services/ai-autopost.service.js', () => ({
+  generateLostFoundAutoPost: vi.fn().mockResolvedValue({
+    type: 'LOST',
+    title: 'Mất ví da',
+    description: 'Mất ví da tại thư viện. Có hình ảnh đính kèm để đối chiếu.',
+    images: ['https://s3.amazonaws.com/img.jpg'],
+    location: 'Thư viện',
+    category: 'ACCESSORIES',
+    tags: ['wallet'],
+    verificationQuestion: 'Bạn hãy mô tả đặc điểm nhận dạng của món đồ này?',
+  }),
+}));
+
 vi.mock('@iuh-exchange/common', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -66,7 +83,7 @@ vi.mock('@iuh-exchange/common', async (importOriginal) => {
 const lfController = await import('../controllers/lostfound.controller.js');
 
 function mockReqRes(body = {}, params = {}, query = {}, user = { sub: 'user123' }) {
-  const req = { body, params, query, user };
+  const req = { body, params, query, user, ip: '127.0.0.1', headers: { 'user-agent': 'vitest' } };
   const res = {
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
@@ -194,6 +211,41 @@ describe('lostfound.controller', () => {
       expect(response.data.matches).toBeDefined();
       expect(response.data.matches.length).toBe(1);
       expect(response.data.matches[0].score).toBe(0.75);
+    });
+  });
+
+  describe('createAiAutoPost', () => {
+    it('should generate and create an AI auto-post', async () => {
+      mockLFModel.create.mockResolvedValue({ ...mockLostFoundItem });
+
+      const { req, res, next } = mockReqRes({
+        type: 'LOST',
+        title: 'Mất ví da',
+        location: 'Thư viện',
+        imageUrls: ['https://s3.amazonaws.com/img.jpg'],
+        consentImageAnalysis: true,
+      });
+      await lfController.createAiAutoPost(req, res, next);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockLFModel.create).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'LOST',
+        title: 'Mất ví da',
+        category: 'ACCESSORIES',
+        tags: ['wallet'],
+      }));
+    });
+
+    it('should require image analysis consent when images are provided', async () => {
+      const { req, res, next } = mockReqRes({
+        title: 'Mất ví da',
+        location: 'Thư viện',
+        images: ['https://s3.amazonaws.com/img.jpg'],
+      });
+      await lfController.createAiAutoPost(req, res, next);
+
+      expect(res.status).not.toHaveBeenCalled();
+      expect(next).toHaveBeenCalled();
     });
   });
 

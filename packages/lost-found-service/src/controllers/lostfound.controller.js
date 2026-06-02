@@ -16,6 +16,7 @@ import { findMatches, autoMatchOnCreate, calculateMatchScore } from '../services
 import { publishLostFoundMatch } from '../services/kafka.service.js';
 import { queueAnalysis } from '../services/image-processor.service.js';
 import { publishLostFoundEvent } from '../services/kafka.service.js';
+import { generateLostFoundAutoPost } from '../services/ai-autopost.service.js';
 
 
 // ── Cache Helpers ──────────────────────────────────────────
@@ -52,6 +53,17 @@ const createItemSchema = z.object({
   tags: z.array(z.string().max(50).trim().toLowerCase()).max(10).optional().default([]),
   verificationQuestion: z.string().max(300).optional().default(''),
   // Consent flags for AI analysis
+  consentImageAnalysis: z.boolean().optional().default(false),
+  consentMssvExtraction: z.boolean().optional().default(false),
+});
+
+const aiAutoPostSchema = z.object({
+  type: z.enum(['LOST', 'FOUND']).optional(),
+  title: z.string().min(1).max(200).trim(),
+  images: z.array(z.string().url()).max(10).optional().default([]),
+  imageUrls: z.array(z.string().url()).max(10).optional(),
+  location: z.string().min(1).max(300).trim(),
+  contactInfo: z.string().max(200).optional(),
   consentImageAnalysis: z.boolean().optional().default(false),
   consentMssvExtraction: z.boolean().optional().default(false),
 });
@@ -387,6 +399,44 @@ export async function createItem(req, res, next) {
         score: m.score,
       })),
     }));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/lost-found/ai-post
+ * Create a lost/found item from minimal user input.
+ * Body: { type?, title, location, images|imageUrls, contactInfo?, consentImageAnalysis }
+ */
+export async function createAiAutoPost(req, res, next) {
+  try {
+    const rawData = { ...req.body };
+    if (rawData.imageUrls && !rawData.images) {
+      rawData.images = rawData.imageUrls;
+    }
+
+    const input = aiAutoPostSchema.parse(rawData);
+    const hasImages = input.images && input.images.length > 0;
+    if (hasImages && !input.consentImageAnalysis) {
+      throw new BadRequestException('Bạn cần đồng ý cho AI phân tích hình ảnh trước khi tự động đăng bài.');
+    }
+
+    const generated = await generateLostFoundAutoPost({
+      type: input.type,
+      title: input.title,
+      location: input.location,
+      images: input.images,
+    });
+
+    req.body = {
+      ...generated,
+      contactInfo: input.contactInfo,
+      consentImageAnalysis: input.consentImageAnalysis,
+      consentMssvExtraction: input.consentMssvExtraction,
+    };
+
+    return createItem(req, res, next);
   } catch (err) {
     next(err);
   }

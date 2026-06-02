@@ -5,6 +5,7 @@ import {
   listAdminItems,
   getItemById,
   createItem,
+  createAiAutoPost,
   updateItem,
   deleteItem,
   deleteItemAsAdmin,
@@ -48,6 +49,7 @@ router.delete('/admin/:id', authenticate, canModerateLostFound, deleteItemAsAdmi
 
 // Protected: mutations require authentication
 router.post('/', authenticate, authorize('CAN_REPORT'), ocrRateLimit, createItem);
+router.post('/ai-post', authenticate, authorize('CAN_REPORT'), ocrRateLimit, createAiAutoPost);
 
 // Upload presigned URL (must be before /:id)
 router.post('/upload-url', authenticate, authorize('CAN_REPORT'), getUploadUrl);

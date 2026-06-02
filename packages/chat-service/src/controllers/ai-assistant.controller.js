@@ -18,12 +18,14 @@ export async function chatWithAiAssistant(req, res, next) {
     const result = await askAiAssistant(message, {
       userId: req.user?.sub,
       locale: req.body?.locale || 'vi-VN',
+      authHeader: req.headers.authorization,
     });
 
     res.json(ApiResponse.ok({
       message,
       answer: result.answer,
       model: result.model,
+      toolCalls: result.toolCalls || [],
     }, 'AI assistant replied'));
   } catch (err) {
     next(err);

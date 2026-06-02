@@ -9,7 +9,7 @@ vi.mock('../services/ai-assistant.service.js', () => ({
 const { chatWithAiAssistant } = await import('../controllers/ai-assistant.controller.js');
 
 function mockReqRes(body = {}, user = { sub: 'user1' }) {
-  const req = { body, user };
+  const req = { body, user, headers: { authorization: 'Bearer test-token' } };
   const res = {
     json: vi.fn().mockReturnThis(),
   };
@@ -33,7 +33,7 @@ describe('ai-assistant.controller', () => {
 
     expect(mockAskAiAssistant).toHaveBeenCalledWith(
       'Laptop cũ nên bán giá bao nhiêu?',
-      { userId: 'user1', locale: 'vi-VN' },
+      { userId: 'user1', locale: 'vi-VN', authHeader: 'Bearer test-token' },
     );
     expect(res.json).toHaveBeenCalled();
     expect(res.json.mock.calls[0][0].data.answer).toContain('5-6 triệu');
