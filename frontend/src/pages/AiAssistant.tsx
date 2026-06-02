@@ -62,14 +62,13 @@ const detectLostFoundType = (text: string): ItemType | undefined => {
 };
 
 const extractLocation = (text: string) => {
-  const normalized = normalizeText(text);
   const patterns = [
-    /\b(?:o|tai|khu|gan|quanh|loanh quanh|tang|nha)\s+(.{1,120})/i,
-    /\b(?:can tin|canteen|thu vien|ham|san|bai xe|cong|sanh|phong|toa|lop)\b.{0,80}/i,
+    /\b(?:ở|tại|khu|gần|quanh|loanh quanh|tầng|nhà)\s+([^,.!?;]{1,120})/i,
+    /\b(?:căn\s*tin|căng\s*tin|canteen|thư\s*viện|hầm|sân|bãi\s*xe|cổng|sảnh|phòng|tòa|lớp)\b[^,.!?;]{0,80}/i,
   ];
 
   for (const pattern of patterns) {
-    const match = normalized.match(pattern);
+    const match = text.match(pattern);
     if (match?.[1]) return match[1].trim();
     if (match?.[0]) return match[0].trim();
   }
@@ -78,15 +77,20 @@ const extractLocation = (text: string) => {
 };
 
 const cleanTitle = (text: string, type?: ItemType) => {
+  const location = extractLocation(text);
   let title = text
-    .replace(/\b(tôi|minh|mình|em|mới|vừa|có|muốn|đăng|tin|bài)\b/gi, ' ')
+    .replace(location, ' ')
+    .replace(/[,.;:!?]\s*(hãy|nhờ|giúp|đăng|tạo|post|up)\b.*$/i, ' ')
+    .replace(/\b(hãy|nhờ|giúp|đăng|tạo|post|up)\s+(bài|tin)?\s*(giúp|dùm|cho)?\s*(tôi|mình|em)?\b.*$/i, ' ')
+    .replace(/\b(tôi|minh|mình|em|mới|vừa|có|muốn|bị|đăng|tin|bài|đồ|vật|món)\b/gi, ' ')
     .replace(/\b(mất|rơi|thất lạc|nhặt được|tìm thấy|thấy được|lượm được)\b/gi, ' ')
     .replace(/\b(ở|tại|gần|quanh|loanh quanh|khu|tầng|nhà)\b.+$/i, ' ')
+    .replace(/[",“”]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
   if (!title) title = type === ItemType.FOUND ? 'Đồ nhặt được' : 'Đồ bị mất';
-  return title.slice(0, 120);
+  return `${title.charAt(0).toUpperCase()}${title.slice(1)}`.slice(0, 120);
 };
 
 const AiAssistant: React.FC = () => {

@@ -62,7 +62,7 @@ function normalizeDraft(input, draft = {}) {
 
   return {
     type,
-    title: String(draft.title || input.title).trim().slice(0, 200),
+    title: String(input.title || draft.title).trim().slice(0, 200),
     description: String(draft.description || fallbackDescription).trim().slice(0, 2000),
     location: input.location,
     images: input.images || [],
