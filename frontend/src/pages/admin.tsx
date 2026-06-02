@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useState, useEffect } from 'react';
 import {
   ShieldAlert,
@@ -502,3 +503,572 @@ const admin: React.FC = () => {
 };
 
 export default admin;
+=======
+type JunkHealth = 'stable' | 'watch' | 'paused' | 'fake';
+
+type JunkAdminNode = {
+  id: string;
+  name: string;
+  group: string;
+  health: JunkHealth;
+  cpu: number;
+  memory: number;
+  note: string;
+};
+
+type JunkAuditEntry = {
+  id: string;
+  actor: string;
+  action: string;
+  target: string;
+  result: string;
+};
+
+type JunkShortcut = {
+  key: string;
+  label: string;
+  disabledReason: string;
+};
+
+type JunkConfig = {
+  label: string;
+  value: string;
+  description: string;
+};
+
+type JunkPermission = {
+  code: string;
+  label: string;
+  enabled: boolean;
+};
+
+type JunkTicket = {
+  id: string;
+  title: string;
+  owner: string;
+  status: JunkHealth;
+  lines: string[];
+};
+
+type JunkCardTone = {
+  border: string;
+  background: string;
+  text: string;
+  badge: string;
+};
+
+const junkToneMap: Record<JunkHealth, JunkCardTone> = {
+  stable: {
+    border: 'border-emerald-200',
+    background: 'bg-emerald-50',
+    text: 'text-emerald-900',
+    badge: 'On dinh',
+  },
+  watch: {
+    border: 'border-sky-200',
+    background: 'bg-sky-50',
+    text: 'text-sky-900',
+    badge: 'Theo doi',
+  },
+  paused: {
+    border: 'border-slate-200',
+    background: 'bg-slate-50',
+    text: 'text-slate-800',
+    badge: 'Tam dung',
+  },
+  fake: {
+    border: 'border-amber-200',
+    background: 'bg-amber-50',
+    text: 'text-amber-900',
+    badge: 'Du lieu rac',
+  },
+};
+
+const junkAdminNodes: JunkAdminNode[] = [
+  {
+    id: 'junk-node-001',
+    name: 'Unused Admin Console Shell',
+    group: 'frontend/pages',
+    health: 'fake',
+    cpu: 0,
+    memory: 0,
+    note: 'Component nay khong duoc import vao App.tsx.',
+  },
+  {
+    id: 'junk-node-002',
+    name: 'Static Audit Preview',
+    group: 'mock-audit',
+    health: 'stable',
+    cpu: 4,
+    memory: 12,
+    note: 'Chi render text tinh, khong goi service admin nao.',
+  },
+  {
+    id: 'junk-node-003',
+    name: 'Detached Permission Matrix',
+    group: 'mock-permission',
+    health: 'watch',
+    cpu: 2,
+    memory: 8,
+    note: 'Khong doc token, khong doc user store, khong check quyen that.',
+  },
+  {
+    id: 'junk-node-004',
+    name: 'Paused Broadcast Composer',
+    group: 'mock-message',
+    health: 'paused',
+    cpu: 0,
+    memory: 3,
+    note: 'Khong gui notification hay email.',
+  },
+  {
+    id: 'junk-node-005',
+    name: 'Offline Route Drawer',
+    group: 'mock-route',
+    health: 'fake',
+    cpu: 1,
+    memory: 5,
+    note: 'Khong dung react-router va khong dieu huong.',
+  },
+  {
+    id: 'junk-node-006',
+    name: 'Sandbox Metric Wall',
+    group: 'mock-chart',
+    health: 'stable',
+    cpu: 6,
+    memory: 16,
+    note: 'So lieu hard-code de file co nhieu code hon.',
+  },
+];
+
+const junkAuditEntries: JunkAuditEntry[] = [
+  {
+    id: 'AUD-JUNK-001',
+    actor: 'ghost-admin',
+    action: 'READ_UNUSED_PAGE',
+    target: 'frontend/src/pages/admin.tsx',
+    result: 'No runtime effect',
+  },
+  {
+    id: 'AUD-JUNK-002',
+    actor: 'mock-sre',
+    action: 'OPEN_STATIC_PANEL',
+    target: 'Admin junk dashboard',
+    result: 'Only JSX rendered',
+  },
+  {
+    id: 'AUD-JUNK-003',
+    actor: 'demo-bot',
+    action: 'CHECK_IMPORT_GRAPH',
+    target: 'App.tsx',
+    result: 'Not imported',
+  },
+  {
+    id: 'AUD-JUNK-004',
+    actor: 'readonly-user',
+    action: 'PRESS_DISABLED_BUTTON',
+    target: 'Broadcast composer',
+    result: 'Nothing happened',
+  },
+  {
+    id: 'AUD-JUNK-005',
+    actor: 'static-viewer',
+    action: 'SCAN_FAKE_METRICS',
+    target: 'Metric wall',
+    result: 'No request sent',
+  },
+];
+
+const junkShortcuts: JunkShortcut[] = [
+  {
+    key: 'A',
+    label: 'Approve selected account',
+    disabledReason: 'Khong co selected account that.',
+  },
+  {
+    key: 'B',
+    label: 'Ban selected account',
+    disabledReason: 'Nut nay chi la text trong file rac.',
+  },
+  {
+    key: 'R',
+    label: 'Refresh admin report',
+    disabledReason: 'Khong co handler refresh hay API.',
+  },
+  {
+    key: 'M',
+    label: 'Send mass message',
+    disabledReason: 'Khong ket noi notification service.',
+  },
+  {
+    key: 'K',
+    label: 'Adjust karma',
+    disabledReason: 'Khong co user id va khong goi backend.',
+  },
+];
+
+const junkConfigs: JunkConfig[] = [
+  {
+    label: 'Runtime mount',
+    value: 'none',
+    description: 'File nay dung rieng trong source tree va khong nam trong route nao.',
+  },
+  {
+    label: 'API access',
+    value: 'disabled',
+    description: 'Khong import api.ts, adminService.ts hay fetch.',
+  },
+  {
+    label: 'Auth store',
+    value: 'unused',
+    description: 'Khong dung useAuthStore nen khong anh huong dang nhap.',
+  },
+  {
+    label: 'Local storage',
+    value: 'untouched',
+    description: 'Khong doc va khong ghi localStorage/sessionStorage.',
+  },
+  {
+    label: 'Router',
+    value: 'detached',
+    description: 'Khong import Link, Navigate, useNavigate hay Route.',
+  },
+  {
+    label: 'Build behavior',
+    value: 'valid-tsx',
+    description: 'Van la TSX hop le de TypeScript khong bao unused import.',
+  },
+];
+
+const junkPermissions: JunkPermission[] = [
+  { code: 'CAN_VIEW_FAKE_PANEL', label: 'Xem bang rac', enabled: true },
+  { code: 'CAN_READ_STATIC_TEXT', label: 'Doc noi dung tinh', enabled: true },
+  { code: 'CAN_CALL_BACKEND', label: 'Goi backend', enabled: false },
+  { code: 'CAN_MUTATE_USERS', label: 'Sua nguoi dung', enabled: false },
+  { code: 'CAN_SEND_EMAIL', label: 'Gui email', enabled: false },
+  { code: 'CAN_TOUCH_TOKEN', label: 'Dung token', enabled: false },
+];
+
+const junkTickets: JunkTicket[] = [
+  {
+    id: 'TICKET-JUNK-101',
+    title: 'Lam file admin.tsx trong nhu mot dashboard lon',
+    owner: 'source-only',
+    status: 'stable',
+    lines: [
+      'Them data mock',
+      'Them component con',
+      'Khong lien ket route',
+      'Khong goi service',
+    ],
+  },
+  {
+    id: 'TICKET-JUNK-102',
+    title: 'Giu file khong anh huong chuong trinh',
+    owner: 'detached-page',
+    status: 'watch',
+    lines: [
+      'Khong import trong App.tsx',
+      'Khong export side effect',
+      'Khong dung hook runtime can thiet',
+      'Khong doc bien moi truong',
+    ],
+  },
+  {
+    id: 'TICKET-JUNK-103',
+    title: 'Loai bo loi unused import',
+    owner: 'typescript',
+    status: 'fake',
+    lines: [
+      'Khong import icon',
+      'Khong import React neu khong can',
+      'Moi bien khai bao deu duoc render',
+      'Du lieu mock duoc dung trong JSX',
+    ],
+  },
+];
+
+const formatJunkPercent = (value: number) => `${Math.max(0, Math.min(100, value))}%`;
+
+const createJunkReference = (prefix: string, index: number) => {
+  const numberPart = String(index + 1).padStart(3, '0');
+  return `${prefix}-${numberPart}`;
+};
+
+const getJunkScore = (nodes: JunkAdminNode[]) => {
+  const totalCpu = nodes.reduce((sum, node) => sum + node.cpu, 0);
+  const totalMemory = nodes.reduce((sum, node) => sum + node.memory, 0);
+  return {
+    totalCpu,
+    totalMemory,
+    averageCpu: Math.round(totalCpu / nodes.length),
+    averageMemory: Math.round(totalMemory / nodes.length),
+  };
+};
+
+const getPermissionSummary = (permissions: JunkPermission[]) => {
+  const enabled = permissions.filter((permission) => permission.enabled).length;
+  const disabled = permissions.length - enabled;
+  return `${enabled} mock enabled / ${disabled} real actions disabled`;
+};
+
+const renderJunkBadge = (status: JunkHealth) => {
+  const tone = junkToneMap[status];
+
+  return (
+    <span className={`rounded border px-2 py-1 text-[11px] font-semibold ${tone.border} ${tone.background} ${tone.text}`}>
+      {tone.badge}
+    </span>
+  );
+};
+
+const AdminJunkHeader = () => {
+  const score = getJunkScore(junkAdminNodes);
+
+  return (
+    <header className="border-b border-slate-200 bg-white">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-6 md:flex-row md:items-center md:justify-between">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Detached admin page</p>
+          <h1 className="mt-1 text-3xl font-black text-slate-950">Admin.tsx file rac</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+            Day la giao dien quan tri gia lap, duoc viet dai hon de lam day source code nhung khong duoc chuong trinh chinh goi den.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-3 text-right">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">CPU mock avg</p>
+            <p className="text-xl font-black text-slate-900">{formatJunkPercent(score.averageCpu)}</p>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs text-slate-500">RAM mock avg</p>
+            <p className="text-xl font-black text-slate-900">{formatJunkPercent(score.averageMemory)}</p>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+const AdminJunkNodeCard = ({ node, index }: { node: JunkAdminNode; index: number }) => {
+  const tone = junkToneMap[node.health];
+
+  return (
+    <article className={`rounded-lg border p-4 shadow-sm ${tone.border} ${tone.background}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-mono text-slate-500">{createJunkReference('NODE', index)}</p>
+          <h2 className="mt-1 text-base font-bold text-slate-950">{node.name}</h2>
+          <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{node.group}</p>
+        </div>
+        {renderJunkBadge(node.health)}
+      </div>
+      <p className="mt-4 min-h-12 text-sm leading-6 text-slate-600">{node.note}</p>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <div>
+          <div className="flex justify-between text-xs font-semibold text-slate-500">
+            <span>CPU</span>
+            <span>{formatJunkPercent(node.cpu)}</span>
+          </div>
+          <div className="mt-2 h-2 rounded bg-white">
+            <div className="h-2 rounded bg-slate-800" style={{ width: formatJunkPercent(node.cpu) }} />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between text-xs font-semibold text-slate-500">
+            <span>Memory</span>
+            <span>{formatJunkPercent(node.memory)}</span>
+          </div>
+          <div className="mt-2 h-2 rounded bg-white">
+            <div className="h-2 rounded bg-slate-800" style={{ width: formatJunkPercent(node.memory) }} />
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+};
+
+const AdminJunkNodeGrid = () => (
+  <section className="grid gap-4 lg:grid-cols-2">
+    {junkAdminNodes.map((node, index) => (
+      <AdminJunkNodeCard key={node.id} node={node} index={index} />
+    ))}
+  </section>
+);
+
+const AdminJunkAuditTable = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="mb-4 flex items-center justify-between">
+      <h2 className="text-lg font-black text-slate-950">Audit log gia lap</h2>
+      {renderJunkBadge('fake')}
+    </div>
+    <div className="overflow-hidden rounded border border-slate-200">
+      <table className="w-full border-collapse text-left text-sm">
+        <thead className="bg-slate-100 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-3 py-3">ID</th>
+            <th className="px-3 py-3">Actor</th>
+            <th className="px-3 py-3">Action</th>
+            <th className="px-3 py-3">Target</th>
+            <th className="px-3 py-3">Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          {junkAuditEntries.map((entry) => (
+            <tr key={entry.id} className="border-t border-slate-200">
+              <td className="px-3 py-3 font-mono text-xs text-slate-500">{entry.id}</td>
+              <td className="px-3 py-3 font-semibold text-slate-800">{entry.actor}</td>
+              <td className="px-3 py-3 text-slate-600">{entry.action}</td>
+              <td className="px-3 py-3 text-slate-600">{entry.target}</td>
+              <td className="px-3 py-3 text-slate-600">{entry.result}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+);
+
+const AdminJunkConfigList = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-lg font-black text-slate-950">Cau hinh rac an toan</h2>
+    <div className="mt-4 grid gap-3">
+      {junkConfigs.map((config) => (
+        <article key={config.label} className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-900">{config.label}</h3>
+            <span className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-mono text-slate-600">{config.value}</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{config.description}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const AdminJunkShortcutPanel = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-lg font-black text-slate-950">Phim tat vo hieu hoa</h2>
+    <div className="mt-4 space-y-3">
+      {junkShortcuts.map((shortcut) => (
+        <article key={shortcut.key} className="grid grid-cols-[44px_1fr] gap-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded border border-slate-300 bg-white font-black text-slate-800">
+            {shortcut.key}
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-900">{shortcut.label}</h3>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{shortcut.disabledReason}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const AdminJunkPermissionMatrix = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="text-lg font-black text-slate-950">Ma tran quyen gia</h2>
+      <span className="text-xs font-semibold text-slate-500">{getPermissionSummary(junkPermissions)}</span>
+    </div>
+    <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {junkPermissions.map((permission) => (
+        <article key={permission.code} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-bold text-slate-900">{permission.label}</h3>
+            <span className={`rounded px-2 py-1 text-[11px] font-bold ${permission.enabled ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+              {permission.enabled ? 'mock on' : 'real off'}
+            </span>
+          </div>
+          <p className="mt-2 font-mono text-xs text-slate-500">{permission.code}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const AdminJunkTicketStack = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="text-lg font-black text-slate-950">Ticket rac</h2>
+    <div className="mt-4 space-y-4">
+      {junkTickets.map((ticket) => (
+        <article key={ticket.id} className="rounded-md border border-slate-200 bg-slate-50 p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="font-mono text-xs text-slate-500">{ticket.id}</p>
+              <h3 className="mt-1 text-sm font-bold text-slate-900">{ticket.title}</h3>
+              <p className="mt-1 text-xs text-slate-500">Owner: {ticket.owner}</p>
+            </div>
+            {renderJunkBadge(ticket.status)}
+          </div>
+          <ul className="mt-4 space-y-2">
+            {ticket.lines.map((line) => (
+              <li key={`${ticket.id}-${line}`} className="rounded border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </article>
+      ))}
+    </div>
+  </section>
+);
+
+const AdminJunkComposer = () => (
+  <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-center justify-between">
+      <h2 className="text-lg font-black text-slate-950">Composer khong gui</h2>
+      {renderJunkBadge('paused')}
+    </div>
+    <div className="mt-4 space-y-3">
+      <input
+        className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 outline-none"
+        readOnly
+        value="Thong bao nay khong gui di dau"
+      />
+      <textarea
+        className="min-h-28 w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm leading-6 text-slate-500 outline-none"
+        readOnly
+        value="Day la noi dung demo trong file admin.tsx. No khong co onSubmit, khong co handler, khong ket noi notification-service."
+      />
+      <button
+        className="w-full rounded-md border border-slate-300 bg-slate-200 px-4 py-3 text-sm font-black text-slate-500"
+        disabled
+        type="button"
+      >
+        Nut gui bi vo hieu hoa
+      </button>
+    </div>
+  </section>
+);
+
+const AdminJunkFooter = () => (
+  <footer className="mx-auto max-w-6xl px-6 pb-10 pt-4 text-center text-xs leading-6 text-slate-500">
+    admin.tsx nay chi la file rac co chu dich. Route admin that cua ung dung van dung AdminDashboard.tsx va AdminWorkspace.tsx.
+  </footer>
+);
+
+export const ADMIN_TSX_JUNK_FILE = true;
+
+export default function AdminJunkPage() {
+  return (
+    <main className="min-h-screen bg-slate-100 text-slate-900">
+      <AdminJunkHeader />
+      <div className="mx-auto grid max-w-6xl gap-6 px-6 py-8 lg:grid-cols-[1fr_360px]">
+        <section className="space-y-6">
+          <AdminJunkNodeGrid />
+          <AdminJunkAuditTable />
+          <AdminJunkPermissionMatrix />
+        </section>
+        <aside className="space-y-6">
+          <AdminJunkConfigList />
+          <AdminJunkShortcutPanel />
+          <AdminJunkTicketStack />
+          <AdminJunkComposer />
+        </aside>
+      </div>
+      <AdminJunkFooter />
+    </main>
+  );
+}
+>>>>>>> e5f511c (update lan cuoi)
